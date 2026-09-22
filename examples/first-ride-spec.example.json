@@ -1,0 +1,6 @@
+{
+  "calibration_bundle": "data/calibration/calibration.json",
+  "body_model": "profiles/body-model.json",
+  "movement_log": "data/ride/first-ride-movement-log.json",
+  "timing_gates": {}
+}
