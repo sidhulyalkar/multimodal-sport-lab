@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>MotionOS Replay Lab</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">MOTIONOS / REPLAY LAB</p>
+        <h1><span id="session-sport"></span> calibration</h1>
+      </div>
+      <div class="session-meta">
+        <span id="session-duration"></span>
+        <span id="capture-gate" data-state="ready"></span>
+      </div>
+    </header>
+
+    <section id="devices" class="device-grid" aria-label="Device readiness"></section>
+
+    <section class="replay-grid">
+      <article class="panel stage-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">WEARABLE-ONLY STATE</p>
+            <h2>Athlete + equipment</h2>
+          </div>
+          <div class="quality">
+            <span>Pose <strong id="confidence"></strong></span>
+            <span>Sync <strong id="sync"></strong></span>
+          </div>
+        </div>
+        <div id="pose-stage" class="pose-stage"></div>
+        <div class="metric-strip">
+          <div><span>Heart rate</span><strong id="hr"></strong></div>
+          <div><span>Speed</span><strong id="speed"></strong></div>
+          <div><span>Board roll</span><strong id="roll"></strong></div>
+        </div>
+      </article>
+
+      <article class="panel pressure-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">MEASURED</p>
+            <h2>Plantar loading</h2>
+          </div>
+        </div>
+        <div class="feet">
+          <div>
+            <div id="left-pressure"></div>
+            <p>Left <strong id="left-load"></strong></p>
+          </div>
+          <div>
+            <div id="right-pressure"></div>
+            <p>Right <strong id="right-load"></strong></p>
+          </div>
+        </div>
+        <div class="balance">
+          <div class="balance-labels"><span>Left</span><strong id="balance-value"></strong><span>Right</span></div>
+          <div class="balance-track"><i id="balance-dot"></i></div>
+        </div>
+      </article>
+    </section>
+
+    <section class="panel timeline-panel">
+      <div class="timeline-header">
+        <div>
+          <p class="eyebrow">SYNCHRONIZED TIMELINE</p>
+          <h2>Scrub the session</h2>
+        </div>
+        <strong id="time-readout"></strong>
+      </div>
+      <input id="timeline" type="range" min="0" step="100" value="0" aria-label="Replay time" />
+      <div class="track-labels">
+        <span>pressure</span><span>board</span><span>watch</span><span>pose</span><span>events</span>
+      </div>
+    </section>
+  </main>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
