@@ -57,4 +57,60 @@ final class MotionOSAppleCaptureTests: XCTestCase {
         XCTAssertEqual(event.sessionTimeNS, 123_460_000)
         XCTAssertEqual(event.syncQuality, 0.98)
     }
+    func testEquipmentMountCalibrationIdentity() throws {
+        let level = Array(repeating: MotionVector3(0, 0, 9.81), count: 20)
+        let nose = Array(repeating: MotionVector3(-4.146, 0, 8.891), count: 20)
+
+        let calibration = try EquipmentMountCalibrator.calibrate(
+            levelSamples: level,
+            noseUpSamples: nose
+        )
+
+        XCTAssertTrue(
+            calibration.sensorToEquipment.isProperRotation(tolerance: 1e-5)
+        )
+        let transformed = calibration.sensorToEquipment.transform(
+            MotionVector3(1, 2, 3)
+        )
+        XCTAssertEqual(transformed.x, 1, accuracy: 1e-3)
+        XCTAssertEqual(transformed.y, 2, accuracy: 1e-3)
+        XCTAssertEqual(transformed.z, 3, accuracy: 1e-3)
+    }
+
+    func testEquipmentProfileFixtureDecodesInSwift() throws {
+        let url = try XCTUnwrap(
+            Bundle.module.url(
+                forResource: "equipment_profile",
+                withExtension: "json",
+                subdirectory: "Fixtures"
+            )
+        )
+        let data = try Data(contentsOf: url)
+        let profile = try JSONDecoder().decode(
+            EquipmentProfileContract.self,
+            from: data
+        )
+
+        XCTAssertEqual(profile.equipmentID, "longboard-001")
+        XCTAssertEqual(profile.mountID, "center-deck-v1")
+        XCTAssertEqual(profile.calibration.sensorToEquipment.determinant, 1.0)
+    }
+
+    func testEquipmentCalibrationRejectsTinyPitch() {
+        let level = Array(repeating: MotionVector3(0, 0, 9.81), count: 10)
+        let nose = Array(repeating: MotionVector3(0.01, 0, 9.81), count: 10)
+
+        XCTAssertThrowsError(
+            try EquipmentMountCalibrator.calibrate(
+                levelSamples: level,
+                noseUpSamples: nose
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? EquipmentFrameError,
+                .insufficientPitchExcitation
+            )
+        }
+    }
+
 }

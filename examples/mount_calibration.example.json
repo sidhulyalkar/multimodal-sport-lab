@@ -1,0 +1,16 @@
+{
+  "equipment_id": "longboard-001",
+  "equipment_type": "longboard",
+  "mount_id": "center-deck-v1",
+  "notes": "example only",
+  "level_samples": [
+    [0.01, -0.01, 9.81],
+    [0.00, 0.01, 9.80],
+    [-0.01, 0.00, 9.82]
+  ],
+  "nose_up_samples": [
+    [-4.14, 0.00, 8.90],
+    [-4.16, -0.01, 8.88],
+    [-4.13, 0.01, 8.89]
+  ]
+}

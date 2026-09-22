@@ -13,6 +13,7 @@ struct PhoneContentView: View {
                     controls
                     protocolCard
                     journalCard
+                    EquipmentPodCard()
 
                     if let error = coordinator.errorMessage ?? inbox.lastError {
                         Text(error)
@@ -36,12 +37,12 @@ struct PhoneContentView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("M0-B / P0")
+            Text("M0-B / Physical Capture")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
-            Text("Apple Watch qualification")
+            Text("MotionOS capture lab")
                 .font(.largeTitle.bold())
-            Text("Launch the Watch workout, preserve raw wrist data locally, then recover the journal on iPhone.")
+            Text("Qualify Apple Watch capture, then add a durable equipment pod without mixing their clock domains.")
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -199,7 +200,7 @@ struct PhoneContentView: View {
     }
 }
 
-private extension View {
+extension View {
     func cardStyle() -> some View {
         self
             .padding()

@@ -14,6 +14,9 @@ options:
 packages:
   MotionOSAppleCapture:
     path: ../MotionOSAppleCapture
+  MetaWear:
+    url: https://github.com/mbientlab/MetaWear-API-Swift.git
+    revision: 7dd2a5dbddafb2f8d583cb8d018be476d8ee9a71
 
 settings:
   base:
@@ -71,6 +74,7 @@ targets:
         NSHealthShareUsageDescription: MotionOS uses workout state to coordinate capture with Apple Watch.
         NSHealthUpdateUsageDescription: MotionOS starts workouts on your paired Apple Watch.
         NSMotionUsageDescription: MotionOS may use motion data during calibration.
+        NSBluetoothAlwaysUsageDescription: MotionOS connects to equipment sensor pods for motion capture and durable on-device logging.
     entitlements:
       path: iOS/MotionOSiOS.entitlements
       properties:
@@ -80,6 +84,8 @@ targets:
         embed: true
       - package: MotionOSAppleCapture
         product: MotionOSAppleCapture
+      - package: MetaWear
+        product: MetaWear
 
 schemes:
   MotionOS-iOS:
