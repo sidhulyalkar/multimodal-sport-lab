@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>MotionOS Product Lab</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">MOTIONOS / PRODUCT LAB</p>
+        <h1>Understand movement, not just workouts.</h1>
+      </div>
+      <div class="session-meta">
+        <span>Prototype M0-B</span>
+        <span id="capture-gate" data-state="ready"></span>
+      </div>
+    </header>
+
+    <nav class="tabbar" aria-label="Primary navigation">
+      <button class="tab is-active" data-screen="today">Today</button>
+      <button class="tab" data-screen="capture">Capture</button>
+      <button class="tab" data-screen="replay">Replay</button>
+      <button class="tab" data-screen="compare">Compare</button>
+      <button class="tab" data-screen="lab">Lab</button>
+    </nav>
+
+    <section class="screen is-active" data-screen-panel="today">
+      <div class="hero-grid">
+        <article class="panel hero-card">
+          <p class="eyebrow">QUICK START</p>
+          <h2>Ready for a session</h2>
+          <p class="hero-copy">Watch and board pod are ready. Add bilateral feet when available without changing the session contract.</p>
+          <div class="sport-grid">
+            <button>Longboard</button><button>Skateboard</button><button>RipStik</button>
+            <button>Run</button><button>Climb</button><button>MTB</button>
+          </div>
+        </article>
+        <article class="panel readiness-summary">
+          <div class="panel-heading">
+            <div><p class="eyebrow">SYSTEM</p><h2>Readiness</h2></div>
+            <span class="big-state">3/4</span>
+          </div>
+          <div class="readiness-row"><span>Apple Watch</span><strong>ready</strong></div>
+          <div class="readiness-row"><span>Equipment pod</span><strong>ready</strong></div>
+          <div class="readiness-row"><span>Pressure feet</span><strong class="warning">degraded</strong></div>
+          <div class="readiness-row"><span>Camera teacher</span><strong>available</strong></div>
+        </article>
+      </div>
+      <article class="panel recent-panel">
+        <div class="panel-heading"><div><p class="eyebrow">RECENT</p><h2>Sessions</h2></div></div>
+        <div class="session-list">
+          <div><strong>Longboard calibration</strong><span>18:42 · quality 0.91</span></div>
+          <div><strong>Trail run</strong><span>42:18 · Watch only</span></div>
+          <div><strong>RipStik exploration</strong><span>11:06 · pod + Watch</span></div>
+        </div>
+      </article>
+    </section>
+
+    <section class="screen" data-screen-panel="capture">
+      <div class="capture-layout">
+        <article class="panel capture-main">
+          <div class="panel-heading">
+            <div><p class="eyebrow">CALIBRATION SESSION</p><h2>Longboard</h2></div>
+            <span class="capture-badge">ARMED</span>
+          </div>
+          <div class="calibration-steps">
+            <div class="step is-done"><b>1</b><span><strong>Stillness</strong><small>bias baseline captured</small></span></div>
+            <div class="step is-done"><b>2</b><span><strong>Neutral stance</strong><small>body/equipment frame linked</small></span></div>
+            <div class="step is-active"><b>3</b><span><strong>Left/right transfer</strong><small>hold each side for 3 seconds</small></span></div>
+            <div class="step"><b>4</b><span><strong>Sync impulse</strong><small>one deliberate shared motion</small></span></div>
+            <div class="step"><b>5</b><span><strong>Camera check</strong><small>full body + board visible</small></span></div>
+          </div>
+          <div class="capture-actions">
+            <button class="secondary">Cancel</button>
+            <button class="primary">Continue calibration</button>
+          </div>
+        </article>
+        <aside>
+          <section id="devices" class="device-grid vertical" aria-label="Device readiness"></section>
+        </aside>
+      </div>
+
+      <article class="panel live-hud">
+        <div><span>Heart rate</span><strong>142 bpm</strong></div>
+        <div><span>Left / right</span><strong>46 / 54%</strong></div>
+        <div><span>Board roll</span><strong>-3.2°</strong></div>
+        <div><span>Sync</span><strong>±3.2 ms</strong></div>
+        <div><span>Recorder</span><strong class="recording">● local + phone</strong></div>
+      </article>
+    </section>
+
+    <section class="screen" data-screen-panel="replay">
+      <header class="screen-title">
+        <div><p class="eyebrow">SESSION REPLAY</p><h2><span id="session-sport"></span> calibration</h2></div>
+        <span id="session-duration"></span>
+      </header>
+      <section class="replay-grid">
+        <article class="panel stage-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">WEARABLE-ONLY STATE</p>
+              <h2>Athlete + equipment</h2>
+            </div>
+            <div class="quality">
+              <span>Pose <strong id="confidence"></strong></span>
+              <span>Sync <strong id="sync"></strong></span>
+            </div>
+          </div>
+          <div id="pose-stage" class="pose-stage"></div>
+          <div class="metric-strip">
+            <div><span>Heart rate</span><strong id="hr"></strong></div>
+            <div><span>Speed</span><strong id="speed"></strong></div>
+            <div><span>Board roll</span><strong id="roll"></strong></div>
+          </div>
+        </article>
+
+        <article class="panel pressure-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">MEASURED</p>
+              <h2>Plantar loading</h2>
+            </div>
+          </div>
+          <div class="feet">
+            <div>
+              <div id="left-pressure"></div>
+              <p>Left <strong id="left-load"></strong></p>
+            </div>
+            <div>
+              <div id="right-pressure"></div>
+              <p>Right <strong id="right-load"></strong></p>
+            </div>
+          </div>
+          <div class="balance">
+            <div class="balance-labels"><span>Left</span><strong id="balance-value"></strong><span>Right</span></div>
+            <div class="balance-track"><i id="balance-dot"></i></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="panel timeline-panel">
+        <div class="timeline-header">
+          <div>
+            <p class="eyebrow">SYNCHRONIZED TIMELINE</p>
+            <h2>Scrub the session</h2>
+          </div>
+          <strong id="time-readout"></strong>
+        </div>
+        <input id="timeline" type="range" min="0" step="100" value="0" aria-label="Replay time" />
+        <div class="track-labels">
+          <span>pressure</span><span>board</span><span>watch</span><span>pose</span><span>events</span>
+        </div>
+      </section>
+    </section>
+
+    <section class="screen" data-screen-panel="compare">
+      <header class="screen-title">
+        <div><p class="eyebrow">COMPARE</p><h2>Cross-sport movement signatures</h2></div>
+      </header>
+      <div class="compare-grid">
+        <article class="panel compare-card">
+          <p class="eyebrow">LONGBOARD</p><h3>Carving session</h3>
+          <div class="dimension"><span>Cardio load</span><i style="--v:.44"></i></div>
+          <div class="dimension"><span>Impact exposure</span><i style="--v:.26"></i></div>
+          <div class="dimension"><span>Balance corrections</span><i style="--v:.81"></i></div>
+          <div class="dimension"><span>Asymmetric loading</span><i style="--v:.68"></i></div>
+        </article>
+        <article class="panel compare-card">
+          <p class="eyebrow">TRAIL RUN</p><h3>Technical climb</h3>
+          <div class="dimension"><span>Cardio load</span><i style="--v:.84"></i></div>
+          <div class="dimension"><span>Impact exposure</span><i style="--v:.67"></i></div>
+          <div class="dimension"><span>Balance corrections</span><i style="--v:.39"></i></div>
+          <div class="dimension"><span>Asymmetric loading</span><i style="--v:.21"></i></div>
+        </article>
+        <article class="panel compare-card">
+          <p class="eyebrow">RIPSTIK</p><h3>Pumping session</h3>
+          <div class="dimension"><span>Cardio load</span><i style="--v:.56"></i></div>
+          <div class="dimension"><span>Impact exposure</span><i style="--v:.18"></i></div>
+          <div class="dimension"><span>Balance corrections</span><i style="--v:.92"></i></div>
+          <div class="dimension"><span>Asymmetric loading</span><i style="--v:.52"></i></div>
+        </article>
+      </div>
+      <p class="method-note">These are dimensional comparisons, not a single opaque “athletic score.” Each bar must retain units/provenance in production.</p>
+    </section>
+
+    <section class="screen" data-screen-panel="lab">
+      <header class="screen-title">
+        <div><p class="eyebrow">LAB</p><h2>Body, devices, and evidence</h2></div>
+      </header>
+      <div class="lab-grid">
+        <article class="panel lab-card">
+          <p class="eyebrow">BODY MODEL</p><h3>Personal geometry</h3>
+          <div class="body-placeholder">3D<br/>BODY</div>
+          <p>Skeleton v1 · 9 measured segments · calibration current</p>
+        </article>
+        <article class="panel lab-card">
+          <p class="eyebrow">EQUIPMENT</p><h3>Longboard</h3>
+          <div class="receipt"><span>Pod orientation</span><strong>X forward / Z up</strong></div>
+          <div class="receipt"><span>Mount</span><strong>center deck</strong></div>
+          <div class="receipt"><span>Last calibration</span><strong>today</strong></div>
+        </article>
+        <article class="panel lab-card">
+          <p class="eyebrow">EVIDENCE</p><h3>Receipts</h3>
+          <div class="receipt"><span>Clock drift</span><strong class="warning">field gate open</strong></div>
+          <div class="receipt"><span>Pressure zero</span><strong>fixture only</strong></div>
+          <div class="receipt"><span>Camera alignment</span><strong>fixture only</strong></div>
+        </article>
+        <article class="panel lab-card">
+          <p class="eyebrow">DATA</p><h3>Session archive</h3>
+          <div class="receipt"><span>Raw streams</span><strong>preserved</strong></div>
+          <div class="receipt"><span>Derived models</span><strong>versioned</strong></div>
+          <div class="receipt"><span>Export</span><strong>JSONL / MCAP</strong></div>
+        </article>
+      </div>
+    </section>
+  </main>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
