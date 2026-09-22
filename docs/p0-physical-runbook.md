@@ -104,7 +104,7 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -e '.[dev]'
 
-scripts/process_p0_watch.sh /path/to/watch.jsonl data/p0 60
+bash scripts/process_p0_watch.sh /path/to/watch.jsonl data/p0 60
 ```
 
 The command creates:
@@ -133,7 +133,7 @@ Include:
 Process with:
 
 ```bash
-scripts/process_p0_watch.sh /path/to/watch.jsonl data/p0 1200
+bash scripts/process_p0_watch.sh /path/to/watch.jsonl data/p0 1200
 ```
 
 The P0 gate deliberately does not hard-code a 50 Hz accuracy tolerance. It reports the observed effective rate. Freeze a rate tolerance only after real-device data shows the Watch's actual sampling behavior.
