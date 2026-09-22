@@ -21,6 +21,7 @@ from .clock_sync import write_clock_sync
 from .equipment_cli import calibrate_equipment_mount_file
 from .insole import import_opengo_text_export, write_p2_capture_receipt
 from .mcap_io import export_mcap
+from .operator_evidence import write_operator_evidence_receipt
 from .p0 import import_watch_journal, write_p0_receipt
 from .p1 import (
     import_pod_journal,
@@ -224,6 +225,16 @@ def _parser() -> argparse.ArgumentParser:
     camera_validate.add_argument(
         "--receipt",
         default="camera-capture-receipt.json",
+    )
+
+    operator_validate = sub.add_parser(
+        "validate-operator-evidence",
+        help="validate a sealed first-ride operator journal bundle",
+    )
+    operator_validate.add_argument("directory")
+    operator_validate.add_argument(
+        "--receipt",
+        default="operator-evidence-receipt.json",
     )
 
     p2_import = sub.add_parser(
@@ -446,6 +457,14 @@ def main(argv: list[str] | None = None) -> int:
             args.session,
             args.receipt,
             min_duration_s=args.min_duration,
+        )
+        print(json.dumps(receipt.to_dict(), indent=2, sort_keys=True))
+        return 0 if receipt.passed else 2
+
+    if args.command == "validate-operator-evidence":
+        receipt = write_operator_evidence_receipt(
+            args.directory,
+            args.receipt,
         )
         print(json.dumps(receipt.to_dict(), indent=2, sort_keys=True))
         return 0 if receipt.passed else 2

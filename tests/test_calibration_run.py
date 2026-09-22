@@ -397,6 +397,22 @@ def _build_four_role_fixture(tmp_path: Path) -> tuple[Path, Path]:
         encoding="utf-8",
     )
 
+    operator_journal = artifacts / "operator-events.jsonl"
+    operator_journal.write_text(
+        "{\"schema_version\":\"motionos.operator-events.v1\"}\n",
+        encoding="utf-8",
+    )
+    operator_metadata = artifacts / "operator-metadata.json"
+    operator_metadata.write_text(
+        json.dumps(
+            {
+                "schema_version": "motionos.operator-metadata.v1",
+                "source": "synthetic-test-only",
+            }
+        ),
+        encoding="utf-8",
+    )
+
     body_model = artifacts / "body-model.json"
     body_model.write_text(
         json.dumps(
@@ -420,6 +436,16 @@ def _build_four_role_fixture(tmp_path: Path) -> tuple[Path, Path]:
                     {
                         "kind": "body_model",
                         "path": str(body_model),
+                    }
+                ],
+                "artifacts": [
+                    {
+                        "kind": "operator_events",
+                        "path": str(operator_journal),
+                    },
+                    {
+                        "kind": "operator_metadata",
+                        "path": str(operator_metadata),
                     }
                 ],
                 "movement_blocks": [
@@ -464,9 +490,18 @@ def test_run_manifest_report_and_replay_are_hash_verified(tmp_path):
     )
     assert run.profiles[0].kind == "body_model"
     assert len(run.profiles[0].sha256) == 64
+    assert [artifact.kind for artifact in run.artifacts] == [
+        "operator_events",
+        "operator_metadata",
+    ]
+    assert all(len(artifact.sha256) == 64 for artifact in run.artifacts)
 
     report = build_calibration_report(run_path)
     assert report["unresolved_blockers"] == []
+    assert [artifact["kind"] for artifact in report["artifacts"]] == [
+        "operator_events",
+        "operator_metadata",
+    ]
     assert [source["role"] for source in report["sources"]] == [
         "watch",
         "equipment",
@@ -606,6 +641,24 @@ def test_run_manifest_detects_body_model_tampering(tmp_path):
     )
 
     with pytest.raises(ValueError, match="run profile hash changed"):
+        load_calibration_run(run_path)
+
+
+def test_run_manifest_detects_operator_artifact_tampering(tmp_path):
+    spec, run_path = _build_four_role_fixture(tmp_path)
+    run = build_calibration_run(spec, run_path)
+
+    artifact = next(
+        item for item in run.artifacts
+        if item.kind == "operator_events"
+    )
+    artifact_path = (run_path.parent / artifact.path).resolve()
+    artifact_path.write_text(
+        artifact_path.read_text(encoding="utf-8") + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="run artifact hash changed"):
         load_calibration_run(run_path)
 
 

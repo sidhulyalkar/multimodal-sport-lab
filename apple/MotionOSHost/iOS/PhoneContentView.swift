@@ -10,6 +10,7 @@ struct PhoneContentView: View {
                 VStack(spacing: 16) {
                     header
                     readiness
+                    FieldRunCard()
                     controls
                     protocolCard
                     journalCard

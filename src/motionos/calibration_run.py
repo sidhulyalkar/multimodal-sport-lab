@@ -39,6 +39,7 @@ class CalibrationRun:
     protocol_version: str
     calibration_bundle: RunArtifactReference
     profiles: tuple[RunArtifactReference, ...]
+    artifacts: tuple[RunArtifactReference, ...]
     movement_blocks: tuple[dict[str, object], ...]
     sync_landmarks: tuple[dict[str, object], ...]
     notes: tuple[str, ...]
@@ -56,6 +57,7 @@ class CalibrationRun:
             "protocol_version": self.protocol_version,
             "calibration_bundle": self.calibration_bundle.to_dict(),
             "profiles": [profile.to_dict() for profile in self.profiles],
+            "artifacts": [artifact.to_dict() for artifact in self.artifacts],
             "movement_blocks": list(self.movement_blocks),
             "sync_landmarks": list(self.sync_landmarks),
             "notes": list(self.notes),
@@ -178,6 +180,27 @@ def build_calibration_run(
             )
         )
 
+    artifacts_raw = raw.get("artifacts", [])
+    if not isinstance(artifacts_raw, list):
+        raise TypeError("artifacts must be a list")
+
+    artifacts: list[RunArtifactReference] = []
+    for index, item in enumerate(artifacts_raw):
+        if not isinstance(item, dict):
+            raise TypeError(f"artifacts[{index}] must be an object")
+        if item.get("path") is None:
+            raise ValueError(f"artifacts[{index}] requires path")
+        artifacts.append(
+            _artifact(
+                _resolve_path(
+                    str(item["path"]),
+                    base=spec.parent,
+                ),
+                output_dir=output.parent,
+                kind=str(item.get("kind", "run_artifact")),
+            )
+        )
+
     run = CalibrationRun(
         run_id=run_id,
         sport=sport,
@@ -188,6 +211,7 @@ def build_calibration_run(
             kind="calibration_bundle",
         ),
         profiles=tuple(profiles),
+        artifacts=tuple(artifacts),
         movement_blocks=_object_list(
             raw.get("movement_blocks"),
             field="movement_blocks",
@@ -248,12 +272,28 @@ def load_calibration_run(
     if len(profiles) != len(profiles_raw):
         raise TypeError("profile entries must be objects")
 
+    artifacts_raw = raw.get("artifacts", [])
+    if not isinstance(artifacts_raw, list):
+        raise TypeError("artifacts must be a list")
+    artifacts = tuple(
+        RunArtifactReference(
+            path=str(item["path"]),
+            sha256=str(item["sha256"]),
+            kind=str(item["kind"]),
+        )
+        for item in artifacts_raw
+        if isinstance(item, dict)
+    )
+    if len(artifacts) != len(artifacts_raw):
+        raise TypeError("artifact entries must be objects")
+
     run = CalibrationRun(
         run_id=str(raw["run_id"]),
         sport=str(raw["sport"]),
         protocol_version=str(raw["protocol_version"]),
         calibration_bundle=bundle_ref,
         profiles=profiles,
+        artifacts=artifacts,
         movement_blocks=_object_list(
             raw.get("movement_blocks"),
             field="movement_blocks",
@@ -288,6 +328,13 @@ def load_calibration_run(
             if sha256_file(profile_path) != profile.sha256:
                 raise ValueError(
                     f"run profile hash changed: {profile.kind}"
+                )
+
+        for artifact in run.artifacts:
+            artifact_path = _resolve_path(artifact.path, base=base)
+            if sha256_file(artifact_path) != artifact.sha256:
+                raise ValueError(
+                    f"run artifact hash changed: {artifact.kind}"
                 )
 
     return run
@@ -467,6 +514,7 @@ def build_calibration_report(
         "reference_session_id": run.reference_session_id,
         "calibration_bundle": run.calibration_bundle.to_dict(),
         "profiles": [profile.to_dict() for profile in run.profiles],
+        "artifacts": [artifact.to_dict() for artifact in run.artifacts],
         "movement_blocks": list(run.movement_blocks),
         "sync_landmarks": list(run.sync_landmarks),
         "notes": list(run.notes),
@@ -857,6 +905,10 @@ def build_replay_lab_payload(
             "profiles": [
                 profile.to_dict()
                 for profile in run.profiles
+            ],
+            "artifacts": [
+                artifact.to_dict()
+                for artifact in run.artifacts
             ],
         },
         "claim_boundary": (

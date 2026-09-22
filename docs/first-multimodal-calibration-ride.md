@@ -106,6 +106,51 @@ with explicit start/middle/end physical landmark windows.
 Do not select landmarks by searching the entire recording for whichever peaks
 produce the smallest residual.
 
+## Seal and validate operator evidence
+
+Use the **First-ride field coordinator** in the iPhone host during the ride.
+
+The coordinator records:
+
+- run identity;
+- readiness snapshots;
+- protocol block start/completion;
+- start/middle/end sync-cue annotations;
+- operator notes;
+- failure/anomaly notes.
+
+The resulting files are:
+
+~~~text
+operator-events.jsonl
+operator-metadata.json
+~~~
+
+The iPhone host clock in these files is **annotation-only**. It is not a
+replacement for physical clock synchronization.
+
+After copying both files into one directory, validate them:
+
+~~~bash
+motionos validate-operator-evidence \
+  data/operator/<run-id> \
+  --receipt data/operator/<run-id>/operator-evidence-receipt.json
+~~~
+
+A passing operator receipt checks:
+
+- stable run ID;
+- contiguous event sequence;
+- monotonic host annotation time;
+- exact timing-semantics boundary;
+- metadata/event count agreement;
+- sealed journal SHA-256;
+- preserved sync-cue labels;
+- preserved failure-note text.
+
+Then reference the journal, metadata, and receipt under `artifacts` in the
+calibration-run spec. These are run evidence, not sensor profiles.
+
 ## Build the calibration bundle
 
 Create a calibration-bundle spec referencing all four sessions, receipts, and
