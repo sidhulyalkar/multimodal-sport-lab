@@ -62,9 +62,17 @@ def _linear_fit(xs: list[int], ys: list[int]) -> tuple[float, float, float]:
 
 
 def estimate_clock_model(
-    observations: list[ClockObservation], *, keep_fraction: float = 0.6
+    observations: list[ClockObservation],
+    *,
+    keep_fraction: float = 0.6,
+    prune_residual_outliers: bool = True,
 ) -> ClockModel:
-    """Estimate device→session time mapping using the lowest-RTT probes."""
+    """Estimate an affine device→session mapping.
+
+    RTT-style coordinator probes keep the historical low-jitter/outlier
+    pruning behavior by default. Deliberate physical landmarks can disable
+    residual pruning so every predeclared correspondence remains in the fit.
+    """
 
     if len(observations) < 3:
         raise ValueError("at least three clock observations are required")
@@ -84,7 +92,7 @@ def estimate_clock_model(
         (abs(item.session_time_ns - (slope * item.device_time_ns + intercept)), item)
         for item in selected
     ]
-    if len(residual_pairs) >= 5:
+    if prune_residual_outliers and len(residual_pairs) >= 5:
         residual_pairs.sort(key=lambda item: item[0])
         selected = sorted(
             [item for _, item in residual_pairs[: max(3, int(len(residual_pairs) * 0.8))]],

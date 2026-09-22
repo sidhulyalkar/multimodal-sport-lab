@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from .provenance import sha256_file
 from .qc import inspect_stream
 from .schema import DeviceDescriptor, SensorEvent, SessionManifest
 from .session import SessionReader, SessionWriter
@@ -59,8 +60,14 @@ def import_watch_journal(
     )
 
     host_metadata_path = journal.with_name("iphone-host.json")
+    source_evidence_sha256 = {
+        "watch_journal": sha256_file(journal),
+    }
     iphone_host_metadata: dict[str, object] = {}
     if host_metadata_path.exists():
+        source_evidence_sha256["iphone_host_metadata"] = sha256_file(
+            host_metadata_path
+        )
         raw_host_metadata = json.loads(
             host_metadata_path.read_text(encoding="utf-8")
         )
@@ -97,6 +104,7 @@ def import_watch_journal(
             "cross_device_sync_qualified": False,
             "watch_capture": watch_metadata,
             "iphone_host": iphone_host_metadata,
+            "source_evidence_sha256": source_evidence_sha256,
         },
     )
 
@@ -113,6 +121,7 @@ def import_watch_journal(
                 "source_path": str(journal),
                 "event_count": len(events),
                 "streams": list(streams),
+                "source_evidence_sha256": source_evidence_sha256,
             },
         )
 

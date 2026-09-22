@@ -8,6 +8,11 @@ from itertools import pairwise
 from pathlib import Path
 
 from .clock import ClockModel, ClockObservation, estimate_clock_model
+from .clock_sync import (
+    clock_observations_from_json,
+    derive_clock_sync,
+    write_clock_sync,
+)
 from .equipment import EquipmentProfile, load_equipment_profile
 from .equipment_adapter import (
     ACCEL_STREAM,
@@ -29,37 +34,6 @@ def _sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _acceleration_magnitude(event: SensorEvent) -> float:
-    try:
-        x = float(event.payload["ax"])
-        y = float(event.payload["ay"])
-        z = float(event.payload["az"])
-    except (KeyError, TypeError, ValueError) as exc:
-        raise ValueError(
-            f"event {event.stream} lacks numeric acceleration channels"
-        ) from exc
-    return (x * x + y * y + z * z) ** 0.5
-
-
-def _peak_in_window(
-    events: list[SensorEvent],
-    start_ns: int,
-    end_ns: int,
-) -> SensorEvent:
-    if end_ns <= start_ns:
-        raise ValueError("synchronization window end must be after start")
-    candidates = [
-        event
-        for event in events
-        if start_ns <= event.canonical_time_ns <= end_ns
-    ]
-    if not candidates:
-        raise ValueError(
-            f"no events inside synchronization window {start_ns}:{end_ns}"
-        )
-    return max(candidates, key=_acceleration_magnitude)
-
-
 def derive_impulse_clock_observations(
     reference_reader: SessionReader,
     pod_reader: SessionReader,
@@ -68,48 +42,17 @@ def derive_impulse_clock_observations(
     reference_stream: str = "/body/watch/imu",
     pod_stream: str = ACCEL_STREAM,
 ) -> list[ClockObservation]:
-    """Pair deliberate physical impulses across independent clock domains.
+    """Compatibility wrapper over generic deliberate-landmark synchronization."""
 
-    Each window supplies separate search bounds for the reference/Watch clock
-    and the pod clock. The strongest acceleration magnitude in each window is
-    treated as the same deliberately-created physical landmark.
-    """
-
-    reference = list(reference_reader.iter_stream(reference_stream))
-    pod = list(pod_reader.iter_stream(pod_stream))
-    if not reference:
-        raise ValueError(f"reference stream is empty: {reference_stream}")
-    if not pod:
-        raise ValueError(f"pod stream is empty: {pod_stream}")
-
-    observations: list[ClockObservation] = []
-    for index, window in enumerate(windows):
-        try:
-            ref_start = int(window["reference_start_ns"])
-            ref_end = int(window["reference_end_ns"])
-            pod_start = int(window["pod_start_ns"])
-            pod_end = int(window["pod_end_ns"])
-            uncertainty_ns = int(window.get("uncertainty_ns", 0))
-        except (KeyError, TypeError, ValueError) as exc:
-            raise ValueError(
-                f"invalid synchronization window at index {index}"
-            ) from exc
-
-        reference_peak = _peak_in_window(reference, ref_start, ref_end)
-        pod_peak = _peak_in_window(pod, pod_start, pod_end)
-        observations.append(
-            ClockObservation(
-                device_time_ns=pod_peak.canonical_time_ns,
-                session_time_ns=reference_peak.canonical_time_ns,
-                round_trip_ns=max(0, uncertainty_ns),
-            )
-        )
-
-    if len(observations) < 3:
-        raise ValueError(
-            "at least three synchronization landmarks are required"
-        )
-    return observations
+    receipt = derive_clock_sync(
+        reference_reader,
+        pod_reader,
+        windows,
+        reference_stream=reference_stream,
+        target_stream=pod_stream,
+        allow_legacy_pod_windows=True,
+    )
+    return list(receipt.observations)
 
 
 def write_impulse_clock_observations(
@@ -121,45 +64,18 @@ def write_impulse_clock_observations(
     reference_stream: str = "/body/watch/imu",
     pod_stream: str = ACCEL_STREAM,
 ) -> list[ClockObservation]:
-    raw = json.loads(Path(windows_path).read_text(encoding="utf-8"))
-    if not isinstance(raw, list):
-        raise TypeError("synchronization windows must be a JSON list")
+    """Write the generic receipt while preserving the legacy P1 return type."""
 
-    windows: list[dict[str, object]] = []
-    for index, item in enumerate(raw):
-        if not isinstance(item, dict):
-            raise TypeError(
-                f"synchronization window {index} must be an object"
-            )
-        windows.append(dict(item))
-
-    observations = derive_impulse_clock_observations(
-        SessionReader(reference_session),
-        SessionReader(pod_session),
-        windows,
+    receipt = write_clock_sync(
+        reference_session,
+        pod_session,
+        windows_path,
+        output_path,
         reference_stream=reference_stream,
-        pod_stream=pod_stream,
+        target_stream=pod_stream,
+        allow_legacy_pod_windows=True,
     )
-
-    output = Path(output_path)
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(
-        json.dumps(
-            [
-                {
-                    "device_time_ns": item.device_time_ns,
-                    "session_time_ns": item.session_time_ns,
-                    "round_trip_ns": item.round_trip_ns,
-                }
-                for item in observations
-            ],
-            indent=2,
-            sort_keys=True,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-    return observations
+    return list(receipt.observations)
 
 
 def import_pod_journal(
@@ -478,25 +394,7 @@ def _tick_gap_report(
 def _read_sync_observations(
     path: str | Path | None,
 ) -> list[ClockObservation]:
-    if path is None:
-        return []
-
-    raw = json.loads(Path(path).read_text(encoding="utf-8"))
-    if not isinstance(raw, list):
-        raise TypeError("sync observations must be a JSON list")
-
-    observations: list[ClockObservation] = []
-    for index, item in enumerate(raw):
-        if not isinstance(item, dict):
-            raise TypeError(f"sync observation {index} must be an object")
-        observations.append(
-            ClockObservation(
-                device_time_ns=int(item["device_time_ns"]),
-                session_time_ns=int(item["session_time_ns"]),
-                round_trip_ns=int(item.get("round_trip_ns", 0)),
-            )
-        )
-    return observations
+    return clock_observations_from_json(path)
 
 
 def _payload_contract_error_count(
@@ -805,7 +703,11 @@ def build_p1_receipt(
 
     observations = sync_observations or []
     clock_model = (
-        estimate_clock_model(observations, keep_fraction=1.0)
+        estimate_clock_model(
+            observations,
+            keep_fraction=1.0,
+            prune_residual_outliers=False,
+        )
         if len(observations) >= 3
         else None
     )

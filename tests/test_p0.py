@@ -107,6 +107,9 @@ def test_p0_import_and_receipt_pass(tmp_path):
     assert receipt.missing_environment_fields == ()
     assert reader.manifest.devices[0].model == "Apple Watch"
     assert reader.manifest.devices[0].firmware == "26.0"
+    hashes = reader.manifest.metadata["source_evidence_sha256"]
+    assert len(hashes["watch_journal"]) == 64
+    assert len(hashes["iphone_host_metadata"]) == 64
 
 
 def test_p0_receipt_fails_dropped_watch_sample(tmp_path):

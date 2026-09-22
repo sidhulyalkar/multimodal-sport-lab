@@ -3,6 +3,12 @@ from __future__ import annotations
 import argparse
 import json
 
+from .calibration import (
+    build_calibration_bundle,
+    calibration_gap_regions,
+    replay_calibration_frames,
+)
+from .clock_sync import write_clock_sync
 from .equipment_cli import calibrate_equipment_mount_file
 from .insole import import_opengo_text_export, write_p2_capture_receipt
 from .mcap_io import export_mcap
@@ -17,6 +23,19 @@ from .replay import replay_frames
 from .session import SessionReader
 from .simulate import simulate_session
 from .validate import validate_m0_session
+
+
+def _channel_keys(raw: str) -> tuple[str, ...]:
+    keys = tuple(
+        value.strip()
+        for value in raw.split(",")
+        if value.strip()
+    )
+    if not keys:
+        raise argparse.ArgumentTypeError(
+            "channel key list must contain at least one name"
+        )
+    return keys
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -111,6 +130,50 @@ def _parser() -> argparse.ArgumentParser:
         "--pod-stream",
         default="/equipment/imu/accel",
     )
+
+    generic_sync = sub.add_parser(
+        "derive-clock-sync",
+        help="derive an affine target→reference clock mapping from explicit landmarks",
+    )
+    generic_sync.add_argument("reference_session")
+    generic_sync.add_argument("target_session")
+    generic_sync.add_argument("windows")
+    generic_sync.add_argument("output")
+    generic_sync.add_argument("--reference-stream", required=True)
+    generic_sync.add_argument("--target-stream", required=True)
+    generic_sync.add_argument(
+        "--reference-keys",
+        type=_channel_keys,
+        default=("ax", "ay", "az"),
+        help="comma-separated payload keys used for reference peak magnitude",
+    )
+    generic_sync.add_argument(
+        "--target-keys",
+        type=_channel_keys,
+        default=("ax", "ay", "az"),
+        help="comma-separated payload keys used for target peak magnitude",
+    )
+
+    calibration = sub.add_parser(
+        "build-calibration-bundle",
+        help="build a hash-verified non-destructive calibration manifest",
+    )
+    calibration.add_argument("spec")
+    calibration.add_argument("output")
+
+    calibration_replay = sub.add_parser(
+        "replay-calibration",
+        help="replay clock-mapped calibration events without rewriting sources",
+    )
+    calibration_replay.add_argument("manifest")
+    calibration_replay.add_argument("--hz", type=float, default=10.0)
+    calibration_replay.add_argument("--frames", type=int, default=10)
+
+    calibration_gaps = sub.add_parser(
+        "calibration-gaps",
+        help="report explicit timestamp gaps in a calibration bundle",
+    )
+    calibration_gaps.add_argument("manifest")
 
     p2_import = sub.add_parser(
         "import-opengo-export",
@@ -238,6 +301,48 @@ def main(argv: list[str] | None = None) -> int:
                     }
                     for item in observations
                 ],
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    if args.command == "derive-clock-sync":
+        receipt = write_clock_sync(
+            args.reference_session,
+            args.target_session,
+            args.windows,
+            args.output,
+            reference_stream=args.reference_stream,
+            target_stream=args.target_stream,
+            reference_peak_keys=args.reference_keys,
+            target_peak_keys=args.target_keys,
+        )
+        print(json.dumps(receipt.to_dict(), indent=2, sort_keys=True))
+        return 0 if receipt.coverage.passed else 2
+
+    if args.command == "build-calibration-bundle":
+        bundle = build_calibration_bundle(args.spec, args.output)
+        print(json.dumps(bundle.to_dict(), indent=2, sort_keys=True))
+        return 0
+
+    if args.command == "replay-calibration":
+        for index, frame in enumerate(
+            replay_calibration_frames(
+                args.manifest,
+                frame_hz=args.hz,
+            )
+        ):
+            if index >= args.frames:
+                break
+            print(json.dumps(frame.to_dict(), sort_keys=True))
+        return 0
+
+    if args.command == "calibration-gaps":
+        gaps = calibration_gap_regions(args.manifest)
+        print(
+            json.dumps(
+                [gap.to_dict() for gap in gaps],
                 indent=2,
                 sort_keys=True,
             )
