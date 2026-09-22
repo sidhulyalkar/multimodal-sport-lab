@@ -395,7 +395,7 @@ final class FieldRunCoordinator: ObservableObject {
                 state: state
             )
             evidenceBundle = try await journal.close(
-                plannedBlocks: Self.movementBlocks.map(\.id),
+                plannedBlocks: Self.movementBlocks.map { $0.id },
                 hostModel: UIDevice.current.model,
                 hostOSVersion: UIDevice.current.systemVersion
             )
