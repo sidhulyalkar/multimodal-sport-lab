@@ -55,6 +55,11 @@ public final class WatchWorkoutRecorder: NSObject, HKWorkoutSessionDelegate, HKL
         self.session = session
         self.builder = builder
 
+        // Prepare first. This keeps the primary session in a valid pre-running
+        // state before mirroring and avoids known intermittent mirroring failures
+        // observed on recent iOS/watchOS releases.
+        session.prepare()
+
         if mirrorToCompanion {
             do {
                 try await session.startMirroringToCompanionDevice()
