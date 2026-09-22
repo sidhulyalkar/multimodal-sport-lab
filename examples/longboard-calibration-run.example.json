@@ -103,5 +103,19 @@
     "Do not change camera zoom or equipment-pod mount during the run.",
     "Do not edit source video or sensor exports before import."
   ],
-  "failure_modes": []
+  "failure_modes": [],
+  "artifacts": [
+    {
+      "kind": "operator_events",
+      "path": "../data/operator/m0-longboard-run/operator-events.jsonl"
+    },
+    {
+      "kind": "operator_metadata",
+      "path": "../data/operator/m0-longboard-run/operator-metadata.json"
+    },
+    {
+      "kind": "operator_evidence_receipt",
+      "path": "../data/operator/m0-longboard-run/operator-evidence-receipt.json"
+    }
+  ]
 }
