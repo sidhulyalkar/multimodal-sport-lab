@@ -28,9 +28,41 @@ public enum Pose3DExtractor {
                 .number(Double(translation.z))
             ])
         }
+
         return [
             "joints_m": .object(joints),
-            "joint_count": .number(Double(joints.count))
+            "joint_count": .number(Double(joints.count)),
+            "body_height_m": .number(Double(observation.bodyHeight)),
+            "height_estimation": .string(
+                String(describing: observation.heightEstimation)
+            ),
+            "camera_origin_matrix": .array(
+                flatten(observation.cameraOriginMatrix).map {
+                    .number(Double($0))
+                }
+            ),
+            "coordinate_basis": .string("vision_root_relative_meters")
+        ]
+    }
+
+    private static func flatten(_ matrix: simd_float4x4) -> [Float] {
+        [
+            matrix.columns.0.x,
+            matrix.columns.0.y,
+            matrix.columns.0.z,
+            matrix.columns.0.w,
+            matrix.columns.1.x,
+            matrix.columns.1.y,
+            matrix.columns.1.z,
+            matrix.columns.1.w,
+            matrix.columns.2.x,
+            matrix.columns.2.y,
+            matrix.columns.2.z,
+            matrix.columns.2.w,
+            matrix.columns.3.x,
+            matrix.columns.3.y,
+            matrix.columns.3.z,
+            matrix.columns.3.w
         ]
     }
 }

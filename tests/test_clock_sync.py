@@ -291,3 +291,114 @@ def test_deliberate_sync_fit_keeps_all_five_landmarks(tmp_path):
     assert receipt.clock_model.observations_used == 5
     assert receipt.coverage.passed is True
     assert receipt.clock_model.drift_ppm == pytest.approx(18.0, abs=0.01)
+
+
+
+def test_sparse_peak_stream_cannot_define_full_capture_coverage(tmp_path):
+    reference_manifest = SessionManifest(
+        session_id="coverage-reference",
+        created_at_utc=datetime.now(UTC).isoformat(),
+        sport="calibration",
+        mode="calibration",
+        athlete_id="fixture",
+        devices=(
+            DeviceDescriptor(
+                device_id="watch",
+                kind="imu",
+                placement="wrist",
+                streams=("/body/watch/imu",),
+            ),
+        ),
+    )
+    reference_root = tmp_path / "reference"
+    landmark_times = [4_000_000_000, 7_000_000_000, 10_000_000_000]
+    with SessionWriter(reference_root, reference_manifest) as writer:
+        for sequence, target_time in enumerate(landmark_times):
+            writer.append(
+                SensorEvent(
+                    session_id="coverage-reference",
+                    device_id="watch",
+                    stream="/body/watch/imu",
+                    sequence=sequence,
+                    device_time_ns=target_time + 50_000_000,
+                    payload={"ax": 20.0, "ay": 0.0, "az": 0.0},
+                )
+            )
+
+    target_manifest = SessionManifest(
+        session_id="coverage-target",
+        created_at_utc=datetime.now(UTC).isoformat(),
+        sport="calibration",
+        mode="calibration",
+        athlete_id="fixture",
+        devices=(
+            DeviceDescriptor(
+                device_id="camera",
+                kind="camera",
+                placement="tripod",
+                streams=("/derived/motion", "/raw/frame"),
+            ),
+        ),
+    )
+    target_root = tmp_path / "target"
+    with SessionWriter(target_root, target_manifest) as writer:
+        for sequence, time_ns in enumerate(
+            range(0, 10_000_000_001, 1_000_000_000)
+        ):
+            writer.append(
+                SensorEvent(
+                    session_id="coverage-target",
+                    device_id="camera",
+                    stream="/raw/frame",
+                    sequence=sequence,
+                    device_time_ns=time_ns,
+                    payload={"value": 1.0},
+                )
+            )
+        for sequence, time_ns in enumerate(landmark_times):
+            writer.append(
+                SensorEvent(
+                    session_id="coverage-target",
+                    device_id="camera",
+                    stream="/derived/motion",
+                    sequence=sequence,
+                    device_time_ns=time_ns,
+                    payload={"motion": 20.0},
+                )
+            )
+
+    windows = [
+        {
+            "reference_start_ns": time_ns + 40_000_000,
+            "reference_end_ns": time_ns + 60_000_000,
+            "target_start_ns": time_ns - 10_000_000,
+            "target_end_ns": time_ns + 10_000_000,
+        }
+        for time_ns in landmark_times
+    ]
+
+    sparse_receipt = derive_clock_sync(
+        SessionReader(reference_root / "coverage-reference"),
+        SessionReader(target_root / "coverage-target"),
+        windows,
+        reference_stream="/body/watch/imu",
+        target_stream="/derived/motion",
+        target_peak_keys=("motion",),
+    )
+    assert sparse_receipt.coverage.passed is True
+
+    raw_coverage_receipt = derive_clock_sync(
+        SessionReader(reference_root / "coverage-reference"),
+        SessionReader(target_root / "coverage-target"),
+        windows,
+        reference_stream="/body/watch/imu",
+        target_stream="/derived/motion",
+        target_peak_keys=("motion",),
+        target_coverage_stream="/raw/frame",
+    )
+
+    assert raw_coverage_receipt.target_coverage_stream == "/raw/frame"
+    assert raw_coverage_receipt.coverage.first_position_fraction == pytest.approx(
+        0.4
+    )
+    assert raw_coverage_receipt.coverage.passed is False

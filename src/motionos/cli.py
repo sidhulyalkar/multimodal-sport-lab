@@ -8,6 +8,7 @@ from .calibration import (
     calibration_gap_regions,
     replay_calibration_frames,
 )
+from .camera import import_camera_evidence, write_camera_capture_receipt
 from .clock_sync import write_clock_sync
 from .equipment_cli import calibrate_equipment_mount_file
 from .insole import import_opengo_text_export, write_p2_capture_receipt
@@ -142,6 +143,13 @@ def _parser() -> argparse.ArgumentParser:
     generic_sync.add_argument("--reference-stream", required=True)
     generic_sync.add_argument("--target-stream", required=True)
     generic_sync.add_argument(
+        "--target-coverage-stream",
+        help=(
+            "stream whose raw time span defines start/middle/end coverage; "
+            "defaults to --target-stream"
+        ),
+    )
+    generic_sync.add_argument(
         "--reference-keys",
         type=_channel_keys,
         default=("ax", "ay", "az"),
@@ -192,6 +200,24 @@ def _parser() -> argparse.ArgumentParser:
     p2.add_argument("session")
     p2.add_argument("--min-duration", type=float, default=60.0)
     p2.add_argument("--receipt", default="p2-capture-receipt.json")
+
+    camera_import = sub.add_parser(
+        "import-camera-evidence",
+        help="import iPhone video + camera journal + metadata",
+    )
+    camera_import.add_argument("journal")
+    camera_import.add_argument("video")
+    camera_import.add_argument("--metadata")
+    camera_import.add_argument("--out", default="data")
+    camera_import.add_argument("--sport", default="camera-qualification")
+
+    camera = sub.add_parser(
+        "validate-camera",
+        help="write an iPhone camera/Vision evidence receipt",
+    )
+    camera.add_argument("session")
+    camera.add_argument("--min-duration", type=float, default=60.0)
+    camera.add_argument("--receipt", default="camera-capture-receipt.json")
     return parser
 
 
@@ -317,6 +343,7 @@ def main(argv: list[str] | None = None) -> int:
             target_stream=args.target_stream,
             reference_peak_keys=args.reference_keys,
             target_peak_keys=args.target_keys,
+            target_coverage_stream=args.target_coverage_stream,
         )
         print(json.dumps(receipt.to_dict(), indent=2, sort_keys=True))
         return 0 if receipt.coverage.passed else 2
@@ -363,6 +390,27 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "validate-p2":
         receipt = write_p2_capture_receipt(
+            args.session,
+            args.receipt,
+            min_duration_s=args.min_duration,
+        )
+        print(json.dumps(receipt.to_dict(), indent=2, sort_keys=True))
+        return 0 if receipt.capture_passed else 2
+
+    if args.command == "import-camera-evidence":
+        print(
+            import_camera_evidence(
+                args.journal,
+                args.video,
+                args.out,
+                metadata_path=args.metadata,
+                sport=args.sport,
+            )
+        )
+        return 0
+
+    if args.command == "validate-camera":
+        receipt = write_camera_capture_receipt(
             args.session,
             args.receipt,
             min_duration_s=args.min_duration,

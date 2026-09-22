@@ -34,6 +34,8 @@ def test_derive_clock_sync_forwards_generic_streams_and_peak_keys(
             "/body/watch/imu",
             "--target-stream",
             "/body/left_foot/imu",
+            "--target-coverage-stream",
+            "/body/left_foot/imu",
             "--reference-keys",
             "ax,ay,az",
             "--target-keys",
@@ -50,6 +52,10 @@ def test_derive_clock_sync_forwards_generic_streams_and_peak_keys(
     )
     assert calls[0][1]["reference_stream"] == "/body/watch/imu"
     assert calls[0][1]["target_stream"] == "/body/left_foot/imu"
+    assert (
+        calls[0][1]["target_coverage_stream"]
+        == "/body/left_foot/imu"
+    )
     assert calls[0][1]["reference_peak_keys"] == ("ax", "ay", "az")
     assert calls[0][1]["target_peak_keys"] == ("ax", "az")
     assert '"passed": true' in capsys.readouterr().out

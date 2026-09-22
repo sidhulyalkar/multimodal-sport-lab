@@ -52,6 +52,11 @@ For each source pair, define narrow independent search windows.
 Do not run unconstrained full-recording peak matching and then choose the
 correspondence that looks best.
 
+If the landmark/peak stream is sparse or derived, pass
+`--target-coverage-stream` so structural coverage is judged against a raw
+capture stream spanning the true recording. When omitted, coverage defaults to
+the target peak stream.
+
 A generic window file uses:
 
 ```json

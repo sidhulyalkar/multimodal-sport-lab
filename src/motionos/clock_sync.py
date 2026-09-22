@@ -86,6 +86,7 @@ class ClockSyncReceipt:
     windows_sha256: str
     reference_peak_keys: tuple[str, ...]
     target_peak_keys: tuple[str, ...]
+    target_coverage_stream: str
     schema_version: str = CLOCK_SYNC_SCHEMA_VERSION
 
     @property
@@ -98,6 +99,7 @@ class ClockSyncReceipt:
             "reference": self.reference.to_dict(),
             "target": self.target.to_dict(),
             "windows_sha256": self.windows_sha256,
+            "target_coverage_stream": self.target_coverage_stream,
             "peak_metric": {
                 "type": "euclidean_magnitude",
                 "reference_keys": list(self.reference_peak_keys),
@@ -281,6 +283,7 @@ def derive_clock_sync(
     target_stream: str,
     reference_peak_keys: tuple[str, ...] = ("ax", "ay", "az"),
     target_peak_keys: tuple[str, ...] = ("ax", "ay", "az"),
+    target_coverage_stream: str | None = None,
     allow_legacy_pod_windows: bool = False,
 ) -> ClockSyncReceipt:
     """Fit a target-device clock to a reference session from explicit landmarks.
@@ -291,10 +294,18 @@ def derive_clock_sync(
 
     reference_events = list(reference_reader.iter_stream(reference_stream))
     target_events = list(target_reader.iter_stream(target_stream))
+    coverage_stream = target_coverage_stream or target_stream
+    target_coverage_events = list(
+        target_reader.iter_stream(coverage_stream)
+    )
     if not reference_events:
         raise ValueError(f"reference stream is empty: {reference_stream}")
     if not target_events:
         raise ValueError(f"target stream is empty: {target_stream}")
+    if not target_coverage_events:
+        raise ValueError(
+            f"target coverage stream is empty: {coverage_stream}"
+        )
     if len(windows) < 3:
         raise ValueError("at least three synchronization windows are required")
 
@@ -369,7 +380,10 @@ def derive_clock_sync(
         )
 
     observations = [landmark.to_observation() for landmark in landmarks]
-    coverage = landmark_coverage(observations, target_events)
+    coverage = landmark_coverage(
+        observations,
+        target_coverage_events,
+    )
     model = estimate_clock_model(
         observations,
         keep_fraction=1.0,
@@ -395,6 +409,7 @@ def derive_clock_sync(
         windows_sha256=_json_sha256(windows),
         reference_peak_keys=reference_peak_keys,
         target_peak_keys=target_peak_keys,
+        target_coverage_stream=coverage_stream,
     )
 
 
@@ -425,10 +440,17 @@ def validate_clock_sync_receipt(
         reference_reader.iter_stream(receipt.reference.stream)
     )
     target_events = list(target_reader.iter_stream(receipt.target.stream))
+    target_coverage_events = list(
+        target_reader.iter_stream(receipt.target_coverage_stream)
+    )
     if not reference_events:
         raise ValueError("clock-sync reference stream is missing or empty")
     if not target_events:
         raise ValueError("clock-sync target stream is missing or empty")
+    if not target_coverage_events:
+        raise ValueError(
+            "clock-sync target coverage stream is missing or empty"
+        )
 
     reference_points = {
         (event.sequence, event.canonical_time_ns)
@@ -459,7 +481,7 @@ def validate_clock_sync_receipt(
     observations = list(receipt.observations)
     recomputed_coverage = landmark_coverage(
         observations,
-        target_events,
+        target_coverage_events,
     )
     if recomputed_coverage != receipt.coverage:
         raise ValueError("clock-sync landmark coverage does not recompute")
@@ -525,6 +547,7 @@ def write_clock_sync(
     target_stream: str,
     reference_peak_keys: tuple[str, ...] = ("ax", "ay", "az"),
     target_peak_keys: tuple[str, ...] = ("ax", "ay", "az"),
+    target_coverage_stream: str | None = None,
     allow_legacy_pod_windows: bool = False,
 ) -> ClockSyncReceipt:
     windows = read_windows(windows_path)
@@ -536,6 +559,7 @@ def write_clock_sync(
         target_stream=target_stream,
         reference_peak_keys=reference_peak_keys,
         target_peak_keys=target_peak_keys,
+        target_coverage_stream=target_coverage_stream,
         allow_legacy_pod_windows=allow_legacy_pod_windows,
     )
 
@@ -686,6 +710,12 @@ def load_clock_sync_receipt(path: str | Path) -> ClockSyncReceipt:
         target_peak_keys=tuple(
             str(value)
             for value in metric.get("target_keys", [])
+        ),
+        target_coverage_stream=str(
+            raw.get(
+                "target_coverage_stream",
+                identity("target").stream,
+            )
         ),
         schema_version=str(raw["schema_version"]),
     )

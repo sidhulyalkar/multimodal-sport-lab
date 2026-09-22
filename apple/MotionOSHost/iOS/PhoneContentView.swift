@@ -14,6 +14,7 @@ struct PhoneContentView: View {
                     protocolCard
                     journalCard
                     EquipmentPodCard()
+                    CameraEvidenceCard()
 
                     if let error = coordinator.errorMessage ?? inbox.lastError {
                         Text(error)
