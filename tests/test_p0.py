@@ -51,6 +51,8 @@ def test_p0_import_and_receipt_pass(tmp_path):
     assert receipt.imu_count == 150
     assert 49.0 <= receipt.imu_effective_hz <= 51.0
     assert receipt.imu_missing_sequences == 0
+    assert receipt.imu_median_dt_ms == 20.0
+    assert receipt.imu_max_gap_ms == 20.0
     assert receipt.hr_count == 3
     assert receipt.raw_device_time_samples == 153
     assert receipt.mapped_session_time_samples == 0
