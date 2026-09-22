@@ -1,0 +1,71 @@
+{
+  "schema_version": "motionos.first-ride-log.v1",
+  "ride_id": "replace-with-ride-id",
+  "stages": [
+    {
+      "id": "quiet_stance",
+      "completed": false,
+      "notes": "30 s stable stance"
+    },
+    {
+      "id": "pushes",
+      "completed": false,
+      "notes": "10 controlled pushes"
+    },
+    {
+      "id": "straight_glide",
+      "completed": false,
+      "notes": "stable straight glide"
+    },
+    {
+      "id": "left_carves",
+      "completed": false,
+      "notes": "repeated left carves"
+    },
+    {
+      "id": "right_carves",
+      "completed": false,
+      "notes": "repeated right carves"
+    },
+    {
+      "id": "front_load_shift",
+      "completed": false,
+      "notes": "deliberate front-foot load transfer"
+    },
+    {
+      "id": "rear_load_shift",
+      "completed": false,
+      "notes": "deliberate rear-foot load transfer"
+    },
+    {
+      "id": "foot_repositioning",
+      "completed": false,
+      "notes": "controlled stance repositioning"
+    },
+    {
+      "id": "braking",
+      "completed": false,
+      "notes": "controlled slowing/stopping"
+    },
+    {
+      "id": "stabilization_perturbations",
+      "completed": false,
+      "notes": "safe deliberate stabilization corrections"
+    },
+    {
+      "id": "sync_start",
+      "completed": false,
+      "notes": "shared camera/Watch/pod/insole landmark near start"
+    },
+    {
+      "id": "sync_middle",
+      "completed": false,
+      "notes": "shared landmark near middle"
+    },
+    {
+      "id": "sync_end",
+      "completed": false,
+      "notes": "shared landmark near end"
+    }
+  ]
+}
