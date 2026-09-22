@@ -22,7 +22,7 @@ public enum Pose3DExtractor {
         for name in observation.availableJointNames {
             let point = try observation.recognizedPoint(name)
             let translation = point.position.columns.3
-            joints[name.rawValue] = .array([
+            joints[name.rawValue.rawValue] = .array([
                 .number(Double(translation.x)),
                 .number(Double(translation.y)),
                 .number(Double(translation.z))
