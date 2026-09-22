@@ -9,6 +9,7 @@ import {
 import { demoSession } from "./demo-session.mjs";
 
 const $ = (selector) => document.querySelector(selector);
+const $$ = (selector) => [...document.querySelectorAll(selector)];
 const timeline = $("#timeline");
 const deviceGrid = $("#devices");
 const captureGate = deriveCaptureGate(demoSession.devices, demoSession.requiredIds);
@@ -56,7 +57,7 @@ function skeletonSVG(joints) {
       <g class="joints">
         ${Object.values(joints).map(([x,y]) => `<circle cx="${x}" cy="${y}" r="2.2" />`).join("")}
       </g>
-      <g class="board" transform="rotate(0 52 91)">
+      <g class="board">
         <line x1="28" y1="91" x2="76" y2="91" />
         <circle cx="34" cy="94" r="1.7" />
         <circle cx="70" cy="94" r="1.7" />
@@ -100,6 +101,19 @@ function onTimeline() {
   renderFrame(nearestFrame(demoSession.frames, time));
   $("#time-readout").textContent = `${(time / 1000).toFixed(1)} s`;
 }
+
+function showScreen(name) {
+  $$(".tab").forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.screen === name);
+  });
+  $$(".screen").forEach((screen) => {
+    screen.classList.toggle("is-active", screen.dataset.screenPanel === name);
+  });
+}
+
+$$(".tab").forEach((button) =>
+  button.addEventListener("click", () => showScreen(button.dataset.screen))
+);
 
 $("#session-sport").textContent = demoSession.sport;
 $("#session-duration").textContent = demoSession.duration;
