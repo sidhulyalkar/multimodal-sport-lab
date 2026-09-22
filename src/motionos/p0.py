@@ -122,7 +122,6 @@ class P0Receipt:
                 "max_gap_ms": self.imu_max_gap_ms,
                 "missing_sequences": self.imu_missing_sequences,
                 "non_monotonic_timestamps": self.imu_non_monotonic_timestamps,
-                "max_gap_ms": self.imu_max_gap_ms,
             },
             "watch_hr": {
                 "count": self.hr_count,
