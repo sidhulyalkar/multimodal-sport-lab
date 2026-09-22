@@ -2,7 +2,6 @@ from pathlib import Path
 
 from motionos.schema import SensorEvent
 
-
 FIXTURE = (
     Path(__file__).parents[1]
     / "apple"
