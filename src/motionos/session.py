@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import json
 import os
+from collections.abc import Iterable, Iterator
 from pathlib import Path
-from typing import Iterable, Iterator
+from typing import Self
 
 from .schema import SensorEvent, SessionManifest
 
@@ -74,7 +75,7 @@ class SessionWriter:
         self._closed = True
         return self.root
 
-    def __enter__(self) -> "SessionWriter":
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
