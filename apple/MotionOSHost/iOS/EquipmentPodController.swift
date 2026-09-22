@@ -32,11 +32,6 @@ final class EquipmentPodController: ObservableObject {
     private var stateRefreshTask: Task<Void, Never>?
     private var lastPreviewPublish = Date.distantPast
 
-    deinit {
-        scanRefreshTask?.cancel()
-        stateRefreshTask?.cancel()
-    }
-
     func startScanning() {
         errorMessage = nil
         candidates = []
