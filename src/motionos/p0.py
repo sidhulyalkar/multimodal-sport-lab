@@ -97,11 +97,14 @@ class P0Receipt:
     imu_count: int
     imu_duration_s: float
     imu_effective_hz: float
+    imu_median_dt_ms: float | None
+    imu_max_gap_ms: float | None
     imu_missing_sequences: int
     imu_non_monotonic_timestamps: int
-    imu_max_gap_ms: float | None
     hr_count: int
     hr_duration_s: float
+    hr_median_dt_ms: float | None
+    hr_max_gap_ms: float | None
     hr_missing_sequences: int
     hr_non_monotonic_timestamps: int
     mapped_session_time_samples: int
@@ -182,11 +185,14 @@ def build_p0_receipt(
         imu_count=imu_qc.count,
         imu_duration_s=imu_qc.duration_s,
         imu_effective_hz=imu_qc.effective_hz,
+        imu_median_dt_ms=imu_qc.median_dt_ms,
+        imu_max_gap_ms=imu_qc.max_gap_ms,
         imu_missing_sequences=imu_qc.missing_sequences,
         imu_non_monotonic_timestamps=imu_qc.non_monotonic_timestamps,
-        imu_max_gap_ms=imu_qc.max_gap_ms,
         hr_count=hr_qc.count,
         hr_duration_s=hr_qc.duration_s,
+        hr_median_dt_ms=hr_qc.median_dt_ms,
+        hr_max_gap_ms=hr_qc.max_gap_ms,
         hr_missing_sequences=hr_qc.missing_sequences,
         hr_non_monotonic_timestamps=hr_qc.non_monotonic_timestamps,
         mapped_session_time_samples=mapped,
