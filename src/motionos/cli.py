@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 
+from .equipment_cli import calibrate_equipment_mount_file
 from .mcap_io import export_mcap
 from .p0 import import_watch_journal, write_p0_receipt
 from .qc import session_qc
@@ -58,6 +59,13 @@ def _parser() -> argparse.ArgumentParser:
     p0.add_argument("session")
     p0.add_argument("--min-duration", type=float, default=60.0)
     p0.add_argument("--receipt", default="p0-receipt.json")
+
+    mount = sub.add_parser(
+        "calibrate-equipment-mount",
+        help="derive a sensor-to-equipment rotation from level/nose-up samples",
+    )
+    mount.add_argument("input")
+    mount.add_argument("output")
     return parser
 
 
@@ -132,6 +140,10 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(json.dumps(receipt.to_dict(), indent=2, sort_keys=True))
         return 0 if receipt.passed else 2
+
+    if args.command == "calibrate-equipment-mount":
+        print(calibrate_equipment_mount_file(args.input, args.output))
+        return 0
 
     raise AssertionError("unreachable")
 

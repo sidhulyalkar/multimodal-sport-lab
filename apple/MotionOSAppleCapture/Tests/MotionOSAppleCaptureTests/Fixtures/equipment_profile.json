@@ -1,0 +1,17 @@
+{
+  "equipment_id": "longboard-001",
+  "equipment_type": "longboard",
+  "mount_id": "center-deck-v1",
+  "calibration": {
+    "sensor_to_equipment": [
+      [1.0, 0.0, 0.0],
+      [0.0, 1.0, 0.0],
+      [0.0, 0.0, 1.0]
+    ],
+    "level_mean_accel": [0.0, 0.0, 9.81],
+    "nose_up_mean_accel": [-4.146, 0.0, 8.891],
+    "forward_excitation": 0.4226,
+    "orthogonality_error": 0.0
+  },
+  "notes": "fixture"
+}
