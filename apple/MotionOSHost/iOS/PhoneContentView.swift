@@ -143,8 +143,20 @@ struct PhoneContentView: View {
                     .font(.caption)
                     .foregroundStyle(.green)
 
-                ShareLink(item: url) {
-                    Label("Share raw journal", systemImage: "square.and.arrow.up")
+                if let hostURL = inbox.latestHostMetadataURL {
+                    ShareLink(items: [url, hostURL]) {
+                        Label(
+                            "Share P0 evidence files",
+                            systemImage: "square.and.arrow.up"
+                        )
+                    }
+                } else {
+                    ShareLink(item: url) {
+                        Label(
+                            "Share raw journal",
+                            systemImage: "square.and.arrow.up"
+                        )
+                    }
                 }
             } else {
                 Text("No journal received yet.")
