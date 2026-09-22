@@ -40,6 +40,10 @@
     {
       "kind": "right_insole_geometry",
       "path": "profiles/right-insole-geometry.json"
+    },
+    {
+      "kind": "body_model",
+      "path": "profiles/body-model.json"
     }
   ]
 }
