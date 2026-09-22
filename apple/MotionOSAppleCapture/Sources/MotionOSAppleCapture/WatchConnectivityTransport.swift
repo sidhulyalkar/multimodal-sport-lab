@@ -5,6 +5,7 @@ import WatchConnectivity
 public final class WatchConnectivityTransport: NSObject, WCSessionDelegate {
     public let session: WCSession
     public var onFileReceived: ((URL, [String: Any]?) -> Void)?
+    public var onStateChanged: (() -> Void)?
 
     public override init() {
         session = .default
@@ -28,7 +29,13 @@ public final class WatchConnectivityTransport: NSObject, WCSessionDelegate {
         _ session: WCSession,
         activationDidCompleteWith activationState: WCSessionActivationState,
         error: Error?
-    ) {}
+    ) {
+        onStateChanged?()
+    }
+
+    public func sessionReachabilityDidChange(_ session: WCSession) {
+        onStateChanged?()
+    }
 
     public func session(_ session: WCSession, didReceive file: WCSessionFile) {
         do {
