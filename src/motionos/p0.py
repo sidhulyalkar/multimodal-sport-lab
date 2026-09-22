@@ -118,6 +118,8 @@ class P0Receipt:
                 "count": self.imu_count,
                 "duration_s": self.imu_duration_s,
                 "effective_hz": self.imu_effective_hz,
+                "median_dt_ms": self.imu_median_dt_ms,
+                "max_gap_ms": self.imu_max_gap_ms,
                 "missing_sequences": self.imu_missing_sequences,
                 "non_monotonic_timestamps": self.imu_non_monotonic_timestamps,
                 "max_gap_ms": self.imu_max_gap_ms,
@@ -125,6 +127,8 @@ class P0Receipt:
             "watch_hr": {
                 "count": self.hr_count,
                 "duration_s": self.hr_duration_s,
+                "median_dt_ms": self.hr_median_dt_ms,
+                "max_gap_ms": self.hr_max_gap_ms,
                 "missing_sequences": self.hr_missing_sequences,
                 "non_monotonic_timestamps": self.hr_non_monotonic_timestamps,
             },
