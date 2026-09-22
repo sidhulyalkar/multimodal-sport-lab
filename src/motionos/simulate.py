@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 import random
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from .clock import ClockObservation, estimate_clock_model
@@ -86,7 +86,7 @@ def simulate_session(
     )
     manifest = SessionManifest(
         session_id=session_id,
-        created_at_utc=datetime.now(timezone.utc).isoformat(),
+        created_at_utc=datetime.now(UTC).isoformat(),
         sport=sport,
         mode=mode,
         athlete_id="demo-athlete",
