@@ -66,6 +66,8 @@ targets:
       path: iOS/Info.plist
       properties:
         CFBundleDisplayName: MotionOS
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
         NSHealthShareUsageDescription: MotionOS uses workout state to coordinate capture with Apple Watch.
         NSHealthUpdateUsageDescription: MotionOS starts workouts on your paired Apple Watch.
         NSMotionUsageDescription: MotionOS may use motion data during calibration.
