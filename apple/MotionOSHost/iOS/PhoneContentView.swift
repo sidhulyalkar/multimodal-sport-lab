@@ -142,6 +142,10 @@ struct PhoneContentView: View {
                 Label("Copied into iPhone Documents", systemImage: "checkmark.circle.fill")
                     .font(.caption)
                     .foregroundStyle(.green)
+
+                ShareLink(item: url) {
+                    Label("Share raw journal", systemImage: "square.and.arrow.up")
+                }
             } else {
                 Text("No journal received yet.")
                     .font(.subheadline)
