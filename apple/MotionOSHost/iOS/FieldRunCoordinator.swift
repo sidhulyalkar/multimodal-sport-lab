@@ -209,6 +209,11 @@ actor FieldRunJournal {
 
 @MainActor
 final class FieldRunCoordinator: ObservableObject {
+    struct MovementBlock: Identifiable, Sendable {
+        let id: String
+        let label: String
+    }
+
     enum Phase: String {
         case idle
         case running
@@ -217,17 +222,17 @@ final class FieldRunCoordinator: ObservableObject {
         case failed
     }
 
-    static let movementBlocks: [(id: String, label: String)] = [
-        ("baseline", "30 s quiet stance"),
-        ("pushes", "10 pushes"),
-        ("straight-glide", "Straight glide"),
-        ("left-carves", "Repeated left carves"),
-        ("right-carves", "Repeated right carves"),
-        ("front-load", "Front-load shifts"),
-        ("rear-load", "Rear-load shifts"),
-        ("foot-reposition", "Foot repositioning"),
-        ("braking", "Controlled braking / stopping"),
-        ("perturbations", "Stabilization perturbations"),
+    static let movementBlocks: [MovementBlock] = [
+        MovementBlock(id: "baseline", label: "30 s quiet stance"),
+        MovementBlock(id: "pushes", label: "10 pushes"),
+        MovementBlock(id: "straight-glide", label: "Straight glide"),
+        MovementBlock(id: "left-carves", label: "Repeated left carves"),
+        MovementBlock(id: "right-carves", label: "Repeated right carves"),
+        MovementBlock(id: "front-load", label: "Front-load shifts"),
+        MovementBlock(id: "rear-load", label: "Rear-load shifts"),
+        MovementBlock(id: "foot-reposition", label: "Foot repositioning"),
+        MovementBlock(id: "braking", label: "Controlled braking / stopping"),
+        MovementBlock(id: "perturbations", label: "Stabilization perturbations"),
     ]
 
     @Published private(set) var phase: Phase = .idle
