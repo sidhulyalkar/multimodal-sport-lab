@@ -39,6 +39,13 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
             }
         }
 
+        transport.onStateChanged = { [weak self] in
+            guard let self else { return }
+            Task { @MainActor in
+                self.refreshWatchState()
+            }
+        }
+
         transport.onFileReceived = { [weak self] url, metadata in
             guard let self else { return }
             // WCSession's received file URL is temporary, so copy it while
