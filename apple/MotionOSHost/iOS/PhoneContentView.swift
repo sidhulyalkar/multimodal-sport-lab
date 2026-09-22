@@ -200,7 +200,7 @@ struct PhoneContentView: View {
     }
 }
 
-private extension View {
+extension View {
     func cardStyle() -> some View {
         self
             .padding()
