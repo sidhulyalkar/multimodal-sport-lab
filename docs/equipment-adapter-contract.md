@@ -2,35 +2,64 @@
 
 Vendor SDK objects stop at the adapter boundary.
 
-The downstream MotionOS stream remains:
+## Raw stream contract
+
+For MetaMotionS, acceleration and gyroscope samples have independent device
+timestamps. MotionOS therefore preserves two raw stream families:
 
 ```text
-/equipment/imu
+/equipment/imu/accel
+/equipment/imu/gyro
 ```
 
-with one canonical `SensorEvent` envelope.
+A combined `/equipment/imu` event is reserved for hardware or a later
+reconstruction step that can justify a synchronized six-axis observation.
 
-## Payload principle: raw + calibrated
+We do **not** pair BLE packet arrivals and pretend they were sampled
+simultaneously.
 
-Never replace vendor/raw vectors with calibrated values.
+## Timestamp authority
 
-A normalized payload contains both:
+There are two distinct timing regimes:
+
+### Live preview
+
+The MetaWear SDK timestamps live BLE samples when the host receives the packet.
+That is useful for UI feedback, but BLE scheduling jitter makes it unsuitable as
+the authoritative pod clock.
+
+Live preview samples therefore stay outside the scientific session journal.
+
+### Recovered flash log
+
+MetaMotionS flash samples expose `tickMs`, the board clock in milliseconds
+since reset. Recovered MotionOS events use:
+
+```text
+device_time_ns = tickMs * 1_000_000
+timestamp_basis = "device_tick_ms"
+```
+
+This device clock becomes the input to the later affine clock-mapping step.
+
+## Units
+
+MotionOS converts vendor units at the adapter boundary:
+
+- accelerometer: `g` → `m/s²`
+- gyroscope: `degrees/s` → `rad/s`
+
+Raw sensor-frame vectors are never discarded.
+
+After mount calibration an accel event can contain:
 
 ```json
 {
   "ax": 0.1,
   "ay": 0.2,
   "az": 9.8,
-  "gx": 0.01,
-  "gy": 0.02,
-  "gz": 0.03,
-
   "accel_sensor": [0.1, 0.2, 9.8],
-  "gyro_sensor": [0.01, 0.02, 0.03],
-
   "accel_equipment": [0.2, -0.1, 9.8],
-  "gyro_equipment": [0.02, -0.01, 0.03],
-
   "equipment_id": "longboard-001",
   "equipment_type": "longboard",
   "mount_id": "center-deck-v1",
@@ -38,36 +67,72 @@ A normalized payload contains both:
 }
 ```
 
-This is intentionally redundant. Raw values are evidence; calibrated values are a deterministic interpretation.
+Gyroscope events use the analogous `gyro_sensor` and `gyro_equipment`
+fields.
 
-## MetaMotionS adapter responsibilities
+This redundancy is intentional. Raw values are evidence; calibrated values are
+a deterministic interpretation.
 
-The future MbientLab adapter should:
+## MetaMotionS operating modes
 
-1. discover a selected MetaMotionS;
-2. verify model/hardware revision;
-3. expose battery/RSSI/device identity;
-4. configure accelerometer and gyro ranges/rates;
-5. stream a live preview;
-6. arm on-device flash logging;
-7. preserve device/sample timing;
-8. recover the local log after disconnect;
-9. translate each sample into `SensorEvent`;
-10. apply the saved equipment profile without discarding raw vectors.
+The pinned MetaWear SDK models live streaming and on-device logging as mutually
+exclusive high-level device states. MotionOS respects that constraint.
 
-The active MbientLab Swift SDK supports MetaMotionS, live sensor streams, and on-device logging/recovery. Pin a specific SDK revision when implementation begins; do not track an unpinned branch in production.
+### Preview mode
+
+- stream BMI270 accelerometer and gyroscope over BLE;
+- show mounting/orientation feedback;
+- inspect signal magnitude and clipping risk;
+- do not treat BLE arrival time as device time.
+
+### Recording mode
+
+- stop preview first;
+- optionally clear flash only through an explicit user action;
+- arm BMI270 accelerometer and gyroscope flash loggers;
+- let the board record autonomously;
+- BLE presence is not required for evidence continuity.
+
+### Recovery mode
+
+- reconnect after link loss;
+- enumerate/recover logger registrations;
+- stop both loggers;
+- flush the MetaMotionS partial NAND page;
+- download typed accelerometer and gyroscope logs;
+- retain each sample's `tickMs`;
+- verify both streams are non-empty;
+- only clear flash after both downloads succeed.
+
+The SDK is pinned to upstream commit
+`7dd2a5dbddafb2f8d583cb8d018be476d8ee9a71`.
 
 ## Dropout semantics
 
-A BLE disconnect is not automatically a data loss event.
+A BLE disconnect is not automatically a data-loss event.
 
-MotionOS should distinguish:
+MotionOS distinguishes:
 
-- `live_link_lost`
+- `preview_link_lost`
+- `recording_link_lost`
 - `local_logger_continues`
 - `reconnected`
-- `local_log_recovered`
+- `logger_registry_recovered`
+- `local_log_downloaded`
 - `reconciliation_complete`
 - `unrecoverable_gap`
 
 Only the final state represents confirmed missing evidence.
+
+## Current claim boundary
+
+The adapter and host app can be compile-qualified without hardware.
+
+P1 is not scientifically qualified until a physical MetaMotionS run proves:
+
+1. both flash streams record at the requested rates;
+2. deliberate phone separation does not stop the board logger;
+3. logger recovery succeeds after reconnect;
+4. downloaded sequence/tick timing is internally coherent;
+5. start/middle/end synchronization impulses support a measured clock model;
+6. the same mount calibration is stable before and after the ride.
