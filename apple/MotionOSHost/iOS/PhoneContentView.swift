@@ -14,6 +14,7 @@ struct PhoneContentView: View {
                     protocolCard
                     journalCard
                     EquipmentPodCard()
+                    CameraCaptureCard()
 
                     if let error = coordinator.errorMessage ?? inbox.lastError {
                         Text(error)
@@ -42,7 +43,7 @@ struct PhoneContentView: View {
                 .foregroundStyle(.secondary)
             Text("MotionOS capture lab")
                 .font(.largeTitle.bold())
-            Text("Qualify Apple Watch capture, then add a durable equipment pod without mixing their clock domains.")
+            Text("Capture Watch, equipment, and camera evidence without collapsing their clock domains. Each source stays raw until explicit calibration.")
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)

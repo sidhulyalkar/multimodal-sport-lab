@@ -20,6 +20,12 @@
       "session": "data/p2/insole-session",
       "receipt": "data/p2/insole-session/p2-capture-receipt.json",
       "clock_sync": "data/sync/insoles-to-watch.json"
+    },
+    {
+      "role": "camera",
+      "session": "data/camera/camera-session",
+      "receipt": "data/camera/camera-session/camera-capture-receipt.json",
+      "clock_sync": "data/sync/camera-to-watch.json"
     }
   ],
   "profiles": [
