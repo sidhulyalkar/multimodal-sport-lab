@@ -15,6 +15,7 @@ final class WatchSessionController: ObservableObject {
         case running
         case paused
         case ending
+        case journalReady
         case transferred
         case failed
     }
@@ -30,21 +31,27 @@ final class WatchSessionController: ObservableObject {
     private let motion = WatchMotionRecorder()
     private let workout = WatchWorkoutRecorder()
     private let transport = WatchConnectivityTransport()
+
     private var pipeline: WatchCapturePipeline?
-    private var finalized = false\n    private var heartRateSequence: UInt64 = 0\n    private var closedJournalURL: URL?
+    private var finalized = false
+    private var heartRateSequence: UInt64 = 0
+    private var closedJournalURL: URL?
 
     private init() {
         workout.onHeartRateBPM = { [weak self] bpm, timestamp in
             guard let self else { return }
-            Task {
-                await self.recordHeartRate(bpm: bpm, timestamp: timestamp)
+            Task { @MainActor in
+                await self.recordHeartRate(
+                    bpm: bpm,
+                    timestamp: timestamp
+                )
             }
         }
 
-        workout.onStateChange = { [weak self] state in
+        workout.onStateChange = { [weak self] workoutState in
             guard let self else { return }
             Task { @MainActor in
-                self.applyWorkoutState(state)
+                self.applyWorkoutState(workoutState)
             }
         }
 
@@ -59,6 +66,7 @@ final class WatchSessionController: ObservableObject {
     func requestAuthorization() async {
         state = .authorizing
         errorMessage = nil
+
         do {
             try await workout.requestAuthorization()
             state = .idle
@@ -68,20 +76,33 @@ final class WatchSessionController: ObservableObject {
     }
 
     func start(configuration: HKWorkoutConfiguration) async {
-        guard state == .idle || state == .transferred || state == .failed else { return }
+        guard [
+            CaptureState.idle,
+            .journalReady,
+            .transferred,
+            .failed,
+        ].contains(state) else {
+            return
+        }
 
         state = .starting
         errorMessage = nil
         heartRateBPM = nil
         eventCount = 0
+        heartRateSequence = 0
         finalized = false
+        closedJournalURL = nil
+        lastTransferredURL = nil
 
         let id = Self.makeSessionID()
         sessionID = id
 
         do {
             let url = try Self.makeJournalURL(sessionID: id)
-            let pipeline = try WatchCapturePipeline(sessionID: id, journalURL: url)
+            let pipeline = try WatchCapturePipeline(
+                sessionID: id,
+                journalURL: url
+            )
             self.pipeline = pipeline
 
             try motion.start(
@@ -90,7 +111,7 @@ final class WatchSessionController: ObservableObject {
                 hz: 50
             ) { [weak self] event in
                 guard let self else { return }
-                Task {
+                Task { @MainActor in
                     await self.record(event)
                 }
             }
@@ -126,8 +147,22 @@ final class WatchSessionController: ObservableObject {
         workout.resume()
     }
 
+    func retryTransfer() {
+        guard let journalURL = closedJournalURL,
+              let id = sessionID
+        else {
+            return
+        }
+
+        queueTransfer(
+            journalURL: journalURL,
+            sessionID: id
+        )
+    }
+
     private func record(_ event: SensorEnvelope) async {
         guard let pipeline else { return }
+
         do {
             let count = try await pipeline.append(event)
             if count.isMultiple(of: 25) {
@@ -138,7 +173,10 @@ final class WatchSessionController: ObservableObject {
         }
     }
 
-    private func recordHeartRate(bpm: Double, timestamp: UInt64) async {
+    private func recordHeartRate(
+        bpm: Double,
+        timestamp: UInt64
+    ) async {
         heartRateBPM = bpm
         guard let id = sessionID else { return }
 
@@ -152,6 +190,7 @@ final class WatchSessionController: ObservableObject {
             syncQuality: nil,
             payload: ["bpm": .number(bpm)]
         )
+        heartRateSequence += 1
         await record(event)
     }
 
@@ -159,42 +198,51 @@ final class WatchSessionController: ObservableObject {
         guard !finalized else { return }
         finalized = true
         motion.stop()
+
         let shouldPreserveFailure = state == .failed
 
         guard let pipeline else {
-            if !shouldPreserveFailure { state = .idle }
+            if !shouldPreserveFailure {
+                state = .idle
+            }
             return
         }
 
         do {
             eventCount = try await pipeline.close()
-            let journalURL = await pipeline.journalURL
-            let id = await pipeline.sessionID
+            let journalURL = pipeline.journalURL
+            let id = pipeline.sessionID
+
             closedJournalURL = journalURL
             self.pipeline = nil
-            if !shouldPreserveFailure {
-                state = .journalReady
-                queueTransfer(journalURL: journalURL, sessionID: id)
+
+            if shouldPreserveFailure {
+                return
             }
+
+            state = .journalReady
+            queueTransfer(
+                journalURL: journalURL,
+                sessionID: id
+            )
         } catch {
             fail(error)
         }
     }
 
-    func retryTransfer() {
-        guard let journalURL = closedJournalURL, let id = sessionID else { return }
-        queueTransfer(journalURL: journalURL, sessionID: id)
-    }
-
-    private func queueTransfer(journalURL: URL, sessionID: String) {
+    private func queueTransfer(
+        journalURL: URL,
+        sessionID: String
+    ) {
         let transfer = transport.transferJournal(
             journalURL,
             metadata: [
                 "session_id": sessionID,
                 "schema_version": "motionos.m0.v1",
-                "stream": "/body/watch"
+                "stream": "/body/watch",
             ]
         )
+
         if transfer != nil {
             lastTransferredURL = journalURL
             state = .transferred
@@ -203,7 +251,9 @@ final class WatchSessionController: ObservableObject {
         }
     }
 
-    private func applyWorkoutState(_ workoutState: WatchWorkoutRecorder.State) {
+    private func applyWorkoutState(
+        _ workoutState: WatchWorkoutRecorder.State
+    ) {
         switch workoutState {
         case .running:
             state = .running
@@ -225,12 +275,15 @@ final class WatchSessionController: ObservableObject {
     }
 
     private static func makeSessionID() -> String {
-        let timestamp = ISO8601DateFormatter().string(from: Date())
+        let timestamp = ISO8601DateFormatter()
+            .string(from: Date())
             .replacingOccurrences(of: ":", with: "")
         return "p0-watch-\(timestamp)-\(UUID().uuidString.prefix(8).lowercased())"
     }
 
-    private static func makeJournalURL(sessionID: String) throws -> URL {
+    private static func makeJournalURL(
+        sessionID: String
+    ) throws -> URL {
         let manager = FileManager.default
         let documents = try manager.url(
             for: .documentDirectory,
@@ -241,7 +294,10 @@ final class WatchSessionController: ObservableObject {
         let directory = documents
             .appendingPathComponent("MotionOS", isDirectory: true)
             .appendingPathComponent(sessionID, isDirectory: true)
-        try manager.createDirectory(at: directory, withIntermediateDirectories: true)
+        try manager.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
         return directory.appendingPathComponent("watch.jsonl")
     }
 }
