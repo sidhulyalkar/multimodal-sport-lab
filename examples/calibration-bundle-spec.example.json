@@ -1,0 +1,39 @@
+{
+  "reference": {
+    "role": "watch",
+    "session": "data/p0/watch-session"
+  },
+  "sources": [
+    {
+      "role": "watch",
+      "session": "data/p0/watch-session",
+      "receipt": "data/p0/watch-session/p0-receipt.json"
+    },
+    {
+      "role": "equipment",
+      "session": "data/p1/pod-session",
+      "receipt": "data/p1/pod-session/p1-receipt.json",
+      "clock_sync": "data/sync/equipment-to-watch.json"
+    },
+    {
+      "role": "insoles",
+      "session": "data/p2/insole-session",
+      "receipt": "data/p2/insole-session/p2-capture-receipt.json",
+      "clock_sync": "data/sync/insoles-to-watch.json"
+    }
+  ],
+  "profiles": [
+    {
+      "kind": "equipment_mount",
+      "path": "profiles/equipment-profile.json"
+    },
+    {
+      "kind": "left_insole_geometry",
+      "path": "profiles/left-insole-geometry.json"
+    },
+    {
+      "kind": "right_insole_geometry",
+      "path": "profiles/right-insole-geometry.json"
+    }
+  ]
+}

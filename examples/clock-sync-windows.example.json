@@ -1,0 +1,23 @@
+[
+  {
+    "reference_start_ns": 1000000000,
+    "reference_end_ns": 1600000000,
+    "target_start_ns": 500000000,
+    "target_end_ns": 1100000000,
+    "uncertainty_ns": 5000000
+  },
+  {
+    "reference_start_ns": 300000000000,
+    "reference_end_ns": 301000000000,
+    "target_start_ns": 299000000000,
+    "target_end_ns": 300000000000,
+    "uncertainty_ns": 5000000
+  },
+  {
+    "reference_start_ns": 599000000000,
+    "reference_end_ns": 600000000000,
+    "target_start_ns": 598000000000,
+    "target_end_ns": 599000000000,
+    "uncertainty_ns": 5000000
+  }
+]
