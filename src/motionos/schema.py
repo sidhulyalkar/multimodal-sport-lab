@@ -22,7 +22,7 @@ class DeviceDescriptor:
         return data
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "DeviceDescriptor":
+    def from_dict(cls, data: dict[str, Any]) -> DeviceDescriptor:
         return cls(
             device_id=str(data["device_id"]),
             kind=str(data["kind"]),
@@ -58,7 +58,7 @@ class SessionManifest:
         return data
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "SessionManifest":
+    def from_dict(cls, data: dict[str, Any]) -> SessionManifest:
         return cls(
             session_id=str(data["session_id"]),
             created_at_utc=str(data["created_at_utc"]),
@@ -108,7 +108,7 @@ class SensorEvent:
         return json.dumps(self.to_dict(), separators=(",", ":"), sort_keys=True)
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "SensorEvent":
+    def from_dict(cls, data: dict[str, Any]) -> SensorEvent:
         return cls(
             session_id=str(data["session_id"]),
             device_id=str(data["device_id"]),
@@ -126,5 +126,5 @@ class SensorEvent:
         )
 
     @classmethod
-    def from_json(cls, raw: str) -> "SensorEvent":
+    def from_json(cls, raw: str) -> SensorEvent:
         return cls.from_dict(json.loads(raw))
