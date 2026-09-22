@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import statistics
 from dataclasses import asdict, dataclass
+from itertools import pairwise
 
 from .schema import SensorEvent
 from .session import SessionReader
@@ -33,13 +34,13 @@ def inspect_stream(stream: str, events: list[SensorEvent]) -> StreamQC:
     if not events:
         return StreamQC(stream, 0, 0.0, 0.0, None, None, 0, 0, None)
     times = [event.canonical_time_ns for event in events]
-    diffs = [b - a for a, b in zip(times, times[1:])]
+    diffs = [b - a for a, b in pairwise(times)]
     positive = [value for value in diffs if value > 0]
     duration_ns = max(0, times[-1] - times[0])
     duration_s = duration_ns / 1e9
     effective_hz = (len(events) - 1) / duration_s if duration_s > 0 else 0.0
     missing = 0
-    for prev, current in zip(events, events[1:]):
+    for prev, current in pairwise(events):
         if current.sequence > prev.sequence + 1:
             missing += current.sequence - prev.sequence - 1
     quality = [event.sync_quality for event in events if event.sync_quality is not None]
