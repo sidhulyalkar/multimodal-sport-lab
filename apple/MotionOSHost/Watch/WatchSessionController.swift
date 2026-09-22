@@ -30,7 +30,7 @@ final class WatchSessionController: ObservableObject {
     private let workout = WatchWorkoutRecorder()
     private let transport = WatchConnectivityTransport()
     private var pipeline: WatchCapturePipeline?
-    private var finalized = false
+    private var finalized = false\n    private var heartRateSequence: UInt64 = 0\n    private var closedJournalURL: URL?
 
     private init() {
         workout.onHeartRateBPM = { [weak self] bpm, timestamp in
@@ -145,7 +145,7 @@ final class WatchSessionController: ObservableObject {
             sessionID: id,
             deviceID: "apple-watch",
             stream: "/body/watch/hr",
-            sequence: UInt64(max(0, eventCount)),
+            sequence: heartRateSequence,
             deviceTimeNS: timestamp,
             sessionTimeNS: nil,
             syncQuality: nil,
@@ -168,19 +168,34 @@ final class WatchSessionController: ObservableObject {
             eventCount = try await pipeline.close()
             let journalURL = await pipeline.journalURL
             let id = await pipeline.sessionID
-            _ = transport.transferJournal(
-                journalURL,
-                metadata: [
-                    "session_id": id,
-                    "schema_version": "motionos.m0.v1",
-                    "stream": "/body/watch"
-                ]
-            )
-            lastTransferredURL = journalURL
+            closedJournalURL = journalURL
             self.pipeline = nil
-            state = .transferred
+            state = .journalReady
+            queueTransfer(journalURL: journalURL, sessionID: id)
         } catch {
             fail(error)
+        }
+    }
+
+    func retryTransfer() {
+        guard let journalURL = closedJournalURL, let id = sessionID else { return }
+        queueTransfer(journalURL: journalURL, sessionID: id)
+    }
+
+    private func queueTransfer(journalURL: URL, sessionID: String) {
+        let transfer = transport.transferJournal(
+            journalURL,
+            metadata: [
+                "session_id": sessionID,
+                "schema_version": "motionos.m0.v1",
+                "stream": "/body/watch"
+            ]
+        )
+        if transfer != nil {
+            lastTransferredURL = journalURL
+            state = .transferred
+        } else {
+            state = .journalReady
         }
     }
 
