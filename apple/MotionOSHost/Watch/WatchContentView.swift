@@ -23,6 +23,13 @@ struct WatchContentView: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
+            } else if controller.state == .journalReady {
+                Label("Journal safe on Watch", systemImage: "internaldrive.fill")
+                    .foregroundStyle(.yellow)
+                Button("Retry Transfer") {
+                    controller.retryTransfer()
+                }
+                .buttonStyle(.borderedProminent)
             } else if controller.state == .transferred {
                 Label("Journal queued", systemImage: "checkmark.circle.fill")
                     .foregroundStyle(.green)
