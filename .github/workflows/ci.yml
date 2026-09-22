@@ -26,3 +26,9 @@ jobs:
         with:
           node-version: "24"
       - run: npm run test:ui-model
+
+  swift-contract:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift test --package-path apple/MotionOSAppleCapture
