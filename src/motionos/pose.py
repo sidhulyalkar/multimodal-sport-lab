@@ -18,7 +18,7 @@ class BodyModel:
     metadata: dict[str, Any]
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "BodyModel":
+    def from_dict(cls, data: dict[str, Any]) -> BodyModel:
         limits = {
             key: (float(value[0]), float(value[1]))
             for key, value in data.get("joint_limits_deg", {}).items()
