@@ -12,6 +12,7 @@ from .session import SessionReader, SessionWriter
 P0_REQUIRED_STREAMS = {
     "/body/watch/imu",
     "/body/watch/hr",
+    "/meta/watch",
 }
 
 
@@ -48,6 +49,24 @@ def import_watch_journal(
     session_id = next(iter(session_ids))
     device_id = next(iter(device_ids))
 
+    watch_metadata_events = [
+        event for event in events if event.stream == "/meta/watch"
+    ]
+    watch_metadata = (
+        dict(watch_metadata_events[0].payload)
+        if watch_metadata_events
+        else {}
+    )
+
+    host_metadata_path = journal.with_name("iphone-host.json")
+    iphone_host_metadata: dict[str, object] = {}
+    if host_metadata_path.exists():
+        raw_host_metadata = json.loads(
+            host_metadata_path.read_text(encoding="utf-8")
+        )
+        if isinstance(raw_host_metadata, dict):
+            iphone_host_metadata = dict(raw_host_metadata)
+
     manifest = SessionManifest(
         session_id=session_id,
         created_at_utc=datetime.now(UTC).isoformat(),
@@ -60,12 +79,24 @@ def import_watch_journal(
                 kind="apple_watch",
                 placement="wrist",
                 streams=streams,
+                model=(
+                    str(watch_metadata["model"])
+                    if watch_metadata.get("model") is not None
+                    else None
+                ),
+                firmware=(
+                    str(watch_metadata["system_version"])
+                    if watch_metadata.get("system_version") is not None
+                    else None
+                ),
             ),
         ),
         metadata={
             "qualification_protocol": "P0",
             "source_journal": journal.name,
             "cross_device_sync_qualified": False,
+            "watch_capture": watch_metadata,
+            "iphone_host": iphone_host_metadata,
         },
     )
 
@@ -109,6 +140,12 @@ class P0Receipt:
     hr_non_monotonic_timestamps: int
     mapped_session_time_samples: int
     raw_device_time_samples: int
+    watch_model: str | None
+    watch_system_version: str | None
+    requested_imu_hz: float | None
+    iphone_model: str | None
+    iphone_system_version: str | None
+    missing_environment_fields: tuple[str, ...]
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -138,6 +175,14 @@ class P0Receipt:
                 "mapped_session_time_samples": self.mapped_session_time_samples,
                 "raw_device_time_samples": self.raw_device_time_samples,
             },
+            "environment": {
+                "watch_model": self.watch_model,
+                "watch_system_version": self.watch_system_version,
+                "requested_imu_hz": self.requested_imu_hz,
+                "iphone_model": self.iphone_model,
+                "iphone_system_version": self.iphone_system_version,
+                "missing_fields": list(self.missing_environment_fields),
+            },
             "claim_boundary": (
                 "P0 qualifies single-Watch capture continuity and journal recovery only. "
                 "It does not qualify cross-device synchronization, physiological accuracy, "
@@ -166,8 +211,52 @@ def build_p0_receipt(
     mapped = sum(event.session_time_ns is not None for event in all_events)
     raw = len(all_events) - mapped
 
+    watch_capture = dict(reader.manifest.metadata.get("watch_capture", {}))
+    iphone_host = dict(reader.manifest.metadata.get("iphone_host", {}))
+
+    watch_model = (
+        str(watch_capture["model"])
+        if watch_capture.get("model") is not None
+        else None
+    )
+    watch_system_version = (
+        str(watch_capture["system_version"])
+        if watch_capture.get("system_version") is not None
+        else None
+    )
+    requested_imu_hz = (
+        float(watch_capture["requested_imu_hz"])
+        if watch_capture.get("requested_imu_hz") is not None
+        else None
+    )
+    iphone_model = (
+        str(iphone_host["iphone_model"])
+        if iphone_host.get("iphone_model") is not None
+        else None
+    )
+    iphone_system_version = (
+        str(iphone_host["iphone_system_version"])
+        if iphone_host.get("iphone_system_version") is not None
+        else None
+    )
+
+    required_environment = {
+        "watch_model": watch_model,
+        "watch_system_version": watch_system_version,
+        "requested_imu_hz": requested_imu_hz,
+        "iphone_system_version": iphone_system_version,
+    }
+    missing_environment = tuple(
+        sorted(
+            key
+            for key, value in required_environment.items()
+            if value is None
+        )
+    )
+
     passed = (
         not missing
+        and not missing_environment
         and imu_qc.count >= 100
         and imu_qc.duration_s >= min_duration_s
         and imu_qc.missing_sequences == 0
@@ -197,6 +286,12 @@ def build_p0_receipt(
         hr_non_monotonic_timestamps=hr_qc.non_monotonic_timestamps,
         mapped_session_time_samples=mapped,
         raw_device_time_samples=raw,
+        watch_model=watch_model,
+        watch_system_version=watch_system_version,
+        requested_imu_hz=requested_imu_hz,
+        iphone_model=iphone_model,
+        iphone_system_version=iphone_system_version,
+        missing_environment_fields=missing_environment,
     )
 
 
