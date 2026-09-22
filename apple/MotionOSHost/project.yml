@@ -75,6 +75,7 @@ targets:
         NSHealthUpdateUsageDescription: MotionOS starts workouts on your paired Apple Watch.
         NSMotionUsageDescription: MotionOS may use motion data during calibration.
         NSBluetoothAlwaysUsageDescription: MotionOS connects to equipment sensor pods for motion capture and durable on-device logging.
+        NSCameraUsageDescription: MotionOS records calibration video and Vision 3D pose only when you explicitly start a camera evidence session.
     entitlements:
       path: iOS/MotionOSiOS.entitlements
       properties:

@@ -1,7 +1,7 @@
 # M0-B4 Calibration Bundle Runbook
 
-This stage turns independently preserved Watch, equipment-pod, and bilateral
-insole sessions into one **auditable temporal view**.
+This stage turns independently preserved Watch, equipment-pod, bilateral
+insole, and camera sessions into one **auditable temporal view**.
 
 It does not rewrite any source journal, stream file, or exported vendor file.
 
@@ -113,6 +113,31 @@ motionos derive-clock-sync \
 This does not erase left/right sparse rows. Both feet retain their own events
 and missing-sample regions on the shared OpenGo time axis.
 
+## iPhone camera → Watch
+
+A qualified camera session preserves raw AVFoundation presentation timestamps
+and exposes a derived timing-only stream:
+
+```text
+/camera/pose_motion
+```
+
+Use the deliberate shared motion near start, middle, and end:
+
+```bash
+motionos derive-clock-sync \
+  data/p0/<watch-session> \
+  data/camera/<camera-session> \
+  camera-sync-windows.json \
+  data/sync/camera-to-watch.json \
+  --reference-stream /body/watch/imu \
+  --target-stream /camera/pose_motion \
+  --target-keys motion_m
+```
+
+The derived `motion_m` signal exists only to make camera timing landmarks
+observable. It is not a biomechanical displacement estimate.
+
 ## What the clock-sync receipt freezes
 
 Each `motionos.clock-sync.v1` receipt stores:
@@ -169,7 +194,10 @@ Profiles can include:
 
 - equipment mount calibration;
 - left/right insole geometry;
-- later camera calibration.
+- later spatial camera calibration.
+
+The camera session itself is already a normal non-reference source in the
+bundle. Spatial camera/world calibration is a separate future artifact.
 
 ## Build the bundle
 
@@ -267,13 +295,12 @@ Those are separate evidence layers.
 
 ## Next physical gate
 
-Once P0, P1, and P2 physical receipts exist:
+Once P0, P1, P2, and camera physical receipts exist:
 
 1. perform one shared calibration run;
-2. create start/middle/end landmarks visible in Watch, pod, and insole IMU;
-3. derive pod→Watch and OpenGo→Watch receipts;
+2. create start/middle/end landmarks visible in Watch, pod, insoles, and camera;
+3. derive pod→Watch, OpenGo→Watch, and camera→Watch receipts;
 4. build the calibration bundle;
 5. inspect drift/residual and gap reports;
-6. replay wrist, equipment, and both feet together;
-7. only then add iPhone video/pose as another independently qualified clock
-   source.
+6. replay wrist, equipment, both feet, camera frames, and Vision pose together;
+7. preserve every modality's raw time beside the mapped Watch/reference time.

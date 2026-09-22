@@ -8,6 +8,10 @@ from .calibration import (
     calibration_gap_regions,
     replay_calibration_frames,
 )
+from .camera import (
+    import_camera_evidence,
+    write_camera_capture_receipt,
+)
 from .clock_sync import write_clock_sync
 from .equipment_cli import calibrate_equipment_mount_file
 from .insole import import_opengo_text_export, write_p2_capture_receipt
@@ -174,6 +178,26 @@ def _parser() -> argparse.ArgumentParser:
         help="report explicit timestamp gaps in a calibration bundle",
     )
     calibration_gaps.add_argument("manifest")
+
+    camera_import = sub.add_parser(
+        "import-camera-evidence",
+        help="import an iPhone camera MOV/frame-journal evidence bundle",
+    )
+    camera_import.add_argument("input")
+    camera_import.add_argument("--out", default="data")
+    camera_import.add_argument("--athlete-id", default="local-athlete")
+    camera_import.add_argument("--sport", default="camera-calibration")
+
+    camera_validate = sub.add_parser(
+        "validate-camera",
+        help="write a camera/video/Vision capture receipt",
+    )
+    camera_validate.add_argument("session")
+    camera_validate.add_argument("--min-duration", type=float, default=60.0)
+    camera_validate.add_argument(
+        "--receipt",
+        default="camera-capture-receipt.json",
+    )
 
     p2_import = sub.add_parser(
         "import-opengo-export",
@@ -348,6 +372,26 @@ def main(argv: list[str] | None = None) -> int:
             )
         )
         return 0
+
+    if args.command == "import-camera-evidence":
+        print(
+            import_camera_evidence(
+                args.input,
+                args.out,
+                athlete_id=args.athlete_id,
+                sport=args.sport,
+            )
+        )
+        return 0
+
+    if args.command == "validate-camera":
+        receipt = write_camera_capture_receipt(
+            args.session,
+            args.receipt,
+            min_duration_s=args.min_duration,
+        )
+        print(json.dumps(receipt.to_dict(), indent=2, sort_keys=True))
+        return 0 if receipt.passed else 2
 
     if args.command == "import-opengo-export":
         print(
