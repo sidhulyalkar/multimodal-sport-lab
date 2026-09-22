@@ -10,3 +10,6 @@ build/
 data/
 *.mcap
 .DS_Store
+
+# Generated local Replay Lab evidence payloads
+web/replay-lab/session.json

@@ -622,6 +622,20 @@ def _gap_regions(
     )
 
 
+def mapped_calibration_events(
+    manifest_path: str | Path,
+) -> tuple[MappedCalibrationEvent, ...]:
+    """Return hash-verified events mapped onto the reference clock.
+
+    Raw target device timestamps and any original session timestamps remain
+    attached to every event. This function never rewrites source sessions.
+    """
+
+    path = Path(manifest_path)
+    bundle = load_calibration_bundle(path, verify_hashes=True)
+    return tuple(_mapped_events(bundle, manifest_path=path))
+
+
 def calibration_gap_regions(
     manifest_path: str | Path,
 ) -> tuple[GapRegion, ...]:

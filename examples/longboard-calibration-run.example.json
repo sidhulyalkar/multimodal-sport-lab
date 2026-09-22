@@ -1,0 +1,107 @@
+{
+  "run_id": "longboard-calibration-001",
+  "sport": "longboard",
+  "protocol_version": "motionos.longboard-calibration.v1",
+  "calibration_bundle": "../data/calibration/longboard-calibration-001/calibration.json",
+  "profiles": [
+    {
+      "kind": "body_model",
+      "path": "../profiles/body-model.json"
+    },
+    {
+      "kind": "equipment_mount",
+      "path": "../profiles/longboard-mount.json"
+    },
+    {
+      "kind": "left_insole_geometry",
+      "path": "../profiles/left-insole-geometry.json"
+    },
+    {
+      "kind": "right_insole_geometry",
+      "path": "../profiles/right-insole-geometry.json"
+    }
+  ],
+  "movement_blocks": [
+    {
+      "id": "baseline",
+      "label": "quiet stance",
+      "planned_duration_s": 30,
+      "purpose": "stationary sensor and pressure baseline"
+    },
+    {
+      "id": "pushes",
+      "label": "10 pushes",
+      "repetitions": 10,
+      "purpose": "capture propulsion and stance-foot transitions"
+    },
+    {
+      "id": "straight-glide",
+      "label": "straight glide",
+      "planned_duration_s": 30,
+      "purpose": "low-curvature steady riding"
+    },
+    {
+      "id": "left-carves",
+      "label": "repeated left carves",
+      "repetitions": 8,
+      "purpose": "left-turn loading and board-motion coverage"
+    },
+    {
+      "id": "right-carves",
+      "label": "repeated right carves",
+      "repetitions": 8,
+      "purpose": "right-turn loading and board-motion coverage"
+    },
+    {
+      "id": "front-load",
+      "label": "front-load shifts",
+      "repetitions": 5,
+      "purpose": "fore-aft plantar loading coverage"
+    },
+    {
+      "id": "rear-load",
+      "label": "rear-load shifts",
+      "repetitions": 5,
+      "purpose": "fore-aft plantar loading coverage"
+    },
+    {
+      "id": "foot-reposition",
+      "label": "foot repositioning",
+      "repetitions": 5,
+      "purpose": "stance transition coverage"
+    },
+    {
+      "id": "braking",
+      "label": "controlled braking and stopping",
+      "repetitions": 5,
+      "purpose": "deceleration and stabilization coverage"
+    },
+    {
+      "id": "perturbations",
+      "label": "deliberate stabilization perturbations",
+      "repetitions": 5,
+      "purpose": "balance-correction coverage"
+    }
+  ],
+  "sync_landmarks": [
+    {
+      "label": "start",
+      "instruction": "perform one visually obvious whole-body and board-coupled sync motion near the beginning"
+    },
+    {
+      "label": "middle",
+      "instruction": "repeat the same sync motion near the middle of the session"
+    },
+    {
+      "label": "end",
+      "instruction": "repeat the same sync motion near the end of the session"
+    }
+  ],
+  "notes": [
+    "Record board pod mount location and orientation before riding.",
+    "Record iPhone camera mount/orientation before riding.",
+    "Do not change camera zoom or equipment-pod mount during the run.",
+    "Do not edit source video or sensor exports before import."
+  ],
+  "failure_modes": []
+}
