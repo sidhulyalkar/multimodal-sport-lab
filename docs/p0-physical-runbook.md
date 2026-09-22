@@ -95,7 +95,12 @@ Expected iPhone result:
 
 ## Export and process the journal
 
-Share `watch.jsonl` to your Mac or copy it from the MotionOS Documents folder.
+Share the **P0 evidence files** from the iPhone app, or copy both files from the MotionOS Documents folder:
+
+- `watch.jsonl` — immutable Watch journal containing `/meta/watch`, IMU, and HR events
+- `iphone-host.json` — iPhone model/OS/app environment captured when the journal is received
+
+Keep the two files in the same directory. The importer automatically discovers `iphone-host.json` beside `watch.jsonl`.
 
 From the repository root:
 
@@ -141,7 +146,9 @@ The P0 gate deliberately does not hard-code a 50 Hz accuracy tolerance. It repor
 ## What to inspect manually
 
 Even if the receipt passes, inspect:
-- observed IMU rate
+- Watch model + watchOS version
+- iPhone model + iOS version
+- requested IMU rate and observed IMU rate
 - maximum acquisition gaps
 - missing sequence count
 - duration
