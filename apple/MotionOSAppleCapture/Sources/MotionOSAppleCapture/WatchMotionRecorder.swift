@@ -23,6 +23,7 @@ public final class WatchMotionRecorder: @unchecked Sendable {
         guard manager.isDeviceMotionAvailable else {
             throw RecorderError.deviceMotionUnavailable
         }
+        sequence = 0
         manager.deviceMotionUpdateInterval = 1.0 / hz
         manager.startDeviceMotionUpdates(to: queue) { [weak self] motion, _ in
             guard let self, let motion else { return }
