@@ -99,6 +99,7 @@ class P0Receipt:
     imu_effective_hz: float
     imu_missing_sequences: int
     imu_non_monotonic_timestamps: int
+    imu_max_gap_ms: float | None
     hr_count: int
     hr_duration_s: float
     hr_missing_sequences: int
@@ -119,6 +120,7 @@ class P0Receipt:
                 "effective_hz": self.imu_effective_hz,
                 "missing_sequences": self.imu_missing_sequences,
                 "non_monotonic_timestamps": self.imu_non_monotonic_timestamps,
+                "max_gap_ms": self.imu_max_gap_ms,
             },
             "watch_hr": {
                 "count": self.hr_count,
@@ -179,6 +181,7 @@ def build_p0_receipt(
         imu_effective_hz=imu_qc.effective_hz,
         imu_missing_sequences=imu_qc.missing_sequences,
         imu_non_monotonic_timestamps=imu_qc.non_monotonic_timestamps,
+        imu_max_gap_ms=imu_qc.max_gap_ms,
         hr_count=hr_qc.count,
         hr_duration_s=hr_qc.duration_s,
         hr_missing_sequences=hr_qc.missing_sequences,
