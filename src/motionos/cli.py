@@ -24,6 +24,7 @@ from .p1 import (
 )
 from .qc import session_qc
 from .replay import replay_frames
+from .ride import build_first_ride_report
 from .session import SessionReader
 from .simulate import simulate_session
 from .validate import validate_m0_session
@@ -197,6 +198,24 @@ def _parser() -> argparse.ArgumentParser:
     camera_validate.add_argument(
         "--receipt",
         default="camera-capture-receipt.json",
+    )
+
+    first_ride = sub.add_parser(
+        "validate-first-ride",
+        help="verify the first multimodal calibration-ride evidence graph",
+    )
+    first_ride.add_argument("spec")
+    first_ride.add_argument(
+        "--report",
+        default="first-ride-report.json",
+    )
+    first_ride.add_argument(
+        "--evidence-only",
+        action="store_true",
+        help=(
+            "return success when evidence is complete even if timing/gap "
+            "qualification thresholds have not yet been frozen"
+        ),
     )
 
     p2_import = sub.add_parser(
@@ -392,6 +411,16 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(json.dumps(receipt.to_dict(), indent=2, sort_keys=True))
         return 0 if receipt.passed else 2
+
+    if args.command == "validate-first-ride":
+        report = build_first_ride_report(
+            args.spec,
+            args.report,
+        )
+        print(json.dumps(report.to_dict(), indent=2, sort_keys=True))
+        if args.evidence_only:
+            return 0 if report.evidence_complete else 2
+        return 0 if report.qualified else 2
 
     if args.command == "import-opengo-export":
         print(
