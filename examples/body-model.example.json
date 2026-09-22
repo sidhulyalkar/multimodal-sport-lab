@@ -1,0 +1,20 @@
+{
+  "model_id": "replace-with-body-scan-model-id",
+  "height_m": 1.75,
+  "segments_m": {
+    "torso": 0.5,
+    "left_upper_arm": 0.3,
+    "right_upper_arm": 0.3,
+    "left_forearm": 0.26,
+    "right_forearm": 0.26,
+    "left_thigh": 0.42,
+    "right_thigh": 0.42,
+    "left_shank": 0.43,
+    "right_shank": 0.43
+  },
+  "joint_limits_deg": {},
+  "metadata": {
+    "source": "replace_with_measured_3d_body_scan",
+    "note": "Example geometry only. Do not treat these dimensions as athlete measurements."
+  }
+}
