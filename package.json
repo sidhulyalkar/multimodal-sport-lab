@@ -1,0 +1,7 @@
+{
+  "name": "motionos-replay-lab",
+  "private": true,
+  "scripts": {
+    "test:ui-model": "node --test web/replay-lab/tests/*.test.mjs"
+  }
+}
