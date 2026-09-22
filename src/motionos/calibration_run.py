@@ -46,6 +46,7 @@ class CalibrationRun:
     reference_role: str
     reference_session_id: str
     source_roles: tuple[str, ...]
+    operator_evidence: tuple[RunArtifactReference, ...] = ()
     schema_version: str = RUN_SCHEMA_VERSION
 
     def to_dict(self) -> dict[str, object]:
@@ -56,6 +57,10 @@ class CalibrationRun:
             "protocol_version": self.protocol_version,
             "calibration_bundle": self.calibration_bundle.to_dict(),
             "profiles": [profile.to_dict() for profile in self.profiles],
+            "operator_evidence": [
+                artifact.to_dict()
+                for artifact in self.operator_evidence
+            ],
             "movement_blocks": list(self.movement_blocks),
             "sync_landmarks": list(self.sync_landmarks),
             "notes": list(self.notes),
@@ -178,6 +183,33 @@ def build_calibration_run(
             )
         )
 
+    operator_raw = raw.get("operator_evidence", [])
+    if not isinstance(operator_raw, list):
+        raise TypeError("operator_evidence must be a list")
+
+    operator_evidence: list[RunArtifactReference] = []
+    for index, item in enumerate(operator_raw):
+        if not isinstance(item, dict):
+            raise TypeError(
+                f"operator_evidence[{index}] must be an object"
+            )
+        if item.get("path") is None:
+            raise ValueError(
+                f"operator_evidence[{index}] requires path"
+            )
+        operator_evidence.append(
+            _artifact(
+                _resolve_path(
+                    str(item["path"]),
+                    base=spec.parent,
+                ),
+                output_dir=output.parent,
+                kind=str(
+                    item.get("kind", "operator_evidence")
+                ),
+            )
+        )
+
     run = CalibrationRun(
         run_id=run_id,
         sport=sport,
@@ -204,6 +236,7 @@ def build_calibration_run(
         reference_role=bundle.reference_role,
         reference_session_id=bundle.reference_session_id,
         source_roles=tuple(source.role for source in bundle.sources),
+        operator_evidence=tuple(operator_evidence),
     )
     output.write_text(
         json.dumps(run.to_dict(), indent=2, sort_keys=True) + "\n",
@@ -248,6 +281,21 @@ def load_calibration_run(
     if len(profiles) != len(profiles_raw):
         raise TypeError("profile entries must be objects")
 
+    operator_raw = raw.get("operator_evidence", [])
+    if not isinstance(operator_raw, list):
+        raise TypeError("operator_evidence must be a list")
+    operator_evidence = tuple(
+        RunArtifactReference(
+            path=str(item["path"]),
+            sha256=str(item["sha256"]),
+            kind=str(item["kind"]),
+        )
+        for item in operator_raw
+        if isinstance(item, dict)
+    )
+    if len(operator_evidence) != len(operator_raw):
+        raise TypeError("operator evidence entries must be objects")
+
     run = CalibrationRun(
         run_id=str(raw["run_id"]),
         sport=str(raw["sport"]),
@@ -270,6 +318,7 @@ def load_calibration_run(
         reference_role=str(raw["reference_role"]),
         reference_session_id=str(raw["reference_session_id"]),
         source_roles=tuple(str(value) for value in raw["source_roles"]),
+        operator_evidence=operator_evidence,
         schema_version=str(raw["schema_version"]),
     )
 
@@ -288,6 +337,17 @@ def load_calibration_run(
             if sha256_file(profile_path) != profile.sha256:
                 raise ValueError(
                     f"run profile hash changed: {profile.kind}"
+                )
+
+        for artifact in run.operator_evidence:
+            artifact_path = _resolve_path(
+                artifact.path,
+                base=base,
+            )
+            if sha256_file(artifact_path) != artifact.sha256:
+                raise ValueError(
+                    "operator evidence hash changed: "
+                    f"{artifact.kind}"
                 )
 
     return run
@@ -453,6 +513,36 @@ def build_calibration_report(
                 f"{source['role']}: missing clock model"
             )
 
+    operator_evidence: list[dict[str, object]] = []
+    for artifact in run.operator_evidence:
+        artifact_path = _resolve_path(
+            artifact.path,
+            base=run_manifest.parent,
+        )
+        payload = _read_json_artifact(artifact_path)
+        operator_evidence.append(
+            {
+                **artifact.to_dict(),
+                "payload": payload,
+            }
+        )
+
+        if artifact.kind == "field_run_receipt" and payload is not None:
+            if payload.get("integrity_passed") is not True:
+                blockers.append(
+                    "field run: operator ledger integrity failed"
+                )
+            if payload.get("protocol_complete") is not True:
+                blockers.append(
+                    "field run: operator protocol incomplete"
+                )
+            failures = payload.get("failure_markers")
+            if isinstance(failures, list):
+                blockers.extend(
+                    f"field run failure: {message}"
+                    for message in failures
+                )
+
     blockers.extend(
         f"recorded failure: {message}"
         for message in run.failure_modes
@@ -467,6 +557,7 @@ def build_calibration_report(
         "reference_session_id": run.reference_session_id,
         "calibration_bundle": run.calibration_bundle.to_dict(),
         "profiles": [profile.to_dict() for profile in run.profiles],
+        "operator_evidence": operator_evidence,
         "movement_blocks": list(run.movement_blocks),
         "sync_landmarks": list(run.sync_landmarks),
         "notes": list(run.notes),
