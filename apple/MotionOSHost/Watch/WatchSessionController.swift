@@ -159,9 +159,10 @@ final class WatchSessionController: ObservableObject {
         guard !finalized else { return }
         finalized = true
         motion.stop()
+        let shouldPreserveFailure = state == .failed
 
         guard let pipeline else {
-            if state != .failed { state = .idle }
+            if !shouldPreserveFailure { state = .idle }
             return
         }
 
@@ -171,8 +172,10 @@ final class WatchSessionController: ObservableObject {
             let id = await pipeline.sessionID
             closedJournalURL = journalURL
             self.pipeline = nil
-            state = .journalReady
-            queueTransfer(journalURL: journalURL, sessionID: id)
+            if !shouldPreserveFailure {
+                state = .journalReady
+                queueTransfer(journalURL: journalURL, sessionID: id)
+            }
         } catch {
             fail(error)
         }
