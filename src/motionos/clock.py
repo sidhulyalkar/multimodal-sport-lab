@@ -27,7 +27,7 @@ class ClockModel:
     observations_used: int
 
     def map(self, device_time_ns: int) -> int:
-        return int(round(self.slope * device_time_ns + self.intercept_ns))
+        return round(self.slope * device_time_ns + self.intercept_ns)
 
     @property
     def drift_ppm(self) -> float:
@@ -72,7 +72,7 @@ def estimate_clock_model(
         raise ValueError("keep_fraction must be between 0.25 and 1.0")
 
     ordered = sorted(observations, key=lambda item: item.round_trip_ns)
-    keep = max(3, int(math.ceil(len(ordered) * keep_fraction)))
+    keep = max(3, math.ceil(len(ordered) * keep_fraction))
     selected = sorted(ordered[:keep], key=lambda item: item.device_time_ns)
 
     slope, intercept, _ = _linear_fit(
