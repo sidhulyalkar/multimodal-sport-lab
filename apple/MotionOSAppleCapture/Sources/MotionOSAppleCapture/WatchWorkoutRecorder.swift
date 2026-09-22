@@ -2,6 +2,7 @@
 import Foundation
 import HealthKit
 
+@MainActor
 public final class WatchWorkoutRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutBuilderDelegate {
     public enum State: Sendable, Equatable {
         case idle
@@ -17,9 +18,9 @@ public final class WatchWorkoutRecorder: NSObject, HKWorkoutSessionDelegate, HKL
     private var session: HKWorkoutSession?
     private var builder: HKLiveWorkoutBuilder?
 
-    public var onHeartRateBPM: (@Sendable (Double, UInt64) -> Void)?
-    public var onStateChange: (@Sendable (State) -> Void)?
-    public var onWorkoutFinished: (@Sendable (HKWorkout?) -> Void)?
+    public var onHeartRateBPM: ((Double, UInt64) -> Void)?
+    public var onStateChange: ((State) -> Void)?
+    public var onWorkoutFinished: ((HKWorkout?) -> Void)?
 
     public init(healthStore: HKHealthStore = HKHealthStore()) {
         self.healthStore = healthStore
