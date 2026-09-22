@@ -19,6 +19,7 @@ from .camera import (
 )
 from .clock_sync import write_clock_sync
 from .equipment_cli import calibrate_equipment_mount_file
+from .field_run import write_field_run_receipt
 from .insole import import_opengo_text_export, write_p2_capture_receipt
 from .mcap_io import export_mcap
 from .p0 import import_watch_journal, write_p0_receipt
@@ -205,6 +206,16 @@ def _parser() -> argparse.ArgumentParser:
     run_replay.add_argument("run")
     run_replay.add_argument("output")
     run_replay.add_argument("--hz", type=float, default=10.0)
+
+    field_run = sub.add_parser(
+        "validate-field-run",
+        help="validate a sealed iPhone field-run operator ledger",
+    )
+    field_run.add_argument("input")
+    field_run.add_argument(
+        "--receipt",
+        default="field-run-receipt.json",
+    )
 
     camera_import = sub.add_parser(
         "import-camera-evidence",
@@ -429,6 +440,17 @@ def main(argv: list[str] | None = None) -> int:
             )
         )
         return 0
+
+    if args.command == "validate-field-run":
+        receipt = write_field_run_receipt(
+            args.input,
+            args.receipt,
+        )
+        print(json.dumps(receipt.to_dict(), indent=2, sort_keys=True))
+        return 0 if (
+            receipt.integrity_passed
+            and receipt.protocol_complete
+        ) else 2
 
     if args.command == "import-camera-evidence":
         print(
