@@ -22,6 +22,14 @@ test("capture screen exposes device readiness and calibration progression", () =
 
 test("replay screen exposes measured pressure and synchronization quality", () => {
   assert.match(html, /Plantar loading/);
-  assert.match(html, /WEARABLE-ONLY STATE/);
+  assert.match(html, /SYNCHRONIZED MULTIMODAL STATE/);
   assert.match(html, /SYNCHRONIZED TIMELINE/);
+});
+
+
+test("replay screen exposes generated-evidence provenance and gap state", () => {
+  assert.match(html, /session-source/);
+  assert.match(html, /gap-state/);
+  assert.match(html, /metric-one-label/);
+  assert.match(html, /metric-two-label/);
 });

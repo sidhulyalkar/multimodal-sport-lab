@@ -8,6 +8,11 @@ from .calibration import (
     calibration_gap_regions,
     replay_calibration_frames,
 )
+from .calibration_run import (
+    build_calibration_run,
+    write_calibration_report,
+    write_replay_lab_payload,
+)
 from .camera import (
     import_camera_evidence,
     write_camera_capture_receipt,
@@ -178,6 +183,28 @@ def _parser() -> argparse.ArgumentParser:
         help="report explicit timestamp gaps in a calibration bundle",
     )
     calibration_gaps.add_argument("manifest")
+
+    run_build = sub.add_parser(
+        "build-calibration-run",
+        help="build a hash-verified first-class calibration run manifest",
+    )
+    run_build.add_argument("spec")
+    run_build.add_argument("output")
+
+    run_report = sub.add_parser(
+        "report-calibration-run",
+        help="write a deterministic evidence/timing/gap report for a run",
+    )
+    run_report.add_argument("run")
+    run_report.add_argument("output")
+
+    run_replay = sub.add_parser(
+        "export-replay-lab",
+        help="export a generated Replay Lab JSON payload from a calibration run",
+    )
+    run_replay.add_argument("run")
+    run_replay.add_argument("output")
+    run_replay.add_argument("--hz", type=float, default=10.0)
 
     camera_import = sub.add_parser(
         "import-camera-evidence",
@@ -367,6 +394,36 @@ def main(argv: list[str] | None = None) -> int:
         print(
             json.dumps(
                 [gap.to_dict() for gap in gaps],
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    if args.command == "build-calibration-run":
+        run = build_calibration_run(args.spec, args.output)
+        print(json.dumps(run.to_dict(), indent=2, sort_keys=True))
+        return 0
+
+    if args.command == "report-calibration-run":
+        report = write_calibration_report(args.run, args.output)
+        print(json.dumps(report, indent=2, sort_keys=True))
+        return 0
+
+    if args.command == "export-replay-lab":
+        payload = write_replay_lab_payload(
+            args.run,
+            args.output,
+            frame_hz=args.hz,
+        )
+        print(
+            json.dumps(
+                {
+                    "schema_version": payload["schema_version"],
+                    "run_id": payload["run"]["run_id"],
+                    "frames": len(payload["frames"]),
+                    "output": args.output,
+                },
                 indent=2,
                 sort_keys=True,
             )

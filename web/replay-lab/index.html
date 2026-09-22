@@ -94,26 +94,30 @@
 
     <section class="screen" data-screen-panel="replay">
       <header class="screen-title">
-        <div><p class="eyebrow">SESSION REPLAY</p><h2><span id="session-sport"></span> calibration</h2></div>
+        <div>
+          <p class="eyebrow">SESSION REPLAY · <span id="session-source"></span></p>
+          <h2><span id="session-sport"></span> calibration</h2>
+        </div>
         <span id="session-duration"></span>
       </header>
       <section class="replay-grid">
         <article class="panel stage-panel">
           <div class="panel-heading">
             <div>
-              <p class="eyebrow">WEARABLE-ONLY STATE</p>
-              <h2>Athlete + equipment</h2>
+              <p class="eyebrow">SYNCHRONIZED MULTIMODAL STATE</p>
+              <h2>Athlete + equipment + feet</h2>
             </div>
             <div class="quality">
               <span>Pose <strong id="confidence"></strong></span>
               <span>Sync <strong id="sync"></strong></span>
+              <span>Gaps <strong id="gap-state"></strong></span>
             </div>
           </div>
           <div id="pose-stage" class="pose-stage"></div>
           <div class="metric-strip">
             <div><span>Heart rate</span><strong id="hr"></strong></div>
-            <div><span>Speed</span><strong id="speed"></strong></div>
-            <div><span>Board roll</span><strong id="roll"></strong></div>
+            <div><span id="metric-one-label">Speed</span><strong id="metric-one"></strong></div>
+            <div><span id="metric-two-label">Board roll</span><strong id="metric-two"></strong></div>
           </div>
         </article>
 

@@ -186,3 +186,25 @@ h3 { font-size:15px; font-weight:620; }
   .sport-grid { grid-template-columns:1fr 1fr; }
   .session-list > div { flex-direction:column; gap:5px; }
 }
+
+
+.no-sample {
+  min-height: 12rem;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-align: center;
+  padding: 1rem;
+}
+
+.no-sample-svg,
+.pose-note {
+  fill: var(--muted);
+  font-size: 5px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.quality {
+  flex-wrap: wrap;
+}
