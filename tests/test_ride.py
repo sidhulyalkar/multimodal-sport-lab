@@ -8,10 +8,7 @@ import pytest
 
 from motionos.calibration import build_calibration_bundle
 from motionos.clock_sync import write_clock_sync
-from motionos.ride import (
-    REQUIRED_MOVEMENT_STAGES,
-    build_first_ride_report,
-)
+from motionos.ride import REQUIRED_MOVEMENT_STAGES, build_first_ride_report
 from motionos.schema import DeviceDescriptor, SensorEvent, SessionManifest
 from motionos.session import SessionWriter
 
