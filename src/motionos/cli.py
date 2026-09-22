@@ -6,6 +6,11 @@ import json
 from .equipment_cli import calibrate_equipment_mount_file
 from .mcap_io import export_mcap
 from .p0 import import_watch_journal, write_p0_receipt
+from .p1 import (
+    import_pod_journal,
+    write_impulse_clock_observations,
+    write_p1_receipt,
+)
 from .qc import session_qc
 from .replay import replay_frames
 from .session import SessionReader
@@ -66,6 +71,45 @@ def _parser() -> argparse.ArgumentParser:
     )
     mount.add_argument("input")
     mount.add_argument("output")
+
+    p1_import = sub.add_parser(
+        "import-pod-journal",
+        help="import recovered MetaMotionS flash evidence",
+    )
+    p1_import.add_argument("journal")
+    p1_import.add_argument("--out", default="data")
+    p1_import.add_argument("--profile")
+    p1_import.add_argument("--sport", default="equipment-qualification")
+
+    p1 = sub.add_parser(
+        "validate-p1",
+        help="write a MetaMotionS physical qualification receipt",
+    )
+    p1.add_argument("session")
+    p1.add_argument("--min-duration", type=float, default=60.0)
+    p1.add_argument("--receipt", default="p1-receipt.json")
+    p1.add_argument("--capture-only", action="store_true")
+    p1.add_argument("--rate-tolerance", type=float)
+    p1.add_argument("--max-gap-multiple", type=float)
+    p1.add_argument("--sync-observations")
+    p1.add_argument("--max-sync-residual-ms", type=float)
+
+    sync = sub.add_parser(
+        "derive-p1-sync",
+        help="pair deliberate impulse landmarks across Watch and pod clocks",
+    )
+    sync.add_argument("reference_session")
+    sync.add_argument("pod_session")
+    sync.add_argument("windows")
+    sync.add_argument("output")
+    sync.add_argument(
+        "--reference-stream",
+        default="/body/watch/imu",
+    )
+    sync.add_argument(
+        "--pod-stream",
+        default="/equipment/imu/accel",
+    )
     return parser
 
 
@@ -144,6 +188,71 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "calibrate-equipment-mount":
         print(calibrate_equipment_mount_file(args.input, args.output))
         return 0
+
+    if args.command == "import-pod-journal":
+        print(
+            import_pod_journal(
+                args.journal,
+                args.out,
+                equipment_profile_path=args.profile,
+                sport=args.sport,
+            )
+        )
+        return 0
+
+    if args.command == "derive-p1-sync":
+        observations = write_impulse_clock_observations(
+            args.reference_session,
+            args.pod_session,
+            args.windows,
+            args.output,
+            reference_stream=args.reference_stream,
+            pod_stream=args.pod_stream,
+        )
+        print(
+            json.dumps(
+                [
+                    {
+                        "device_time_ns": item.device_time_ns,
+                        "session_time_ns": item.session_time_ns,
+                        "round_trip_ns": item.round_trip_ns,
+                    }
+                    for item in observations
+                ],
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    if args.command == "validate-p1":
+        if not args.capture_only:
+            required = {
+                "--rate-tolerance": args.rate_tolerance,
+                "--max-gap-multiple": args.max_gap_multiple,
+                "--sync-observations": args.sync_observations,
+                "--max-sync-residual-ms": args.max_sync_residual_ms,
+            }
+            missing = [name for name, value in required.items() if value is None]
+            if missing:
+                parser = _parser()
+                parser.error(
+                    "full P1 qualification requires " + ", ".join(missing)
+                )
+
+        receipt = write_p1_receipt(
+            args.session,
+            args.receipt,
+            min_duration_s=args.min_duration,
+            rate_tolerance_fraction=args.rate_tolerance,
+            max_gap_multiple=args.max_gap_multiple,
+            sync_observations_path=args.sync_observations,
+            max_sync_residual_ms=args.max_sync_residual_ms,
+        )
+        print(json.dumps(receipt.to_dict(), indent=2, sort_keys=True))
+        if args.capture_only:
+            return 0 if receipt.capture_passed else 2
+        return 0 if receipt.passed else 2
 
     raise AssertionError("unreachable")
 
