@@ -7,6 +7,12 @@ final class MotionOSAppleCaptureTests: XCTestCase {
         XCTAssertEqual(model.sessionTime(deviceTimeNS: 1_000_000), 1_001_010)
     }
 
+    func testMonotonicClockAdvances() {
+        let a = MonotonicClock.nowNS()
+        let b = MonotonicClock.nowNS()
+        XCTAssertGreaterThanOrEqual(b, a)
+    }
+
     func testEnvelopeJSONRoundTrip() throws {
         let event = SensorEnvelope(
             sessionID: "s1",
