@@ -4,6 +4,7 @@ import argparse
 import json
 
 from .equipment_cli import calibrate_equipment_mount_file
+from .insole import import_opengo_text_export, write_p2_capture_receipt
 from .mcap_io import export_mcap
 from .p0 import import_watch_journal, write_p0_receipt
 from .p1 import (
@@ -110,6 +111,24 @@ def _parser() -> argparse.ArgumentParser:
         "--pod-stream",
         default="/equipment/imu/accel",
     )
+
+    p2_import = sub.add_parser(
+        "import-opengo-export",
+        help="import a bilateral Moticon OpenGo text export",
+    )
+    p2_import.add_argument("input")
+    p2_import.add_argument("--out", default="data")
+    p2_import.add_argument("--session-id")
+    p2_import.add_argument("--athlete-id", default="local-athlete")
+    p2_import.add_argument("--sport", default="insole-qualification")
+
+    p2 = sub.add_parser(
+        "validate-p2",
+        help="write a bilateral insole exported-data capture receipt",
+    )
+    p2.add_argument("session")
+    p2.add_argument("--min-duration", type=float, default=60.0)
+    p2.add_argument("--receipt", default="p2-capture-receipt.json")
     return parser
 
 
@@ -224,6 +243,27 @@ def main(argv: list[str] | None = None) -> int:
             )
         )
         return 0
+
+    if args.command == "import-opengo-export":
+        print(
+            import_opengo_text_export(
+                args.input,
+                args.out,
+                session_id=args.session_id,
+                athlete_id=args.athlete_id,
+                sport=args.sport,
+            )
+        )
+        return 0
+
+    if args.command == "validate-p2":
+        receipt = write_p2_capture_receipt(
+            args.session,
+            args.receipt,
+            min_duration_s=args.min_duration,
+        )
+        print(json.dumps(receipt.to_dict(), indent=2, sort_keys=True))
+        return 0 if receipt.capture_passed else 2
 
     if args.command == "validate-p1":
         if not args.capture_only:
