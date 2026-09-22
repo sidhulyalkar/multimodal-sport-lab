@@ -11,7 +11,8 @@ let package = Package(
         .target(name: "MotionOSAppleCapture"),
         .testTarget(
             name: "MotionOSAppleCaptureTests",
-            dependencies: ["MotionOSAppleCapture"]
+            dependencies: ["MotionOSAppleCapture"],
+            resources: [.copy("Fixtures")]
         )
     ]
 )
