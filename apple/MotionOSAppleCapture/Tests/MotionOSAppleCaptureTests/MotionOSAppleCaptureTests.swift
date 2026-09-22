@@ -25,10 +25,16 @@ final class MotionOSAppleCaptureTests: XCTestCase {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         let data = try encoder.encode(event)
-        let raw = try XCTUnwrap(String(data: data, encoding: .utf8))
-        XCTAssertTrue(raw.contains("\\"session_id\\":\\"s1\\""))
-        XCTAssertTrue(raw.contains("\\"device_time_ns\\":100"))
-        XCTAssertFalse(raw.contains("sessionID"))
+
+        let object = try XCTUnwrap(
+            try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        )
+        XCTAssertEqual(object["session_id"] as? String, "s1")
+        XCTAssertEqual(object["device_id"] as? String, "watch")
+        XCTAssertEqual(object["device_time_ns"] as? Int, 100)
+        XCTAssertNil(object["sessionID"])
+        XCTAssertNil(object["deviceTimeNS"])
+
         XCTAssertEqual(
             try JSONDecoder().decode(SensorEnvelope.self, from: data),
             event
