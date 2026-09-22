@@ -41,3 +41,29 @@ A real adapter should include calibration metadata for sensor locations, units, 
 ## 3D pose payload
 
 Calibration pose events carry named joint coordinates in meters and a confidence value. The camera stream is teacher data; it is not required in field mode.
+
+
+## Canonical IMU payload and units
+
+All real and simulated IMU adapters must expose these canonical channels:
+
+```json
+{
+  "ax": 0.1,
+  "ay": -0.2,
+  "az": 9.81,
+  "gx": 0.01,
+  "gy": -0.02,
+  "gz": 0.03,
+  "units": {
+    "acceleration": "m/s^2",
+    "rotation_rate": "rad/s"
+  }
+}
+```
+
+- `ax/ay/az`: total specific acceleration expressed in the sensor frame, in m/s².
+- `gx/gy/gz`: angular velocity around sensor-frame axes, in rad/s.
+- sensor-frame axis orientation is calibration metadata and must never be inferred from placement names alone.
+
+Adapters may preserve additional vendor/fused channels, but downstream models should be able to rely on the canonical six channels and SI units. Apple's Core Motion acceleration channels are converted from g to m/s² at the adapter boundary.

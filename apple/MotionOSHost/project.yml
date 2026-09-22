@@ -1,0 +1,101 @@
+name: MotionOSHost
+
+options:
+  bundleIdPrefix: com.sidhulyalkar
+  deploymentTarget:
+    iOS: "17.0"
+    watchOS: "10.0"
+  postGenCommand: |
+    PROJECT="MotionOSHost.xcodeproj/project.pbxproj"
+    if grep -q 'dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";' "$PROJECT"; then
+      sed -i '' -e 's|dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";|dstPath = "";|'         -e 's|dstSubfolderSpec = 16;|dstSubfolderSpec = 13;|' "$PROJECT"
+    fi
+
+packages:
+  MotionOSAppleCapture:
+    path: ../MotionOSAppleCapture
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    CURRENT_PROJECT_VERSION: 1
+    MARKETING_VERSION: 0.1.0
+    CODE_SIGN_STYLE: Automatic
+
+targets:
+  MotionOSWatch:
+    type: application
+    platform: watchOS
+    deploymentTarget: "10.0"
+    sources:
+      - path: Watch
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.sidhulyalkar.motionos.watchkitapp
+        PRODUCT_NAME: MotionOS
+        CODE_SIGN_ENTITLEMENTS: Watch/MotionOSWatch.entitlements
+    info:
+      path: Watch/Info.plist
+      properties:
+        CFBundleDisplayName: MotionOS
+        WKCompanionAppBundleIdentifier: com.sidhulyalkar.motionos
+        WKRunsIndependentlyOfCompanionApp: false
+        NSHealthShareUsageDescription: MotionOS reads workout metrics so it can synchronize physiology with motion.
+        NSHealthUpdateUsageDescription: MotionOS saves the workout you explicitly start.
+        NSMotionUsageDescription: MotionOS records wrist motion during an active workout.
+    entitlements:
+      path: Watch/MotionOSWatch.entitlements
+      properties:
+        com.apple.developer.healthkit: true
+    dependencies:
+      - package: MotionOSAppleCapture
+        product: MotionOSAppleCapture
+
+  MotionOSiOS:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: iOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.sidhulyalkar.motionos
+        PRODUCT_NAME: MotionOS
+        CODE_SIGN_ENTITLEMENTS: iOS/MotionOSiOS.entitlements
+    info:
+      path: iOS/Info.plist
+      properties:
+        CFBundleDisplayName: MotionOS
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
+        NSHealthShareUsageDescription: MotionOS uses workout state to coordinate capture with Apple Watch.
+        NSHealthUpdateUsageDescription: MotionOS starts workouts on your paired Apple Watch.
+        NSMotionUsageDescription: MotionOS may use motion data during calibration.
+    entitlements:
+      path: iOS/MotionOSiOS.entitlements
+      properties:
+        com.apple.developer.healthkit: true
+    dependencies:
+      - target: MotionOSWatch
+        embed: true
+      - package: MotionOSAppleCapture
+        product: MotionOSAppleCapture
+
+schemes:
+  MotionOS-iOS:
+    build:
+      targets:
+        MotionOSiOS: all
+    run:
+      config: Debug
+    archive:
+      config: Release
+
+  MotionOS-Watch:
+    build:
+      targets:
+        MotionOSWatch: all
+    run:
+      config: Debug
+    archive:
+      config: Release

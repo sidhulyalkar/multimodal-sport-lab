@@ -11,6 +11,18 @@ public struct SensorEnvelope: Codable, Sendable, Equatable {
     public let syncQuality: Double?
     public let payload: [String: JSONValue]
 
+    enum CodingKeys: String, CodingKey {
+        case schemaVersion = "schema_version"
+        case sessionID = "session_id"
+        case deviceID = "device_id"
+        case stream
+        case sequence
+        case deviceTimeNS = "device_time_ns"
+        case sessionTimeNS = "session_time_ns"
+        case syncQuality = "sync_quality"
+        case payload
+    }
+
     public init(
         schemaVersion: String = "motionos.m0.v1",
         sessionID: String,

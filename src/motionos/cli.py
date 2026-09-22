@@ -4,6 +4,7 @@ import argparse
 import json
 
 from .mcap_io import export_mcap
+from .p0 import import_watch_journal, write_p0_receipt
 from .qc import session_qc
 from .replay import replay_frames
 from .session import SessionReader
@@ -42,6 +43,21 @@ def _parser() -> argparse.ArgumentParser:
     mcap = sub.add_parser("export-mcap", help="export a session bundle to MCAP")
     mcap.add_argument("session")
     mcap.add_argument("output")
+
+    p0_import = sub.add_parser(
+        "import-watch-journal",
+        help="import a physical Apple Watch JSONL journal into a MotionOS bundle",
+    )
+    p0_import.add_argument("journal")
+    p0_import.add_argument("--out", default="data")
+
+    p0 = sub.add_parser(
+        "validate-p0",
+        help="write a single-Watch physical qualification receipt",
+    )
+    p0.add_argument("session")
+    p0.add_argument("--min-duration", type=float, default=60.0)
+    p0.add_argument("--receipt", default="p0-receipt.json")
     return parser
 
 
@@ -103,6 +119,19 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "export-mcap":
         print(export_mcap(args.session, args.output))
         return 0
+
+    if args.command == "import-watch-journal":
+        print(import_watch_journal(args.journal, args.out))
+        return 0
+
+    if args.command == "validate-p0":
+        receipt = write_p0_receipt(
+            args.session,
+            args.receipt,
+            min_duration_s=args.min_duration,
+        )
+        print(json.dumps(receipt.to_dict(), indent=2, sort_keys=True))
+        return 0 if receipt.passed else 2
 
     raise AssertionError("unreachable")
 
