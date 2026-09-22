@@ -81,10 +81,10 @@ extension MetaMotionRecoveredSession {
                 "gyroscope": gyroscope.count,
             ],
             "device_tick_ms": [
-                "accelerometer_start": accelerometer.first?.deviceTickMS as Any,
-                "accelerometer_end": accelerometer.last?.deviceTickMS as Any,
-                "gyroscope_start": gyroscope.first?.deviceTickMS as Any,
-                "gyroscope_end": gyroscope.last?.deviceTickMS as Any,
+                "accelerometer_start": accelerometer.first!.deviceTickMS,
+                "accelerometer_end": accelerometer.last!.deviceTickMS,
+                "gyroscope_start": gyroscope.first!.deviceTickMS,
+                "gyroscope_end": gyroscope.last!.deviceTickMS,
             ],
             "streams": [
                 "/equipment/imu/accel",
