@@ -258,6 +258,12 @@ def _fixture(tmp_path: Path) -> tuple[Path, dict[str, Path]]:
         json.dumps(
             {
                 "schema_version": "motionos.body-registration-report.v1",
+                "camera_session": {
+                    "session_id": "camera",
+                    "bundle_sha256": session_evidence_sha256(
+                        SessionReader(camera)
+                    ),
+                },
                 "frames": [
                     {
                         "device_time_ns": 1_000_000_000,
@@ -508,6 +514,40 @@ def test_rotation_matrix_must_be_proper(tmp_path):
     spec.write_text(json.dumps(raw), encoding="utf-8")
 
     with pytest.raises(ValueError, match="not orthogonal"):
+        build_cross_modal_residual_report(
+            spec,
+            tmp_path / "report.json",
+        )
+
+
+def test_body_registration_must_bind_exact_camera_bundle(tmp_path):
+    spec, paths = _fixture(tmp_path)
+    raw = json.loads(
+        paths["registration"].read_text(encoding="utf-8")
+    )
+    raw["camera_session"]["session_id"] = "other-camera"
+    paths["registration"].write_text(json.dumps(raw), encoding="utf-8")
+
+    spec_raw = json.loads(spec.read_text(encoding="utf-8"))
+    spec_raw["body_registration_report"]["sha256"] = sha256_file(
+        paths["registration"]
+    )
+    spec.write_text(json.dumps(spec_raw), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="camera session ID mismatch"):
+        build_cross_modal_residual_report(
+            spec,
+            tmp_path / "report.json",
+        )
+
+
+def test_pressure_threshold_must_be_positive(tmp_path):
+    spec, _paths = _fixture(tmp_path)
+    raw = json.loads(spec.read_text(encoding="utf-8"))
+    raw["pressure_video"][0]["force_threshold_n"] = 0.0
+    spec.write_text(json.dumps(raw), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="positive and finite"):
         build_cross_modal_residual_report(
             spec,
             tmp_path / "report.json",
