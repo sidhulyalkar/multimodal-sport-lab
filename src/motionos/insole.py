@@ -1059,7 +1059,7 @@ def load_p2_physical_spec(
     for label in P2_REQUIRED_CONTROLLED_WINDOWS:
         window = windows_raw.get(label)
         if not isinstance(window, dict):
-            raise ValueError(
+            raise TypeError(
                 f"P2 physical spec requires controlled window {label!r}"
             )
         try:
@@ -1246,7 +1246,7 @@ def build_p2_physical_receipt(
     for label in P2_REQUIRED_CONTROLLED_WINDOWS:
         window = windows_raw.get(label)
         if not isinstance(window, dict):
-            raise ValueError(
+            raise TypeError(
                 f"P2 physical spec requires controlled window {label!r}"
             )
         measurements.append(
