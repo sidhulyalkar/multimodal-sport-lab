@@ -113,4 +113,36 @@ final class MotionOSAppleCaptureTests: XCTestCase {
         }
     }
 
+
+    func testSampleTimingHealthTracksRateMedianAndGap() {
+        var health = SampleTimingHealth(recentWindowSize: 4)
+        for timestamp in [
+            UInt64(0),
+            20_000_000,
+            40_000_000,
+            60_000_000,
+            100_000_000,
+        ] {
+            health.observe(timestampNS: timestamp)
+        }
+
+        XCTAssertEqual(health.sampleCount, 5)
+        XCTAssertEqual(health.nonMonotonicCount, 0)
+        XCTAssertEqual(health.effectiveHz ?? 0, 40.0, accuracy: 1e-9)
+        XCTAssertEqual(health.recentMedianIntervalNS, 20_000_000)
+        XCTAssertEqual(health.recentMedianHz ?? 0, 50.0, accuracy: 1e-9)
+        XCTAssertEqual(health.maxGapMS, 40.0, accuracy: 1e-9)
+    }
+
+    func testSampleTimingHealthFlagsNonMonotonicTimestamp() {
+        var health = SampleTimingHealth()
+        health.observe(timestampNS: 100)
+        health.observe(timestampNS: 90)
+        health.observe(timestampNS: 200)
+
+        XCTAssertEqual(health.sampleCount, 3)
+        XCTAssertEqual(health.nonMonotonicCount, 1)
+        XCTAssertEqual(health.lastTimestampNS, 200)
+        XCTAssertEqual(health.maxGapNS, 100)
+    }
 }
