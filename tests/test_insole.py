@@ -662,3 +662,36 @@ def test_p2_physical_receipt_rejects_static_load_outside_frozen_tolerance(
     assert receipt.static_load_gate_passed is False
     assert receipt.static_load_relative_error == pytest.approx(1 / 6)
     assert receipt.passed is False
+
+
+def test_p2_physical_receipt_rejects_reimported_same_source_as_two_runs(
+    tmp_path,
+):
+    source = tmp_path / "same-export.txt"
+    spec_path = tmp_path / "p2-physical-spec.json"
+    _write_p2_physical_export(source, field=True)
+    _write_p2_physical_spec(spec_path)
+
+    controlled_session = import_opengo_text_export(
+        source,
+        tmp_path / "controlled-sessions",
+        session_id="p2-controlled-copy",
+    )
+    field_session = import_opengo_text_export(
+        source,
+        tmp_path / "field-sessions",
+        session_id="p2-field-copy",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="cannot reuse the same OpenGo source export",
+    ):
+        build_p2_physical_receipt(
+            SessionReader(field_session),
+            SessionReader(controlled_session),
+            load_p2_physical_spec(spec_path),
+            spec_sha256="d" * 64,
+            min_controlled_duration_s=0.09,
+            min_field_duration_s=0.09,
+        )
