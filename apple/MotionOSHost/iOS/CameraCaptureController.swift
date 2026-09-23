@@ -29,6 +29,10 @@ final class CameraCaptureController: ObservableObject {
         AVCaptureDevice.authorizationStatus(for: .video)
     }
 
+    var previewSession: AVCaptureSession {
+        pipeline.captureSessionForPreview
+    }
+
     func prepare() async {
         errorMessage = nil
         do {
@@ -38,7 +42,7 @@ final class CameraCaptureController: ObservableObject {
                 return
             }
 
-            configuration = try await pipeline.configure()
+            configuration = try await pipeline.startPreview()
             phase = .ready
         } catch {
             fail(error)
