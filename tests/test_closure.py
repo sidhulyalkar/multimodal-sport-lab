@@ -1,10 +1,17 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
 from motionos.calibration_run import CalibrationRun, RunArtifactReference
 from motionos.closure import evaluate_m0_closure
+from motionos.operator_evidence import (
+    OPERATOR_EVENT_SCHEMA,
+    OPERATOR_METADATA_SCHEMA,
+    OPERATOR_TIMING_SEMANTICS,
+    validate_operator_evidence,
+)
 
 
 def _artifact(path: str, kind: str) -> RunArtifactReference:
@@ -24,15 +31,69 @@ def _run_with_operator_evidence(
     run_id = "m0-longboard-test"
     protocol = "motionos.longboard-calibration.v1"
 
+    journal_events = [
+        {
+            "schema_version": OPERATOR_EVENT_SCHEMA,
+            "run_id": run_id,
+            "sequence": 0,
+            "host_monotonic_ns": 100,
+            "timing_semantics": OPERATOR_TIMING_SEMANTICS,
+            "kind": "run_created",
+            "label": "test run",
+            "payload": {},
+        },
+        *[
+            {
+                "schema_version": OPERATOR_EVENT_SCHEMA,
+                "run_id": run_id,
+                "sequence": index,
+                "host_monotonic_ns": index * 100,
+                "timing_semantics": OPERATOR_TIMING_SEMANTICS,
+                "kind": "sync_cue_annotation",
+                "label": label,
+                "payload": {},
+            }
+            for index, label in enumerate(
+                ("start", "middle", "end"),
+                start=1,
+            )
+        ],
+    ]
+    for note in failure_notes or []:
+        journal_events.append(
+            {
+                "schema_version": OPERATOR_EVENT_SCHEMA,
+                "run_id": run_id,
+                "sequence": len(journal_events),
+                "host_monotonic_ns": len(journal_events) * 100,
+                "timing_semantics": OPERATOR_TIMING_SEMANTICS,
+                "kind": "failure_note",
+                "label": "operator-observed failure",
+                "payload": {"message": note},
+            }
+        )
+
     events = tmp_path / "operator-events.jsonl"
-    events.write_text("{}\n", encoding="utf-8")
+    events.write_text(
+        "".join(
+            json.dumps(event, sort_keys=True) + "\n"
+            for event in journal_events
+        ),
+        encoding="utf-8",
+    )
+    journal_hash = hashlib.sha256(events.read_bytes()).hexdigest()
 
     metadata = tmp_path / "operator-metadata.json"
     metadata.write_text(
         json.dumps(
             {
+                "schema_version": OPERATOR_METADATA_SCHEMA,
+                "event_schema_version": OPERATOR_EVENT_SCHEMA,
+                "timing_semantics": OPERATOR_TIMING_SEMANTICS,
                 "run_id": run_id,
                 "protocol_version": protocol,
+                "event_count": len(journal_events),
+                "operator_events_sha256": journal_hash,
                 "completed_block_ids": ["baseline", "pushes"],
             }
         ),
@@ -41,14 +102,7 @@ def _run_with_operator_evidence(
 
     receipt = tmp_path / "operator-evidence-receipt.json"
     receipt.write_text(
-        json.dumps(
-            {
-                "run_id": run_id,
-                "passed": True,
-                "sync_cue_labels": ["start", "middle", "end"],
-                "failure_notes": failure_notes or [],
-            }
-        ),
+        json.dumps(validate_operator_evidence(tmp_path).to_dict()),
         encoding="utf-8",
     )
 
