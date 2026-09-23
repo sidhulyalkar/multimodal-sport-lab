@@ -137,6 +137,13 @@ struct WatchContentView: View {
                 )
             }
 
+            if let cue = controller.guidedCueTitle {
+                Label(cue, systemImage: "list.clipboard")
+                    .font(.caption2.weight(.semibold))
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+            }
+
             if let start = controller.startedAt {
                 TimelineView(.periodic(from: .now, by: 1)) { context in
                     HStack {
