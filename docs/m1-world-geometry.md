@@ -237,7 +237,9 @@ The spec freezes thresholds for:
 - minimum pairwise baseline;
 - minimum angle between optical axes;
 - maximum mount translation drift;
-- maximum mount rotation drift.
+- maximum mount rotation drift;
+- maximum allowed camera-observation timing mismatch after each native PTS is
+  mapped to the shared reference timeline.
 
 A rig passes only when:
 
@@ -263,6 +265,13 @@ motionos.multiview-correspondences.v1
 A correspondence artifact binds the exact camera-rig receipt SHA and contains
 pixel observations keyed by camera ID.
 
+Every pixel observation also records its native
+`source_frame_sequence` and `source_frame_pts_ns`. MotionOS maps that PTS
+through the exact camera-specific clock-uncertainty model embedded in the rig
+receipt. The observation is rejected if it falls outside the landmark support
+or if its mapped time differs from the point's declared reference time by more
+than the frozen rig tolerance.
+
 It must contain:
 
 ```json
@@ -285,19 +294,24 @@ Triangulation requires a passing camera-rig receipt.
 
 For each pixel observation MotionOS:
 
-1. removes intrinsics;
-2. numerically undistorts supported lens models;
-3. creates a camera-frame ray;
-4. rotates that ray into the metric world frame;
-5. solves the least-squares closest point across all camera rays;
-6. reprojects the recovered point through each camera model.
+1. verifies each native frame PTS is temporally supported and mutually
+   consistent on the reference timeline;
+2. removes intrinsics;
+3. numerically undistorts supported lens models;
+4. creates a camera-frame ray;
+5. rotates that ray into the metric world frame;
+6. solves the least-squares closest point across all camera rays;
+7. reprojects the recovered point through each camera model.
 
 The output reports:
 
 - world position in meters;
 - per-camera reprojection residual in pixels;
 - mean reprojection residual;
-- RMS distance from the triangulated point to the observation rays.
+- RMS distance from the triangulated point to the observation rays;
+- source frame sequence/PTS;
+- mapped reference time;
+- per-camera timing delta and predictive clock uncertainty.
 
 ## 10. Residual benchmark bridge
 
