@@ -62,12 +62,12 @@ from .qc import session_qc
 from .replay import replay_frames
 from .session import SessionReader
 from .simulate import simulate_session
+from .validate import validate_m0_session
 from .world_geometry import (
     build_camera_rig_receipt,
     triangulate_multiview,
     write_camera_calibration_receipt,
 )
-from .validate import validate_m0_session
 
 
 def _channel_keys(raw: str) -> tuple[str, ...]:
