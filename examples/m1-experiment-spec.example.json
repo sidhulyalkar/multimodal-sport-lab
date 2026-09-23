@@ -1,0 +1,39 @@
+{
+  "schema_version": "motionos.experiment-spec.v1",
+  "experiment_id": "longboard-m1-a0-example",
+  "sport": "longboard",
+  "protocol_version": "motionos.longboard-calibration.v1",
+  "repository_commit": "REPLACE_WITH_EXACT_GIT_COMMIT",
+  "observability_registry": "longboard-observability.example.json",
+  "targets": [
+    "board_angular_velocity",
+    "left_load_fraction",
+    "foot_contact_timing"
+  ],
+  "acquisition": {
+    "subject_id": "participant-001",
+    "day_id": "day-001",
+    "run_id": "run-001",
+    "remount_id": "remount-001",
+    "camera_view": "camera-a",
+    "intensity": "controlled"
+  },
+  "sources": [
+    {
+      "role": "watch",
+      "kind": "motionos_session",
+      "source_type": "session",
+      "path": "../data/p0/REPLACE_WITH_SESSION"
+    },
+    {
+      "role": "protocol_notes",
+      "kind": "artifact",
+      "source_type": "artifact",
+      "path": "../data/experiments/REPLACE_WITH_NOTES.json"
+    }
+  ],
+  "models": [],
+  "notes": [
+    "Example only. Replace all placeholder paths and identifiers before building a real manifest."
+  ]
+}
