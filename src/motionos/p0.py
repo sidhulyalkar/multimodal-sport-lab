@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-from .provenance import sha256_file
+from .provenance import session_evidence_sha256, sha256_file
 from .qc import inspect_stream
 from .schema import DeviceDescriptor, SensorEvent, SessionManifest
 from .session import SessionReader, SessionWriter
@@ -132,6 +132,7 @@ def import_watch_journal(
 class P0Receipt:
     passed: bool
     session_id: str
+    bundle_sha256: str
     min_duration_s: float
     missing_streams: tuple[str, ...]
     imu_count: int
@@ -161,6 +162,7 @@ class P0Receipt:
             "protocol": "P0",
             "passed": self.passed,
             "session_id": self.session_id,
+            "bundle_sha256": self.bundle_sha256,
             "minimum_required_duration_s": self.min_duration_s,
             "missing_streams": list(self.missing_streams),
             "watch_imu": {
@@ -278,6 +280,7 @@ def build_p0_receipt(
     return P0Receipt(
         passed=passed,
         session_id=reader.manifest.session_id,
+        bundle_sha256=session_evidence_sha256(reader),
         min_duration_s=min_duration_s,
         missing_streams=missing,
         imu_count=imu_qc.count,
