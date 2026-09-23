@@ -30,6 +30,7 @@ from .clock_uncertainty import (
     analyze_clock_uncertainty,
     query_clock_uncertainty,
 )
+from .cross_modal_residuals import build_cross_modal_residual_report
 from .closure import write_m0_closure_receipt
 from .data_governance import (
     validate_external_dataset_registry,
@@ -433,6 +434,16 @@ def _parser() -> argparse.ArgumentParser:
     )
     clock_query.add_argument("analysis")
     clock_query.add_argument("device_time_ns", type=int)
+
+    residuals = sub.add_parser(
+        "build-cross-modal-residual-report",
+        help=(
+            "build deterministic IMU/video, pressure/video, and geometry "
+            "residual evidence"
+        ),
+    )
+    residuals.add_argument("spec")
+    residuals.add_argument("output")
     return parser
 
 
@@ -850,6 +861,14 @@ def main(argv: list[str] | None = None) -> int:
         result = query_clock_uncertainty(
             args.analysis,
             args.device_time_ns,
+        )
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+
+    if args.command == "build-cross-modal-residual-report":
+        result = build_cross_modal_residual_report(
+            args.spec,
+            args.output,
         )
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0
