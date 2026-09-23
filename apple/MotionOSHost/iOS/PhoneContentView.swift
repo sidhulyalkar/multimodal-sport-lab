@@ -70,6 +70,32 @@ struct PhoneContentView: View {
                 value: coordinator.watchReachable,
                 detail: coordinator.watchReachable ? "live link" : "background path only"
             )
+
+            readinessRow(
+                "iPhone battery",
+                value: (coordinator.iPhoneBatteryLevel ?? 0) >= 0.20,
+                detail: coordinator.iPhoneBatteryLevel.map {
+                    String(format: "%.0f%%", $0 * 100)
+                } ?? "unknown"
+            )
+            readinessRow(
+                "Free storage",
+                value: (coordinator.iPhoneAvailableStorageBytes ?? 0)
+                    >= 5_000_000_000,
+                detail: coordinator.iPhoneAvailableStorageBytes.map {
+                    ByteCountFormatter.string(
+                        fromByteCount: $0,
+                        countStyle: .file
+                    )
+                } ?? "unknown"
+            )
+            Text(
+                "Development preflight warns below 20% battery or 5 GB free. "
+                    + "These are operator safety margins, not qualification criteria."
+            )
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+
             HStack {
                 Text("Workout state")
                 Spacer()
@@ -248,6 +274,26 @@ struct PhoneContentView: View {
                             "samples",
                             "\(health.imuSampleCount)"
                         )
+                    }
+
+                    if let battery = health.watchBatteryLevel {
+                        HStack {
+                            Image(
+                                systemName: battery >= 0.20
+                                    ? "battery.100percent"
+                                    : "battery.25percent"
+                            )
+                            .foregroundStyle(
+                                battery >= 0.20 ? .green : .yellow
+                            )
+                            Text(
+                                String(
+                                    format: "Watch battery %.0f%%",
+                                    battery * 100
+                                )
+                            )
+                            .font(.caption2)
+                        }
                     }
 
                     Text(
