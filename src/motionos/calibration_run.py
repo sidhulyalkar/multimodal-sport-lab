@@ -6,6 +6,11 @@ import os
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+from .body_model import (
+    BodyModelProfile,
+    load_body_model_profile,
+    register_vision_pose,
+)
 from .calibration import (
     CalibrationBundle,
     CalibrationReplayFrame,
@@ -15,6 +20,7 @@ from .calibration import (
 )
 from .provenance import sha256_file
 from .qc import inspect_stream
+from .schema import SensorEvent
 from .session import SessionReader
 
 RUN_SCHEMA_VERSION = "motionos.calibration-run.v1"
@@ -645,8 +651,68 @@ def _pressure_view(
     }
 
 
+def _body_model_profile(
+    run_manifest: Path,
+    run: CalibrationRun,
+) -> tuple[BodyModelProfile | None, dict[str, object]]:
+    body_refs = [
+        profile
+        for profile in run.profiles
+        if profile.kind == "body_model"
+    ]
+    if not body_refs:
+        return None, {
+            "state": "unavailable",
+            "reason": "run has no body_model profile",
+        }
+    if len(body_refs) > 1:
+        return None, {
+            "state": "unavailable",
+            "reason": "run references multiple body_model profiles",
+        }
+
+    reference = body_refs[0]
+    profile_path = _resolve_path(
+        reference.path,
+        base=run_manifest.parent,
+    )
+    try:
+        profile = load_body_model_profile(profile_path)
+    except (
+        OSError,
+        json.JSONDecodeError,
+        KeyError,
+        TypeError,
+        ValueError,
+    ) as exc:
+        return None, {
+            "state": "unavailable",
+            "reason": f"{type(exc).__name__}: {exc}",
+            "profile_path": reference.path,
+            "profile_sha256": reference.sha256,
+        }
+
+    if profile.profile_sha256 != reference.sha256:
+        return None, {
+            "state": "unavailable",
+            "reason": "body-model run-reference hash mismatch",
+            "profile_path": reference.path,
+            "profile_sha256": reference.sha256,
+        }
+
+    return profile, {
+        "state": "available",
+        "profile_id": profile.model_id,
+        "profile_sha256": profile.profile_sha256,
+        "frame_convention": profile.frame_convention,
+        "registration_landmarks": list(profile.registration_landmarks),
+    }
+
+
 def _pose_view(
     event: dict[str, object] | None,
+    *,
+    body_profile: BodyModelProfile | None,
 ) -> dict[str, object] | None:
     if event is None:
         return None
@@ -654,7 +720,8 @@ def _pose_view(
     if not isinstance(payload, dict):
         return None
     joints = payload.get("joints_root_relative_m")
-    return {
+
+    view: dict[str, object] = {
         **event,
         "joints_root_relative_m": (
             dict(joints)
@@ -669,13 +736,44 @@ def _pose_view(
         "body_height_m": _number(event, "body_height_m"),
         "coordinate_frame": payload.get("joint_coordinate_frame"),
         "camera_origin_matrix": payload.get("camera_origin_matrix"),
+        "registered_pose": None,
+        "registration_error": None,
     }
 
+    if body_profile is None:
+        return view
+
+    try:
+        pose_event = SensorEvent(
+            session_id="replay-camera",
+            device_id="replay-camera",
+            stream="/camera/pose3d",
+            sequence=int(event["sequence"]),
+            device_time_ns=int(event["raw_device_time_ns"]),
+            session_time_ns=(
+                int(event["source_session_time_ns"])
+                if event.get("source_session_time_ns") is not None
+                else None
+            ),
+            payload=dict(payload),
+        )
+        registered = register_vision_pose(
+            pose_event,
+            body_profile,
+        )
+        view["registered_pose"] = registered.to_dict()
+    except (KeyError, TypeError, ValueError) as exc:
+        view["registration_error"] = (
+            f"{type(exc).__name__}: {exc}"
+        )
+
+    return view
 
 def _project_replay_frame(
     frame: CalibrationReplayFrame,
     *,
     reference_start_ns: int,
+    body_profile: BodyModelProfile | None,
 ) -> dict[str, object]:
     watch_imu = _latest(
         frame,
@@ -726,7 +824,8 @@ def _project_replay_frame(
             frame,
             role="camera",
             stream="/camera/pose3d",
-        )
+        ),
+        body_profile=body_profile,
     )
     camera_frame = _latest(
         frame,
@@ -836,6 +935,10 @@ def build_replay_lab_payload(
     run = load_calibration_run(run_manifest, verify_hashes=True)
     bundle_path = calibration_bundle_path(run_manifest, run)
     report = build_calibration_report(run_manifest)
+    body_profile, body_registration = _body_model_profile(
+        run_manifest,
+        run,
+    )
 
     replay_frames = list(
         replay_calibration_frames(
@@ -852,6 +955,7 @@ def build_replay_lab_payload(
             _project_replay_frame(
                 frame,
                 reference_start_ns=reference_start_ns,
+                body_profile=body_profile,
             )
             for frame in replay_frames
         ]
@@ -898,6 +1002,7 @@ def build_replay_lab_payload(
         ],
         "frame_hz": frame_hz,
         "frames": frames,
+        "body_registration": body_registration,
         "provenance": {
             "run_manifest_sha256": sha256_file(run_manifest),
             "calibration_bundle_sha256":

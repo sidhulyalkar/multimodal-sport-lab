@@ -1,22 +1,51 @@
 {
-  "model_id": "demo-body-v1",
+  "schema_version": "motionos.body-model.v2",
+  "model_id": "demo-body-v2",
   "height_m": 1.70,
+  "frame_convention": "+X right,+Y up,+Z forward",
+  "landmarks_m": {
+    "root": [0.000, 0.000, 0.000],
+    "leftHip": [-0.155, 0.015, 0.000],
+    "rightHip": [0.165, 0.010, 0.005],
+    "leftShoulder": [-0.205, 0.515, 0.005],
+    "rightShoulder": [0.218, 0.520, -0.003],
+    "head": [0.008, 0.765, 0.000],
+    "leftKnee": [-0.150, -0.395, 0.015],
+    "rightKnee": [0.160, -0.408, 0.010],
+    "leftAnkle": [-0.145, -0.805, 0.025],
+    "rightAnkle": [0.158, -0.825, 0.018],
+    "leftWrist": [-0.500, 0.315, 0.020],
+    "rightWrist": [0.525, 0.305, -0.015]
+  },
   "segments_m": {
-    "left_femur": 0.43,
-    "right_femur": 0.43,
-    "left_tibia": 0.42,
-    "right_tibia": 0.42,
-    "left_upper_arm": 0.31,
-    "right_upper_arm": 0.31,
-    "left_forearm": 0.26,
-    "right_forearm": 0.26,
-    "torso": 0.52
+    "left_femur": 0.410,
+    "right_femur": 0.418,
+    "left_tibia": 0.412,
+    "right_tibia": 0.421,
+    "left_upper_arm": 0.305,
+    "right_upper_arm": 0.314,
+    "left_forearm": 0.258,
+    "right_forearm": 0.266,
+    "torso": 0.520
   },
   "joint_limits_deg": {
     "left_knee": [0, 145],
-    "right_knee": [0, 145]
+    "right_knee": [0, 142]
+  },
+  "registration_landmarks": [
+    "root",
+    "leftHip",
+    "rightHip",
+    "leftShoulder",
+    "rightShoulder"
+  ],
+  "source": {
+    "type": "example_only",
+    "artifact_sha256": null,
+    "notes": "Replace with scan-derived landmarks and the SHA-256 of the immutable source scan artifact."
   },
   "metadata": {
-    "source": "example only; replace with calibrated scan-derived geometry"
+    "source": "example only; replace with calibrated scan-derived geometry",
+    "asymmetry_policy": "preserve measured left/right differences; do not mirror by default"
   }
 }

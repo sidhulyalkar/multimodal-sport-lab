@@ -150,3 +150,51 @@ test("device and sync summaries retain qualification distinctions", () => {
     3.4
   );
 });
+
+
+test("generated replay retains registered pose alongside raw Vision evidence", () => {
+  const adapted = adaptReplayLabPayload({
+    schema_version: "motionos.replay-lab.v1",
+    run: { run_id: "r1", sport: "longboard" },
+    devices: [],
+    frames: [
+      {
+        t_ms: 0,
+        watch: { heart_rate_bpm: null },
+        equipment: {
+          accel_magnitude_m_s2: null,
+          gyro_magnitude_rad_s: null
+        },
+        left_foot: { pressure: null },
+        right_foot: { pressure: null },
+        camera: {
+          pose3d: {
+            joints_root_relative_m: {
+              root: [0, 0, 0]
+            },
+            registered_pose: {
+              joints_body_model_m: {
+                root: [1, 2, 3]
+              },
+              coordinate_frame: "personalized_body_model",
+              derived: true
+            }
+          }
+        },
+        derived: { left_load_fraction: null },
+        active_gap_streams: [],
+        streams_present: []
+      }
+    ],
+    gaps: []
+  });
+
+  assert.deepEqual(
+    adapted.frames[0].pose.registered_pose.joints_body_model_m.root,
+    [1, 2, 3]
+  );
+  assert.deepEqual(
+    adapted.frames[0].pose.joints_root_relative_m.root,
+    [0, 0, 0]
+  );
+});

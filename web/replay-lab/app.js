@@ -87,9 +87,10 @@ function skeletonSVG(joints) {
 }
 
 function generatedPoseSVG(pose) {
-  const joints = projectRootRelativePose(
-    pose?.joints_root_relative_m ?? {}
-  );
+  const registered = pose?.registered_pose?.joints_body_model_m;
+  const raw = pose?.joints_root_relative_m;
+  const displayJoints = registered ?? raw ?? {};
+  const joints = projectRootRelativePose(displayJoints);
   if (!Object.keys(joints).length) {
     return '<div class="no-sample">No pose sample in this frame</div>';
   }
@@ -111,7 +112,11 @@ function generatedPoseSVG(pose) {
     <svg viewBox="0 0 100 105" class="skeleton" aria-label="Vision 3D pose projected for display">
       <g class="bones">${bones}</g>
       <g class="joints">${points}</g>
-      <text x="4" y="101" class="pose-note">root-relative XY projection</text>
+      <text x="4" y="101" class="pose-note">
+        ${registered
+          ? "personalized body-model projection"
+          : "raw Vision root-relative projection"}
+      </text>
     </svg>`;
 }
 
