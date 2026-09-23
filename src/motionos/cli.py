@@ -21,6 +21,7 @@ from .camera import (
     import_camera_evidence,
     write_camera_capture_receipt,
 )
+from .closure import write_m0_closure_receipt
 from .clock_sync import write_clock_sync
 from .equipment_cli import calibrate_equipment_mount_file
 from .insole import import_opengo_text_export, write_p2_capture_receipt
@@ -210,6 +211,18 @@ def _parser() -> argparse.ArgumentParser:
     run_replay.add_argument("run")
     run_replay.add_argument("output")
     run_replay.add_argument("--hz", type=float, default=10.0)
+
+    closure = sub.add_parser(
+        "validate-m0-closure",
+        help=(
+            "write a strict final M0 physical-integration closure receipt"
+        ),
+    )
+    closure.add_argument("run")
+    closure.add_argument(
+        "--receipt",
+        default="m0-closure-receipt.json",
+    )
 
     body_model = sub.add_parser(
         "validate-body-model",
@@ -451,6 +464,14 @@ def main(argv: list[str] | None = None) -> int:
             )
         )
         return 0
+
+    if args.command == "validate-m0-closure":
+        receipt = write_m0_closure_receipt(
+            args.run,
+            args.receipt,
+        )
+        print(json.dumps(receipt.to_dict(), indent=2, sort_keys=True))
+        return 0 if receipt.passed else 2
 
     if args.command == "validate-body-model":
         profile = load_body_model_profile(args.profile)
