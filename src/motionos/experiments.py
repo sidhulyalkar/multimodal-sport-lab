@@ -366,7 +366,9 @@ class GroupedSplit:
     seed: str
     group_by: tuple[str, ...]
     fractions: dict[str, float]
+    source_index_sha256: str
     assignments: dict[str, tuple[str, ...]]
+    group_assignments: dict[str, str]
     sample_count: int
     group_count: int
     leakage_check_passed: bool
@@ -380,12 +382,14 @@ class GroupedSplit:
             "seed": self.seed,
             "group_by": list(self.group_by),
             "fractions": dict(self.fractions),
+            "source_index_sha256": self.source_index_sha256,
             "sample_count": self.sample_count,
             "group_count": self.group_count,
             "assignments": {
                 key: list(values)
                 for key, values in self.assignments.items()
             },
+            "group_assignments": dict(sorted(self.group_assignments.items())),
             "leakage_check": {
                 "passed": self.leakage_check_passed,
                 "definition": (
@@ -521,10 +525,12 @@ def build_grouped_split(
             "validation": validation,
             "test": test,
         },
+        source_index_sha256=sha256_file(Path(index_path)),
         assignments={
             name: tuple(sorted(values))
             for name, values in assignments.items()
         },
+        group_assignments=dict(group_split),
         sample_count=len(samples),
         group_count=len(groups),
         leakage_check_passed=not leakage,
