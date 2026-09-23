@@ -31,6 +31,20 @@ struct CameraCaptureCard: View {
                 configurationSummary(configuration)
             }
 
+            if camera.phase == .ready || camera.phase == .recording {
+                CameraPreviewView(session: camera.previewSession)
+                    .aspectRatio(16.0 / 9.0, contentMode: .fit)
+                    .background(.black)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+
+                Text(
+                    "Framing preview only. Keep the athlete, feet, board, "
+                        + "and calibration target inside the measurable region."
+                )
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            }
+
             controls
 
             if let stats = camera.liveStats,
