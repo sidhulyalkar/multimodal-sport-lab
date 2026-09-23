@@ -5,6 +5,11 @@ import WatchConnectivity
 public final class WatchConnectivityTransport: NSObject, WCSessionDelegate {
     public let session: WCSession
     public var onFileReceived: ((URL, [String: Any]?) -> Void)?
+    public var onFileTransferFinished: (
+        (URL, [String: Any]?, Error?) -> Void
+    )?
+    public var onUserInfoReceived: (([String: Any]) -> Void)?
+    public var onMessageReceived: (([String: Any]) -> Void)?
     public var onStateChanged: (() -> Void)?
 
     public override init() {
@@ -23,6 +28,32 @@ public final class WatchConnectivityTransport: NSObject, WCSessionDelegate {
     ) -> WCSessionFileTransfer? {
         guard session.activationState == .activated else { return nil }
         return session.transferFile(url, metadata: metadata)
+    }
+
+    @discardableResult
+    public func queueUserInfo(
+        _ userInfo: [String: Any]
+    ) -> WCSessionUserInfoTransfer? {
+        guard session.activationState == .activated else { return nil }
+        return session.transferUserInfo(userInfo)
+    }
+
+    @discardableResult
+    public func sendMessage(
+        _ message: [String: Any]
+    ) -> Bool {
+        guard session.activationState == .activated,
+              session.isReachable
+        else {
+            return false
+        }
+
+        session.sendMessage(
+            message,
+            replyHandler: nil,
+            errorHandler: nil
+        )
+        return true
     }
 
     public func session(
@@ -56,6 +87,33 @@ public final class WatchConnectivityTransport: NSObject, WCSessionDelegate {
             // The app can observe missing transfer completion through its
             // journal inbox. Never hand out the delegate's ephemeral URL.
         }
+    }
+
+    public func session(
+        _ session: WCSession,
+        fileTransfer: WCSessionFileTransfer,
+        didFinishWithError error: Error?
+    ) {
+        onFileTransferFinished?(
+            fileTransfer.file.fileURL,
+            fileTransfer.file.metadata,
+            error
+        )
+        onStateChanged?()
+    }
+
+    public func session(
+        _ session: WCSession,
+        didReceiveUserInfo userInfo: [String: Any] = [:]
+    ) {
+        onUserInfoReceived?(userInfo)
+    }
+
+    public func session(
+        _ session: WCSession,
+        didReceiveMessage message: [String: Any]
+    ) {
+        onMessageReceived?(message)
     }
 
     #if os(iOS)
