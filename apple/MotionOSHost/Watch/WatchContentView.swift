@@ -121,8 +121,8 @@ struct WatchContentView: View {
             .font(.system(.caption2, design: .monospaced))
             .foregroundStyle(
                 controller.nonMonotonicIMUCount == 0
-                    ? .secondary
-                    : .red
+                    ? Color.secondary
+                    : Color.red
             )
 
             if let start = controller.startedAt {
