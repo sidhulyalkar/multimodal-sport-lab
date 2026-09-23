@@ -58,6 +58,10 @@ unobservable degree of freedom.
 The spec must provide a proper 3x3 `imu_to_pose_rotation`. MotionOS validates
 that it is approximately orthonormal with determinant +1.
 
+The transform must also include a non-empty `rotation_provenance` and
+`rotation_frozen_before_residual_review=true`. This prevents optimizing the
+mount transform after inspecting the residuals.
+
 The report includes:
 - residual vector in rad/s;
 - residual norm;
@@ -82,6 +86,10 @@ Instead, visual contact events are explicit reviewed evidence:
 ```json
 {
   "schema_version": "motionos.visual-contact-events.v1",
+  "review_protocol": {
+    "pressure_trace_hidden": true,
+    "events_frozen_before_comparison": true
+  },
   "events": [
     {
       "time_ns": 1000000000,
@@ -93,7 +101,12 @@ Instead, visual contact events are explicit reviewed evidence:
 }
 ```
 
-Pressure contact uses a predeclared `normal_force_n` threshold.
+Pressure contact uses a predeclared `normal_force_n` threshold, and the
+comparison spec requires `threshold_frozen_before_residual_review=true`.
+
+Reviewed visual events require the pressure trace to have been hidden during
+annotation and the event list to have been frozen before comparison. This
+prevents annotators from nudging visual contact times toward pressure events.
 
 The pressure-device event is mapped into camera/reference time using the
 `motionos.clock-uncertainty.v1` model.
@@ -173,6 +186,7 @@ Example:
 ```json
 {
   "schema_version": "motionos.robustness-strata.v1",
+  "frozen_before_residual_review": true,
   "intervals": [
     {
       "start_ns": 0,
@@ -192,7 +206,8 @@ Example:
 }
 ```
 
-Intervals may overlap only when their labels do not conflict at a timestamp.
+The strata artifact must be frozen before residual review. Intervals may overlap
+only when their labels do not conflict at a timestamp.
 
 Unlabeled samples are retained as `__unlabeled__` rather than silently
 discarded.
