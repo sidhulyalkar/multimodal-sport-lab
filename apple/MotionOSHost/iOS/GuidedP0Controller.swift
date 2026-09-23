@@ -139,8 +139,7 @@ final class GuidedP0Controller: ObservableObject {
 
         let stepElapsed = stepElapsedSeconds(at: date)
         let planElapsed = planElapsedSeconds(at: date)
-        guard progress.completeCurrentStep(
-            plan: plan,
+        guard step.canComplete(
             stepElapsedSeconds: stepElapsed,
             planElapsedSeconds: planElapsed
         ) else {
@@ -162,6 +161,14 @@ final class GuidedP0Controller: ObservableObject {
                         String(format: "%.3f", planElapsed),
                 ]
             )
+
+            guard progress.completeCurrentStep(
+                plan: plan,
+                stepElapsedSeconds: stepElapsed,
+                planElapsedSeconds: planElapsed
+            ) else {
+                throw GuidanceError.transitionRejected
+            }
 
             if progress.state == .completed {
                 try append(
@@ -191,7 +198,7 @@ final class GuidedP0Controller: ObservableObject {
 
     func skipCurrentStep(at date: Date = Date()) {
         guard let step = currentStep,
-              progress.skipCurrentStep(plan: plan)
+              step.allowsSkip
         else {
             errorMessage = "This protocol step cannot be skipped."
             notify(.warning)
@@ -210,6 +217,9 @@ final class GuidedP0Controller: ObservableObject {
                         ),
                 ]
             )
+            guard progress.skipCurrentStep(plan: plan) else {
+                throw GuidanceError.transitionRejected
+            }
             stepStartedAt = date
             try appendCurrentStepStarted()
             notify(.warning)
@@ -224,7 +234,6 @@ final class GuidedP0Controller: ObservableObject {
 
         do {
             let active = currentStep
-            progress.cancel()
             try append(
                 kind: "protocol_cancelled",
                 step: active,
@@ -236,6 +245,7 @@ final class GuidedP0Controller: ObservableObject {
                         ),
                 ]
             )
+            progress.cancel()
             try closeJournal()
             stepStartedAt = nil
             notify(.warning)
@@ -424,11 +434,14 @@ final class GuidedP0Controller: ObservableObject {
 
     enum GuidanceError: LocalizedError {
         case journalUnavailable
+        case transitionRejected
 
         var errorDescription: String? {
             switch self {
             case .journalUnavailable:
                 "The guided P0 operator journal is unavailable."
+            case .transitionRejected:
+                "The guided protocol state rejected a journaled transition."
             }
         }
     }
