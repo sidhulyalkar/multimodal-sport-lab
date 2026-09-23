@@ -945,6 +945,7 @@ class P2PhysicalReceipt:
                 },
                 "physical_protocol": {
                     "passed": self.protocol_gate_passed,
+                    "thresholds_frozen_before_review": True,
                     "wireless_separation_completed": (
                         self.wireless_separation_completed
                     ),
@@ -1009,6 +1010,11 @@ def load_p2_physical_spec(
         raise TypeError("P2 physical spec must contain a JSON object")
     if raw.get("schema_version") != P2_PHYSICAL_SPEC_SCHEMA_VERSION:
         raise ValueError("unsupported P2 physical spec schema")
+    if raw.get("example_only") is True:
+        raise ValueError(
+            "P2 physical example spec must be replaced with run-specific "
+            "thresholds before qualification"
+        )
 
     thresholds_raw = raw.get("thresholds")
     windows_raw = raw.get("controlled_windows")
@@ -1066,6 +1072,7 @@ def load_p2_physical_spec(
             )
 
     for key in (
+        "thresholds_frozen_before_review",
         "wireless_separation_completed",
         "don_doff_completed",
     ):
@@ -1161,6 +1168,13 @@ def build_p2_physical_receipt(
 ) -> P2PhysicalReceipt:
     if min_controlled_duration_s <= 0 or min_field_duration_s <= 0:
         raise ValueError("P2 physical minimum durations must be positive")
+    if (
+        field_reader.manifest.session_id
+        == controlled_reader.manifest.session_id
+    ):
+        raise ValueError(
+            "P2 controlled and field qualification must use distinct sessions"
+        )
     if spec.get("schema_version") != P2_PHYSICAL_SPEC_SCHEMA_VERSION:
         raise ValueError("unsupported P2 physical spec schema")
 
@@ -1275,11 +1289,18 @@ def build_p2_physical_receipt(
         and repeat_fraction_delta <= max_repeat_fraction
     )
 
+    thresholds_frozen = (
+        protocol_raw.get("thresholds_frozen_before_review") is True
+    )
     wireless_completed = (
         protocol_raw.get("wireless_separation_completed") is True
     )
     don_doff_completed = protocol_raw.get("don_doff_completed") is True
-    protocol_gate = wireless_completed and don_doff_completed
+    protocol_gate = (
+        thresholds_frozen
+        and wireless_completed
+        and don_doff_completed
+    )
 
     passed = (
         capture_passed
