@@ -62,6 +62,11 @@ from .qc import session_qc
 from .replay import replay_frames
 from .session import SessionReader
 from .simulate import simulate_session
+from .world_geometry import (
+    build_camera_rig_receipt,
+    triangulate_multiview,
+    write_camera_calibration_receipt,
+)
 from .validate import validate_m0_session
 
 
@@ -444,6 +449,32 @@ def _parser() -> argparse.ArgumentParser:
     )
     residuals.add_argument("spec")
     residuals.add_argument("output")
+
+    camera_calibration = sub.add_parser(
+        "validate-camera-calibration",
+        help="validate a metric camera calibration and write its receipt",
+    )
+    camera_calibration.add_argument("calibration")
+    camera_calibration.add_argument(
+        "--receipt",
+        default="camera-calibration-receipt.json",
+    )
+
+    camera_rig = sub.add_parser(
+        "build-camera-rig",
+        help="qualify a fixed multi-camera metric world-frame rig",
+    )
+    camera_rig.add_argument("spec")
+    camera_rig.add_argument("output")
+
+    triangulate = sub.add_parser(
+        "triangulate-multiview",
+        help="triangulate frozen multi-camera correspondences in world coordinates",
+    )
+    triangulate.add_argument("rig")
+    triangulate.add_argument("correspondences")
+    triangulate.add_argument("output")
+    triangulate.add_argument("--measurements-output")
     return parser
 
 
@@ -869,6 +900,32 @@ def main(argv: list[str] | None = None) -> int:
         result = build_cross_modal_residual_report(
             args.spec,
             args.output,
+        )
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+
+    if args.command == "validate-camera-calibration":
+        result = write_camera_calibration_receipt(
+            args.calibration,
+            args.receipt,
+        )
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+
+    if args.command == "build-camera-rig":
+        result = build_camera_rig_receipt(
+            args.spec,
+            args.output,
+        )
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0 if result["passed"] else 2
+
+    if args.command == "triangulate-multiview":
+        result = triangulate_multiview(
+            args.rig,
+            args.correspondences,
+            args.output,
+            measurements_output_path=args.measurements_output,
         )
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0
