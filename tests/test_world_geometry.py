@@ -180,8 +180,27 @@ def _calibration(
                     "observation_count": 48,
                 },
                 "source_evidence": [
-                    _artifact_ref(source, path.parent),
+                    {
+                        "role": "calibration_capture",
+                        **_artifact_ref(source, path.parent),
+                    }
                 ],
+                "source_timestamp_basis":
+                    "avcapture_presentation_timestamp",
+                "camera_identity": {
+                    "device_model": "iPhone fixture",
+                    "camera_unique_id": camera_id,
+                    "device_type": "builtInWideAngleCamera",
+                    "position": "back",
+                    "format_width": 1920,
+                    "format_height": 1080,
+                    "pixel_format": "32BGRA",
+                },
+                "acceptance": {
+                    "max_reprojection_rms_px": 1.0,
+                    "max_reprojection_max_px": 2.0,
+                    "thresholds_frozen_before_review": True,
+                },
                 "software": {
                     "name": "fixture-calibrator",
                     "version": "1.0",
@@ -213,7 +232,10 @@ def _mount_verification(
                 "observed_world_from_camera":
                     observed_world_from_camera,
                 "source_evidence": [
-                    _artifact_ref(source, path.parent),
+                    {
+                        "role": "mount_check_image",
+                        **_artifact_ref(source, path.parent),
+                    }
                 ],
             }
         ),
@@ -437,6 +459,11 @@ def test_camera_calibration_receipt_preserves_metric_contract(tmp_path):
     assert calibration["world_frame"]["units"] == "m"
     assert calibration["calibration_board"]["board_type"] == "charuco"
     assert calibration["frozen_before_rig_capture"] is True
+    assert calibration["acceptance"]["passed"] is True
+    assert calibration["camera_identity"]["camera_unique_id"] == "cam-a"
+    assert calibration["source_timestamp_basis"] == (
+        "avcapture_presentation_timestamp"
+    )
 
 
 def test_two_camera_rig_requires_shared_world_clock_and_stable_mounts(
@@ -668,3 +695,39 @@ def test_correspondence_receipt_hash_is_immutable(tmp_path):
             correspondences,
             tmp_path / "geometry-report.json",
         )
+
+
+def test_bad_reprojection_quality_fails_calibration_and_rig_gate(tmp_path):
+    paths = _fixture(tmp_path)
+    raw = json.loads(
+        paths["calibration_a"].read_text(encoding="utf-8")
+    )
+    raw["reprojection"]["rms_px"] = 1.5
+    raw["reprojection"]["max_px"] = 2.5
+    paths["calibration_a"].write_text(json.dumps(raw), encoding="utf-8")
+
+    calibration_receipt = write_camera_calibration_receipt(
+        paths["calibration_a"],
+        tmp_path / "camera-receipt.json",
+    )
+    assert calibration_receipt["passed"] is False
+
+    mount = json.loads(paths["mount_a"].read_text(encoding="utf-8"))
+    mount["calibration_sha256"] = sha256_file(paths["calibration_a"])
+    paths["mount_a"].write_text(json.dumps(mount), encoding="utf-8")
+
+    spec = json.loads(paths["rig_spec"].read_text(encoding="utf-8"))
+    spec["cameras"][0]["calibration"]["sha256"] = sha256_file(
+        paths["calibration_a"]
+    )
+    spec["cameras"][0]["mount_verification"]["sha256"] = sha256_file(
+        paths["mount_a"]
+    )
+    paths["rig_spec"].write_text(json.dumps(spec), encoding="utf-8")
+
+    rig = build_camera_rig_receipt(
+        paths["rig_spec"],
+        tmp_path / "rig.json",
+    )
+    assert rig["passed"] is False
+    assert rig["gates"]["camera_calibration_quality_passed"] is False
