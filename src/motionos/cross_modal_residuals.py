@@ -1240,10 +1240,9 @@ def build_cross_modal_residual_report(
                 "triangulation evidence is supplied"
             ),
         },
-        "aggregate_quality_score": None,
-        "aggregate_quality_score_policy": (
-            "forbidden: report modality-specific residual distributions and "
-            "strata rather than collapsing disagreement into one score"
+        "aggregation_policy": (
+            "No scalar aggregate quality score is produced. Report "
+            "modality-specific residual distributions and strata instead."
         ),
         "claim_boundary": (
             "Residual agreement measures consistency between evidence "
