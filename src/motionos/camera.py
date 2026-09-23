@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from itertools import pairwise
 from pathlib import Path
 
-from .provenance import sha256_file
+from .provenance import session_evidence_sha256, sha256_file
 from .qc import StreamQC, inspect_stream
 from .schema import DeviceDescriptor, SensorEvent, SessionManifest
 from .session import SessionReader, SessionWriter
@@ -32,6 +32,7 @@ class CameraEvidencePaths:
 @dataclass(frozen=True)
 class CameraCaptureReceipt:
     session_id: str
+    bundle_sha256: str
     capture_passed: bool
     pose_evidence_present: bool
     passed: bool
@@ -54,6 +55,7 @@ class CameraCaptureReceipt:
         return {
             "protocol": "P5A-camera",
             "session_id": self.session_id,
+            "bundle_sha256": self.bundle_sha256,
             "capture_passed": self.capture_passed,
             "pose_evidence_present": self.pose_evidence_present,
             "passed": self.passed,
@@ -552,6 +554,7 @@ def build_camera_capture_receipt(
 
     return CameraCaptureReceipt(
         session_id=reader.manifest.session_id,
+        bundle_sha256=session_evidence_sha256(reader),
         capture_passed=capture_passed,
         pose_evidence_present=pose_evidence_present,
         passed=capture_passed and pose_evidence_present,
