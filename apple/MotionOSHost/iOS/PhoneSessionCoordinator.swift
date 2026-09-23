@@ -4,6 +4,19 @@ import HealthKit
 import MotionOSAppleCapture
 import WatchConnectivity
 
+struct WatchLiveCaptureHealth: Equatable, Sendable {
+    let sessionID: String
+    let receivedAt: Date
+    let sourceSentAt: Date?
+    let imuSampleCount: UInt64
+    let heartRateEventCount: UInt64
+    let observedIMUHz: Double?
+    let recentMedianIMUHz: Double?
+    let maxIMUGapMS: Double
+    let nonMonotonicIMUCount: UInt64
+    let heartRateBPM: Double?
+}
+
 @MainActor
 final class PhoneSessionCoordinator: NSObject, ObservableObject {
     enum State: String {
@@ -22,6 +35,7 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
     @Published private(set) var watchPaired = false
     @Published private(set) var watchAppInstalled = false
     @Published private(set) var watchReachable = false
+    @Published private(set) var watchCaptureHealth: WatchLiveCaptureHealth?
     @Published private(set) var errorMessage: String?
 
     let inbox = PhoneJournalInbox()
@@ -49,10 +63,22 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
 
         transport.onFileReceived = { [weak self] url, metadata in
             guard let self else { return }
-            // WCSession's received file URL is temporary, so copy it while
-            // handling the callback rather than retaining the source URL.
+            // WCSession's received file URL is temporary, so verify/copy it
+            // while handling the callback rather than retaining the source URL.
             Task { @MainActor in
-                self.inbox.ingest(fileURL: url, metadata: metadata)
+                if let receipt = self.inbox.ingest(
+                    fileURL: url,
+                    metadata: metadata
+                ) {
+                    self.acknowledgeJournal(receipt)
+                }
+            }
+        }
+
+        transport.onMessageReceived = { [weak self] message in
+            guard let self else { return }
+            Task { @MainActor in
+                self.ingestWatchMessage(message)
             }
         }
 
@@ -64,6 +90,102 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
         watchPaired = session.isPaired
         watchAppInstalled = session.isWatchAppInstalled
         watchReachable = session.isReachable
+    }
+
+    func watchCaptureHealthAge(
+        at date: Date = Date()
+    ) -> TimeInterval? {
+        guard let watchCaptureHealth else { return nil }
+        return max(
+            0,
+            date.timeIntervalSince(watchCaptureHealth.receivedAt)
+        )
+    }
+
+    private func ingestWatchMessage(
+        _ message: [String: Any]
+    ) {
+        guard message["motionos_message"] as? String
+                == "watch_capture_health_v1",
+              let sessionID = message["session_id"] as? String,
+              let imuSamples = Self.uint64(
+                message["imu_sample_count"]
+              ),
+              let hrEvents = Self.uint64(
+                message["hr_event_count"]
+              ),
+              let maxGap = Self.double(
+                message["max_imu_gap_ms"]
+              ),
+              let nonMonotonic = Self.uint64(
+                message["non_monotonic_imu_count"]
+              )
+        else {
+            return
+        }
+
+        let sentAt = Self.double(message["sent_at_unix_s"]).map {
+            Date(timeIntervalSince1970: $0)
+        }
+
+        watchCaptureHealth = WatchLiveCaptureHealth(
+            sessionID: sessionID,
+            receivedAt: Date(),
+            sourceSentAt: sentAt,
+            imuSampleCount: imuSamples,
+            heartRateEventCount: hrEvents,
+            observedIMUHz: Self.double(
+                message["observed_imu_hz"]
+            ),
+            recentMedianIMUHz: Self.double(
+                message["recent_median_imu_hz"]
+            ),
+            maxIMUGapMS: maxGap,
+            nonMonotonicIMUCount: nonMonotonic,
+            heartRateBPM: Self.double(
+                message["heart_rate_bpm"]
+            )
+        )
+    }
+
+    private func acknowledgeJournal(
+        _ receipt: JournalIngestReceipt
+    ) {
+        let acknowledgment: [String: Any] = [
+            "motionos_message": "journal_received_ack",
+            "session_id": receipt.sessionID,
+            "journal_sha256": receipt.journalSHA256,
+            "journal_byte_count": receipt.byteCount,
+        ]
+
+        // Immediate message improves operator feedback when reachable.
+        // transferUserInfo remains the durable background acknowledgment.
+        _ = transport.sendMessage(acknowledgment)
+        _ = transport.queueUserInfo(acknowledgment)
+    }
+
+    private static func uint64(_ value: Any?) -> UInt64? {
+        if let value = value as? UInt64 {
+            return value
+        }
+        if let value = value as? Int, value >= 0 {
+            return UInt64(value)
+        }
+        if let value = value as? NSNumber {
+            let signed = value.int64Value
+            return signed >= 0 ? UInt64(signed) : nil
+        }
+        return nil
+    }
+
+    private static func double(_ value: Any?) -> Double? {
+        if let value = value as? Double {
+            return value
+        }
+        if let value = value as? NSNumber {
+            return value.doubleValue
+        }
+        return nil
     }
 
     func requestAuthorization() async {
