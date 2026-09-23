@@ -43,6 +43,7 @@ struct GuidedP0Card: View {
 
             Text(
                 "Guidance events are operator annotations only. "
+                    + "Watch haptic/step cues are best-effort when reachable. "
                     + "Watch device timestamps and the sealed Watch journal "
                     + "remain the P0 evidence authority."
             )
@@ -159,6 +160,7 @@ struct GuidedP0Card: View {
 
             Button {
                 guided.start()
+                sendCurrentStepCue()
             } label: {
                 Label(
                     "Begin \(guided.mode.rawValue) Guidance",
@@ -211,6 +213,7 @@ struct GuidedP0Card: View {
 
                     Button {
                         guided.completeCurrentStep()
+                        sendCurrentStepCue()
                     } label: {
                         Label(
                             guided.currentStepCanComplete()
@@ -228,6 +231,7 @@ struct GuidedP0Card: View {
                     if step.allowsSkip {
                         Button {
                             guided.skipCurrentStep()
+                            sendCurrentStepCue()
                         } label: {
                             Label(
                                 "Skip & Record Skip",
@@ -367,6 +371,19 @@ struct GuidedP0Card: View {
             }
             .buttonStyle(.bordered)
         }
+    }
+
+    private func sendCurrentStepCue() {
+        guard guided.isRunning,
+              let step = guided.currentStep
+        else {
+            return
+        }
+
+        _ = phone.sendGuidedProtocolCue(
+            plan: guided.plan,
+            step: step
+        )
     }
 
     private func preflightRow(
