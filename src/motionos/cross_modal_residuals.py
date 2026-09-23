@@ -538,6 +538,10 @@ def _load_strata(
         raise TypeError("strata artifact must contain a JSON object")
     if data.get("schema_version") != STRATA_SCHEMA_VERSION:
         raise ValueError("unsupported robustness strata schema")
+    if data.get("frozen_before_residual_review") is not True:
+        raise ValueError(
+            "robustness strata must be frozen before residual review"
+        )
     intervals_raw = data.get("intervals")
     if not isinstance(intervals_raw, list):
         raise TypeError("robustness strata intervals must be a list")
@@ -653,6 +657,15 @@ def _imu_video_comparison(
         raw.get("imu_to_pose_rotation"),
         label=f"{comparison_id}.imu_to_pose_rotation",
     )
+    rotation_provenance = _text(
+        raw.get("rotation_provenance", ""),
+        label=f"{comparison_id}.rotation_provenance",
+    )
+    if raw.get("rotation_frozen_before_residual_review") is not True:
+        raise ValueError(
+            f"{comparison_id} IMU-to-pose rotation must be frozen "
+            "before residual review"
+        )
     max_pairing_delta_ns = round(
         _positive_number(
             raw.get("max_pairing_delta_ms", 30.0),
@@ -770,6 +783,8 @@ def _imu_video_comparison(
             "coordinate_frame": "vision_root_joint_relative_meters",
         },
         "clock_uncertainty_sha256": clock.sha256,
+        "rotation_provenance": rotation_provenance,
+        "rotation_frozen_before_residual_review": True,
         "pairing": {
             "max_pairing_delta_ms": max_pairing_delta_ns / 1e6,
             "matched_samples": len(samples),
@@ -804,6 +819,18 @@ def _visual_contact_events(
         raise TypeError("visual contact artifact must contain a JSON object")
     if raw.get("schema_version") != VISUAL_CONTACT_SCHEMA_VERSION:
         raise ValueError("unsupported visual contact event schema")
+    review_protocol = raw.get("review_protocol")
+    if not isinstance(review_protocol, dict):
+        raise TypeError("visual contact review_protocol must be an object")
+    if review_protocol.get("pressure_trace_hidden") is not True:
+        raise ValueError(
+            "visual contact review requires pressure_trace_hidden=true"
+        )
+    if review_protocol.get("events_frozen_before_comparison") is not True:
+        raise ValueError(
+            "visual contact events must be frozen before comparison"
+        )
+
     events_raw = raw.get("events")
     if not isinstance(events_raw, list):
         raise TypeError("visual contact events must be a list")
@@ -917,6 +944,11 @@ def _pressure_video_comparison(
         raw.get("force_threshold_n"),
         label=f"{comparison_id}.force_threshold_n",
     )
+    if raw.get("threshold_frozen_before_residual_review") is not True:
+        raise ValueError(
+            f"{comparison_id} pressure threshold must be frozen "
+            "before residual review"
+        )
     max_match_delta_ns = round(
         _positive_number(
             raw.get("max_match_delta_ms", 250.0),
@@ -993,6 +1025,9 @@ def _pressure_video_comparison(
         "insole_session_id": insole.reader.manifest.session_id,
         "pressure_stream": stream,
         "force_threshold_n": threshold,
+        "threshold_frozen_before_residual_review": True,
+        "visual_review_pressure_trace_hidden": True,
+        "visual_events_frozen_before_comparison": True,
         "clock_uncertainty_sha256": clock.sha256,
         "visual_events_sha256": visual_artifact.sha256,
         "matching": {
