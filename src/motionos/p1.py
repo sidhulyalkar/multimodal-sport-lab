@@ -19,6 +19,7 @@ from .equipment_adapter import (
     GYRO_STREAM,
     canonicalize_equipment_imu,
 )
+from .provenance import session_evidence_sha256
 from .qc import StreamQC, inspect_stream
 from .schema import DeviceDescriptor, SensorEvent, SessionManifest
 from .session import SessionReader, SessionWriter
@@ -233,6 +234,7 @@ class TickGapReport:
 @dataclass(frozen=True)
 class P1Receipt:
     session_id: str
+    bundle_sha256: str
     capture_passed: bool
     timing_gate_frozen: bool
     timing_passed: bool
@@ -265,6 +267,7 @@ class P1Receipt:
         return {
             "protocol": "P1",
             "session_id": self.session_id,
+            "bundle_sha256": self.bundle_sha256,
             "capture_passed": self.capture_passed,
             "timing_gate": {
                 "frozen": self.timing_gate_frozen,
@@ -739,6 +742,7 @@ def build_p1_receipt(
 
     return P1Receipt(
         session_id=reader.manifest.session_id,
+        bundle_sha256=session_evidence_sha256(reader),
         capture_passed=capture_passed,
         timing_gate_frozen=timing_gate_frozen,
         timing_passed=timing_passed,
