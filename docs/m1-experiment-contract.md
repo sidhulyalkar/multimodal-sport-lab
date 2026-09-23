@@ -104,6 +104,15 @@ one file inside the bundle.
 A target must exist in the referenced observability registry and must be
 teacher-eligible.
 
+The repository commit must be an exact 40-character Git SHA, not `main`, a
+branch name, or an abbreviated moving reference.
+
+Re-verify all referenced hashes later with:
+
+```bash
+motionos verify-experiment-manifest artifacts/experiment.json
+```
+
 ## 3. Leakage-safe grouped splits
 
 The split input is a JSON object with a `samples` list, or a raw JSON list.
@@ -128,10 +137,12 @@ Example day/remount split:
 motionos build-grouped-split   data/m1/sample-index.json   artifacts/split-by-day-remount.json   --group-by day_id,remount_id   --seed longboard-m1-v1
 ```
 
-The stable hash partition is computed from the frozen seed plus the complete
-group key.
+The splitter hashes the frozen seed plus each complete group key, sorts groups
+by that deterministic digest, then apportions whole groups across
+train/validation/test. Requested positive partitions are guaranteed non-empty
+when enough independent groups exist.
 
-All samples sharing that group key are indivisible.
+All samples sharing a group key are indivisible.
 
 For a primary benchmark, at least one acquisition-level field is required:
 
@@ -158,6 +169,15 @@ The split artifact records:
 
 Changing the source index changes the split provenance even when the command
 line is otherwise identical.
+
+Re-verify the frozen artifact against the exact sample index with:
+
+```bash
+motionos verify-grouped-split   artifacts/split-by-run.json   data/m1/sample-index.json
+```
+
+Verification fails if a sample is missing/duplicated, a group crosses
+partitions, a group assignment was edited, or the source index hash changed.
 
 ## Recommended benchmark ladder
 
