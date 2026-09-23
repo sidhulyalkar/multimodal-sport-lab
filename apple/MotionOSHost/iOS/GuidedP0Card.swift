@@ -161,7 +161,7 @@ struct GuidedP0Card: View {
                 guided.start()
             } label: {
                 Label(
-                    "Begin (guided.mode.rawValue) Guidance",
+                    "Begin \(guided.mode.rawValue) Guidance",
                     systemImage: "play.circle.fill"
                 )
                 .frame(maxWidth: .infinity)
@@ -195,9 +195,9 @@ struct GuidedP0Card: View {
     }
 
     private var runningProtocol: some View {
-        TimelineView(.periodic(from: .now, by: 1)) { context in
+        TimelineView(.periodic(from: .now, by: 1)) { _ in
             VStack(alignment: .leading, spacing: 10) {
-                progressHeader(at: context.date)
+                progressHeader
 
                 if let step = guided.currentStep {
                     VStack(alignment: .leading, spacing: 5) {
@@ -207,34 +207,27 @@ struct GuidedP0Card: View {
                             .font(.subheadline)
                     }
 
-                    gateStatus(
-                        step: step,
-                        date: context.date
-                    )
+                    gateStatus(step: step)
 
                     Button {
-                        guided.completeCurrentStep(at: context.date)
+                        guided.completeCurrentStep()
                     } label: {
                         Label(
-                            guided.currentStepCanComplete(at: context.date)
+                            guided.currentStepCanComplete()
                                 ? "Complete Step"
                                 : "Minimum Time Not Reached",
-                            systemImage: guided.currentStepCanComplete(
-                                at: context.date
-                            )
+                            systemImage: guided.currentStepCanComplete()
                                 ? "checkmark.circle.fill"
                                 : "timer"
                         )
                         .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(
-                        !guided.currentStepCanComplete(at: context.date)
-                    )
+                    .disabled(!guided.currentStepCanComplete())
 
                     if step.allowsSkip {
                         Button {
-                            guided.skipCurrentStep(at: context.date)
+                            guided.skipCurrentStep()
                         } label: {
                             Label(
                                 "Skip & Record Skip",
@@ -258,9 +251,7 @@ struct GuidedP0Card: View {
         }
     }
 
-    private func progressHeader(
-        at date: Date
-    ) -> some View {
+    private var progressHeader: some View {
         let completed = guided.progress.completedStepIDs.count
         let skipped = guided.progress.skippedStepIDs.count
         let total = guided.plan.steps.count
@@ -269,16 +260,14 @@ struct GuidedP0Card: View {
         return VStack(alignment: .leading, spacing: 5) {
             HStack {
                 Text(
-                    "Step (min(finished + 1, total)) of (total)"
+                    "Step \(min(finished + 1, total)) of \(total)"
                 )
                 .font(.caption.weight(.semibold))
 
                 Spacer()
 
-                Text(
-                    duration(guided.planElapsedSeconds(at: date))
-                )
-                .font(.system(.caption, design: .monospaced))
+                Text(duration(guided.planElapsedSeconds()))
+                    .font(.system(.caption, design: .monospaced))
             }
 
             ProgressView(
@@ -287,9 +276,9 @@ struct GuidedP0Card: View {
             )
 
             HStack {
-                Text("(completed) complete")
+                Text("\(completed) complete")
                 if skipped > 0 {
-                    Text("· (skipped) skipped")
+                    Text("· \(skipped) skipped")
                         .foregroundStyle(.yellow)
                 }
             }
@@ -299,15 +288,14 @@ struct GuidedP0Card: View {
     }
 
     private func gateStatus(
-        step: GuidedProtocolStep,
-        date: Date
+        step: GuidedProtocolStep
     ) -> some View {
-        let remaining = guided.remainingGateSeconds(at: date)
+        let remaining = guided.remainingGateSeconds()
 
         return VStack(alignment: .leading, spacing: 3) {
             if remaining > 0 {
                 Label(
-                    "(duration(remaining)) minimum remaining",
+                    "\(duration(remaining)) minimum remaining",
                     systemImage: "timer"
                 )
                 .font(.caption)
@@ -323,7 +311,7 @@ struct GuidedP0Card: View {
 
             if step.minimumPlanElapsedSeconds != nil {
                 Text(
-                    "This gate uses total protocol elapsed time, "
+                    "This gate uses monotonic total protocol time, "
                         + "not only time on the current screen."
                 )
                 .font(.caption2)
@@ -343,8 +331,8 @@ struct GuidedP0Card: View {
                 .foregroundStyle(color)
 
             Text(
-                "(guided.progress.completedStepIDs.count) completed · "
-                    + "(guided.progress.skippedStepIDs.count) skipped"
+                "\(guided.progress.completedStepIDs.count) completed · "
+                    + "\(guided.progress.skippedStepIDs.count) skipped"
             )
             .font(.caption)
             .foregroundStyle(.secondary)
@@ -360,7 +348,7 @@ struct GuidedP0Card: View {
 
             if let sessionID = inbox.latestSessionID {
                 Label(
-                    "Latest Watch evidence: (sessionID)",
+                    "Latest Watch evidence: \(sessionID)",
                     systemImage: "checkmark.seal.fill"
                 )
                 .font(.caption2)
