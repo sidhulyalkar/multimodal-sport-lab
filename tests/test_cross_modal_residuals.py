@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import math
 from datetime import UTC, datetime
@@ -458,8 +457,10 @@ def test_report_has_no_scalar_aggregate_quality_score(tmp_path):
         tmp_path / "report.json",
     )
 
-    assert report.get("aggregate_quality_score") is None
-    assert "forbidden" in report["aggregate_quality_score_policy"]
+    assert "aggregate_quality_score" not in report
+    assert "No scalar aggregate quality score" in report[
+        "aggregation_policy"
+    ]
 
 
 def test_residual_spec_hash_binding_rejects_edited_clock(tmp_path):
