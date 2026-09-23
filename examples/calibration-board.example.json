@@ -1,0 +1,11 @@
+{
+  "schema_version": "motionos.calibration-board.v1",
+  "board_id": "charuco-longboard-v1",
+  "board_type": "charuco",
+  "squares_x": 7,
+  "squares_y": 5,
+  "square_length_m": 0.04,
+  "marker_length_m": 0.03,
+  "dictionary": "DICT_5X5_1000",
+  "printable_source_sha256": "REPLACE_WITH_64_HEX_SHA256"
+}
