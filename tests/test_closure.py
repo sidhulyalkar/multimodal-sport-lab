@@ -116,6 +116,7 @@ def _run_with_operator_evidence(
             _artifact(events.name, "operator_events"),
             _artifact(metadata.name, "operator_metadata"),
             _artifact(receipt.name, "operator_evidence_receipt"),
+            _artifact("p2-physical-spec.json", "p2_qualification_spec"),
         ),
         movement_blocks=(
             {"id": "baseline", "label": "quiet stance"},
@@ -159,10 +160,12 @@ def _report(
         if role == "insoles":
             receipt = {
                 "protocol": "P2",
+                "passed": state == "qualified",
                 "field_session_id": session_id,
                 "session_bundle_sha256": {
                     "field": bundle_sha256,
                 },
+                "qualification_spec_sha256": "0" * 64,
             }
         else:
             receipt = {
@@ -211,6 +214,7 @@ def test_m0_closure_passes_only_complete_physical_chain(
     assert receipt.passed is True
     assert receipt.unresolved_blockers == ()
     assert receipt.operator_evidence["state"] == "qualified"
+    assert receipt.p2_qualification_spec["state"] == "qualified"
     assert receipt.body_model["state"] == "not_requested"
 
 
