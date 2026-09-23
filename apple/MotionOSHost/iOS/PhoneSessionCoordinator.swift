@@ -2,6 +2,7 @@ import Combine
 import Foundation
 import HealthKit
 import MotionOSAppleCapture
+import UIKit
 import WatchConnectivity
 
 struct WatchLiveCaptureHealth: Equatable, Sendable {
@@ -15,6 +16,7 @@ struct WatchLiveCaptureHealth: Equatable, Sendable {
     let maxIMUGapMS: Double
     let nonMonotonicIMUCount: UInt64
     let heartRateBPM: Double?
+    let watchBatteryLevel: Double?
 }
 
 @MainActor
@@ -36,6 +38,8 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
     @Published private(set) var watchAppInstalled = false
     @Published private(set) var watchReachable = false
     @Published private(set) var watchCaptureHealth: WatchLiveCaptureHealth?
+    @Published private(set) var iPhoneBatteryLevel: Double?
+    @Published private(set) var iPhoneAvailableStorageBytes: Int64?
     @Published private(set) var errorMessage: String?
 
     let inbox = PhoneJournalInbox()
@@ -46,6 +50,8 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
 
     override init() {
         super.init()
+
+        UIDevice.current.isBatteryMonitoringEnabled = true
 
         healthStore.workoutSessionMirroringStartHandler = { [weak self] session in
             guard let self else { return }
@@ -90,6 +96,26 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
         watchPaired = session.isPaired
         watchAppInstalled = session.isWatchAppInstalled
         watchReachable = session.isReachable
+        refreshHostReadiness()
+    }
+
+    func refreshHostReadiness() {
+        let battery = UIDevice.current.batteryLevel
+        iPhoneBatteryLevel = battery >= 0
+            ? Double(battery)
+            : nil
+
+        do {
+            let attributes = try FileManager.default
+                .attributesOfFileSystem(forPath: NSHomeDirectory())
+            if let free = attributes[.systemFreeSize] as? NSNumber {
+                iPhoneAvailableStorageBytes = free.int64Value
+            } else {
+                iPhoneAvailableStorageBytes = nil
+            }
+        } catch {
+            iPhoneAvailableStorageBytes = nil
+        }
     }
 
     func watchCaptureHealthAge(
@@ -144,6 +170,9 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
             nonMonotonicIMUCount: nonMonotonic,
             heartRateBPM: Self.double(
                 message["heart_rate_bpm"]
+            ),
+            watchBatteryLevel: Self.double(
+                message["watch_battery_level_fraction"]
             )
         )
     }
