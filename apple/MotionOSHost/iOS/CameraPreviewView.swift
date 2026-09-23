@@ -2,7 +2,7 @@ import AVFoundation
 import SwiftUI
 import UIKit
 
-private final class CameraPreviewUIView: UIView {
+final class CameraPreviewUIView: UIView {
     override class var layerClass: AnyClass {
         AVCaptureVideoPreviewLayer.self
     }
