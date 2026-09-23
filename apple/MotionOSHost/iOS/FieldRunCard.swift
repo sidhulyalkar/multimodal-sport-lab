@@ -8,6 +8,7 @@ struct FieldRunCard: View {
     @EnvironmentObject private var camera: CameraCaptureController
 
     @State private var failureNote = ""
+    @State private var confirmIncompleteSeal = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -40,6 +41,21 @@ struct FieldRunCard: View {
             .foregroundStyle(.secondary)
         }
         .cardStyle()
+        .confirmationDialog(
+            "Seal incomplete operator evidence?",
+            isPresented: $confirmIncompleteSeal,
+            titleVisibility: .visible
+        ) {
+            Button(
+                "Seal Incomplete Evidence",
+                role: .destructive
+            ) {
+                fieldRun.seal(readiness: readinessSnapshot)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(fieldRun.closureWarnings.joined(separator: "\n"))
+        }
     }
 
     private var header: some View {
@@ -113,7 +129,7 @@ struct FieldRunCard: View {
             .buttonStyle(.borderedProminent)
 
             Button {
-                fieldRun.seal(readiness: readinessSnapshot)
+                confirmIncompleteSeal = true
             } label: {
                 Label(
                     "Seal Without Starting",
@@ -126,8 +142,25 @@ struct FieldRunCard: View {
         case .running:
             readinessSummary
 
+            if !fieldRun.closureWarnings.isEmpty {
+                VStack(alignment: .leading, spacing: 3) {
+                    ForEach(fieldRun.closureWarnings, id: \.self) { warning in
+                        Label(
+                            warning,
+                            systemImage: "exclamationmark.triangle"
+                        )
+                        .font(.caption2)
+                        .foregroundStyle(.yellow)
+                    }
+                }
+            }
+
             Button(role: .destructive) {
-                fieldRun.seal(readiness: readinessSnapshot)
+                if fieldRun.closureWarnings.isEmpty {
+                    fieldRun.seal(readiness: readinessSnapshot)
+                } else {
+                    confirmIncompleteSeal = true
+                }
             } label: {
                 Label(
                     "Seal Operator Evidence",
