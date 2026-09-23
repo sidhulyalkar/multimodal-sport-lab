@@ -44,6 +44,7 @@ See [`docs/m0-acceptance.md`](docs/m0-acceptance.md) for the explicit boundary b
 
 For the post-M0 measurement, fusion, and cross-sport program, see [`docs/m1-scientific-roadmap.md`](docs/m1-scientific-roadmap.md).
 The reproducible M1 experiment/observability/split contract is in [`docs/m1-experiment-contract.md`](docs/m1-experiment-contract.md).
+Participant/video/body-scan handling and public-export rules are in [`docs/privacy-data-governance.md`](docs/privacy-data-governance.md).
 
 ## Quick start
 
