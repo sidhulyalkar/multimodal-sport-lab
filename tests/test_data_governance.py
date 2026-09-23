@@ -1,5 +1,6 @@
 import hashlib
 import json
+from pathlib import Path
 
 import pytest
 
@@ -180,3 +181,86 @@ def test_dataset_registry_requires_explicit_redistribution_policy(tmp_path):
     result = validate_external_dataset_registry(registry)
     assert result["passed"] is True
     assert result["dataset_count"] == 1
+
+
+def test_checked_in_governance_examples_validate():
+    root = Path(__file__).resolve().parents[1]
+
+    export = validate_public_export_manifest(
+        root / "examples" / "public-export.example.json"
+    )
+    registry = validate_external_dataset_registry(
+        root / "examples" / "external-dataset-registry.example.json"
+    )
+
+    assert export["passed"] is True
+    assert export["classifications"] == ["synthetic"]
+    assert registry["passed"] is True
+
+
+def test_external_dataset_public_export_requires_redistribution_permission(
+    tmp_path,
+):
+    artifact = tmp_path / "derived.json"
+    artifact.write_text("{}\n", encoding="utf-8")
+    registry = tmp_path / "datasets.json"
+    registry.write_text(
+        json.dumps(
+            {
+                "schema_version": "motionos.external-dataset-registry.v1",
+                "datasets": [
+                    {
+                        "dataset_id": "dataset-1",
+                        "name": "Dataset One",
+                        "source_reference": "owner",
+                        "license_or_terms_reference": "terms",
+                        "authorization_status": "authorized_local_copy",
+                        "redistribution_permitted": False,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = tmp_path / "export.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "schema_version": "motionos.public-export.v1",
+                "export_id": "external-export",
+                "purpose": "test",
+                "dataset_registry": {
+                    "path": "datasets.json",
+                    "sha256": _sha(registry),
+                },
+                "artifacts": [
+                    {
+                        "path": "derived.json",
+                        "sha256": _sha(artifact),
+                        "classification": "publishable",
+                        "release_basis": "external_dataset_license",
+                        "license_id": "dataset-1",
+                    }
+                ],
+                "attestations": {
+                    "raw_identifying_excluded": True,
+                    "consent_or_license_verified": True,
+                    "metadata_minimized": True,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="redistribution is not permitted"):
+        validate_public_export_manifest(manifest)
+
+    raw = json.loads(registry.read_text(encoding="utf-8"))
+    raw["datasets"][0]["redistribution_permitted"] = True
+    registry.write_text(json.dumps(raw), encoding="utf-8")
+    raw_manifest = json.loads(manifest.read_text(encoding="utf-8"))
+    raw_manifest["dataset_registry"]["sha256"] = _sha(registry)
+    manifest.write_text(json.dumps(raw_manifest), encoding="utf-8")
+
+    result = validate_public_export_manifest(manifest)
+    assert result["passed"] is True
