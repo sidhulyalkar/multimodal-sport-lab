@@ -898,6 +898,7 @@ class P2PhysicalReceipt:
     static_load_relative_error: float
     repeatability_total_force_delta_fraction: float
     repeatability_left_fraction_delta: float
+    thresholds_frozen_before_review: bool
     wireless_separation_completed: bool
     don_doff_completed: bool
     qualification_spec_sha256: str
@@ -945,7 +946,9 @@ class P2PhysicalReceipt:
                 },
                 "physical_protocol": {
                     "passed": self.protocol_gate_passed,
-                    "thresholds_frozen_before_review": True,
+                    "thresholds_frozen_before_review": (
+                        self.thresholds_frozen_before_review
+                    ),
                     "wireless_separation_completed": (
                         self.wireless_separation_completed
                     ),
@@ -1335,6 +1338,7 @@ def build_p2_physical_receipt(
         static_load_relative_error=static_error,
         repeatability_total_force_delta_fraction=repeat_force_delta,
         repeatability_left_fraction_delta=repeat_fraction_delta,
+        thresholds_frozen_before_review=thresholds_frozen,
         wireless_separation_completed=wireless_completed,
         don_doff_completed=don_doff_completed,
         qualification_spec_sha256=spec_sha256,
