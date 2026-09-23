@@ -381,6 +381,7 @@ def _fixture(tmp_path: Path) -> dict[str, Path]:
                 "min_pairwise_view_angle_deg": 5.0,
                 "max_mount_translation_drift_m": 0.01,
                 "max_mount_rotation_drift_deg": 1.0,
+                "max_correspondence_time_delta_ms": 10.0,
                 "reference_session": _session_ref(watch, tmp_path),
                 "cameras": [
                     {
@@ -578,10 +579,14 @@ def test_multiview_triangulation_recovers_known_world_point(tmp_path):
                             "cam-a": {
                                 "u_px": pixel_a[0],
                                 "v_px": pixel_a[1],
+                                "source_frame_sequence": 0,
+                                "source_frame_pts_ns": 1_000_000_000,
                             },
                             "cam-b": {
                                 "u_px": pixel_b[0],
                                 "v_px": pixel_b[1],
+                                "source_frame_sequence": 0,
+                                "source_frame_pts_ns": 1_000_000_000,
                             },
                         },
                     }
@@ -643,8 +648,18 @@ def test_nonpassing_rig_cannot_claim_world_triangulation(tmp_path):
                         "point_id": "unreachable",
                         "reference_time_ns": 1,
                         "observations": {
-                            "cam-a": {"u_px": 960.0, "v_px": 540.0},
-                            "cam-b": {"u_px": 960.0, "v_px": 540.0},
+                            "cam-a": {
+                                "u_px": 960.0,
+                                "v_px": 540.0,
+                                "source_frame_sequence": 0,
+                                "source_frame_pts_ns": 1_000_000_000
+                            },
+                            "cam-b": {
+                                "u_px": 960.0,
+                                "v_px": 540.0,
+                                "source_frame_sequence": 0,
+                                "source_frame_pts_ns": 1_000_000_000
+                            },
                         },
                     }
                 ],
@@ -679,8 +694,18 @@ def test_correspondence_receipt_hash_is_immutable(tmp_path):
                         "point_id": "p",
                         "reference_time_ns": 1,
                         "observations": {
-                            "cam-a": {"u_px": 960.0, "v_px": 540.0},
-                            "cam-b": {"u_px": 960.0, "v_px": 540.0},
+                            "cam-a": {
+                                "u_px": 960.0,
+                                "v_px": 540.0,
+                                "source_frame_sequence": 0,
+                                "source_frame_pts_ns": 1_000_000_000
+                            },
+                            "cam-b": {
+                                "u_px": 960.0,
+                                "v_px": 540.0,
+                                "source_frame_sequence": 0,
+                                "source_frame_pts_ns": 1_000_000_000
+                            },
                         },
                     }
                 ],
@@ -731,3 +756,108 @@ def test_bad_reprojection_quality_fails_calibration_and_rig_gate(tmp_path):
     )
     assert rig["passed"] is False
     assert rig["gates"]["camera_calibration_quality_passed"] is False
+
+
+def test_multiview_correspondence_time_must_match_reference(tmp_path):
+    paths = _fixture(tmp_path)
+    rig_path = tmp_path / "rig.json"
+    rig = build_camera_rig_receipt(paths["rig_spec"], rig_path)
+
+    calibration_a = load_camera_calibration(paths["calibration_a"])
+    calibration_b = load_camera_calibration(paths["calibration_b"])
+    point_world = (0.0, 0.0, 5.0)
+    pixel_a = _project_world_point(calibration_a, point_world)
+    pixel_b = _project_world_point(calibration_b, point_world)
+
+    correspondences = tmp_path / "bad-time.json"
+    correspondences.write_text(
+        json.dumps(
+            {
+                "schema_version":
+                    "motionos.multiview-correspondences.v1",
+                "rig_id": rig["rig_id"],
+                "rig_receipt_sha256": sha256_file(rig_path),
+                "frozen_before_geometry_review": True,
+                "points": [
+                    {
+                        "point_id": "time-mismatch",
+                        "reference_time_ns": 1_000_000_000,
+                        "observations": {
+                            "cam-a": {
+                                "u_px": pixel_a[0],
+                                "v_px": pixel_a[1],
+                                "source_frame_sequence": 0,
+                                "source_frame_pts_ns": 1_000_000_000,
+                            },
+                            "cam-b": {
+                                "u_px": pixel_b[0],
+                                "v_px": pixel_b[1],
+                                "source_frame_sequence": 0,
+                                "source_frame_pts_ns": 1_100_000_000,
+                            },
+                        },
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="correspondence time tolerance"):
+        triangulate_multiview(
+            rig_path,
+            correspondences,
+            tmp_path / "geometry-report.json",
+        )
+
+
+def test_multiview_correspondence_cannot_extrapolate_clock(tmp_path):
+    paths = _fixture(tmp_path)
+    rig_path = tmp_path / "rig.json"
+    rig = build_camera_rig_receipt(paths["rig_spec"], rig_path)
+    calibration_a = load_camera_calibration(paths["calibration_a"])
+    calibration_b = load_camera_calibration(paths["calibration_b"])
+    point_world = (0.0, 0.0, 5.0)
+    pixel_a = _project_world_point(calibration_a, point_world)
+    pixel_b = _project_world_point(calibration_b, point_world)
+
+    correspondences = tmp_path / "outside-support.json"
+    correspondences.write_text(
+        json.dumps(
+            {
+                "schema_version":
+                    "motionos.multiview-correspondences.v1",
+                "rig_id": rig["rig_id"],
+                "rig_receipt_sha256": sha256_file(rig_path),
+                "frozen_before_geometry_review": True,
+                "points": [
+                    {
+                        "point_id": "outside-support",
+                        "reference_time_ns": 3_000_000_000,
+                        "observations": {
+                            "cam-a": {
+                                "u_px": pixel_a[0],
+                                "v_px": pixel_a[1],
+                                "source_frame_sequence": 1,
+                                "source_frame_pts_ns": 3_000_000_000,
+                            },
+                            "cam-b": {
+                                "u_px": pixel_b[0],
+                                "v_px": pixel_b[1],
+                                "source_frame_sequence": 1,
+                                "source_frame_pts_ns": 3_000_000_000,
+                            },
+                        },
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="outside clock landmark support"):
+        triangulate_multiview(
+            rig_path,
+            correspondences,
+            tmp_path / "geometry-report.json",
+        )
