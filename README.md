@@ -33,7 +33,10 @@ Most fitness systems collapse very different sports into distance, heart rate, a
 - M0 required-stream validation gate.
 - Optional MCAP export.
 - Swift package mirroring the cross-device event and clock contracts.
-- Strict final M0 closure receipt that rejects capture-only evidence.
+- Full P2 controlled + field physical-qualification receipt with a hashed,
+  predeclared threshold spec.
+- Strict final M0 closure receipt that rejects capture-only or source-mismatched
+  evidence.
 - CI tests and linting.
 
 See [`docs/m0-acceptance.md`](docs/m0-acceptance.md) for the explicit boundary between software validation and real-hardware qualification.
