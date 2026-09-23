@@ -19,7 +19,8 @@ P0 does **not** qualify cross-device synchronization, biomechanics, pose reconst
 On your Mac:
 
 ```bash
-git checkout feat/m0b-apple-host-p0
+git checkout main
+git pull --ff-only
 brew install xcodegen
 
 cd apple/MotionOSHost
