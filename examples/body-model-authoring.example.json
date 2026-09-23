@@ -1,0 +1,39 @@
+{
+  "schema_version": "motionos.body-model-authoring.v1",
+  "model_id": "sid-body-v1",
+  "height_m": 1.58,
+  "frame_convention": "+X right,+Y up,+Z forward",
+  "source": {
+    "type": "3d_body_scan",
+    "artifact": "../profiles/body-scan-source.glb",
+    "notes": "Replace with the immutable original scan or mesh artifact."
+  },
+  "landmarks_m": {
+    "root": [0.0, 0.0, 0.0],
+    "leftHip": [-0.15, 0.0, 0.0],
+    "rightHip": [0.17, 0.01, 0.0],
+    "leftShoulder": [-0.20, 0.50, 0.01],
+    "rightShoulder": [0.22, 0.52, -0.01],
+    "leftKnee": [-0.14, -0.39, 0.02],
+    "rightKnee": [0.16, -0.41, 0.01]
+  },
+  "registration_landmarks": [
+    "root",
+    "leftHip",
+    "rightHip",
+    "leftShoulder",
+    "rightShoulder"
+  ],
+  "segment_definitions": {
+    "left_femur": ["leftHip", "leftKnee"],
+    "right_femur": ["rightHip", "rightKnee"]
+  },
+  "segments_m": {
+    "torso": 0.52
+  },
+  "joint_limits_deg": {},
+  "metadata": {
+    "landmarking_method": "replace_with_actual_method",
+    "notes": "Do not mirror missing contralateral landmarks."
+  }
+}
