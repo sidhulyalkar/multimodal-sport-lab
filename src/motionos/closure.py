@@ -7,6 +7,7 @@ from pathlib import Path
 
 from .body_model import load_body_model_profile
 from .calibration_run import build_calibration_report, load_calibration_run
+from .operator_evidence import validate_operator_evidence
 
 CLOSURE_SCHEMA_VERSION = "motionos.m0-closure.v1"
 REQUIRED_SOURCE_ROLES = ("watch", "equipment", "insoles", "camera")
@@ -52,6 +53,12 @@ def _read_json_object(path: Path) -> dict[str, object]:
     return dict(raw)
 
 
+def _string_list(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item) for item in value if isinstance(item, str)]
+
+
 def _artifact_index(run) -> dict[str, list[object]]:
     index: dict[str, list[object]] = {}
     for artifact in (*run.profiles, *run.artifacts):
@@ -86,53 +93,69 @@ def _operator_evidence_status(
         summary["reason"] = "missing_or_ambiguous_artifacts"
         return summary
 
+    events_ref = artifact_index["operator_events"][0]
     receipt_ref = artifact_index["operator_evidence_receipt"][0]
     metadata_ref = artifact_index["operator_metadata"][0]
+    events_path = _resolve(events_ref.path, base=run_manifest.parent)
     receipt_path = _resolve(receipt_ref.path, base=run_manifest.parent)
     metadata_path = _resolve(metadata_ref.path, base=run_manifest.parent)
+
+    if events_path.parent != metadata_path.parent:
+        blockers.append(
+            "operator evidence: journal and metadata must share one directory"
+        )
+        summary["reason"] = "split_bundle"
+        return summary
 
     try:
         receipt = _read_json_object(receipt_path)
         metadata = _read_json_object(metadata_path)
-    except (OSError, json.JSONDecodeError, TypeError) as exc:
+        recomputed = validate_operator_evidence(events_path.parent)
+    except (
+        OSError,
+        json.JSONDecodeError,
+        KeyError,
+        TypeError,
+        ValueError,
+    ) as exc:
         blockers.append(
-            f"operator evidence: unreadable metadata/receipt: "
+            f"operator evidence: validation failed: "
             f"{type(exc).__name__}: {exc}"
         )
-        summary["reason"] = "unreadable"
+        summary["reason"] = "invalid"
         return summary
 
     sync_labels = [
-        str(value).lower()
-        for value in receipt.get("sync_cue_labels", [])
-        if isinstance(value, str)
+        value.lower()
+        for value in recomputed.sync_cue_labels
     ]
-    completed_ids = [
-        str(value)
-        for value in metadata.get("completed_block_ids", [])
-        if isinstance(value, str)
-    ]
-    failure_notes = [
-        str(value)
-        for value in receipt.get("failure_notes", [])
-        if isinstance(value, str)
-    ]
+    completed_ids = _string_list(metadata.get("completed_block_ids"))
+    failure_notes = list(recomputed.failure_notes)
 
     summary.update(
         {
-            "state": "qualified" if receipt.get("passed") is True else "failed",
-            "run_id": receipt.get("run_id"),
+            "state": "qualified" if recomputed.passed else "failed",
+            "run_id": recomputed.run_id,
             "metadata_run_id": metadata.get("run_id"),
             "protocol_version": metadata.get("protocol_version"),
             "sync_cues": sync_labels,
             "completed_block_ids": completed_ids,
             "failure_notes": failure_notes,
+            "recomputed_event_count": recomputed.event_count,
         }
     )
 
-    if receipt.get("passed") is not True:
-        blockers.append("operator evidence: validation receipt is not passing")
-    if receipt.get("run_id") != run.run_id:
+    if not recomputed.passed:
+        blockers.append("operator evidence: recomputed validation is not passing")
+    if receipt.get("passed") is not recomputed.passed:
+        blockers.append("operator evidence: stored receipt pass state does not recompute")
+    if receipt.get("run_id") != recomputed.run_id:
+        blockers.append("operator evidence: stored receipt run_id does not recompute")
+    if receipt.get("source_evidence_sha256") != recomputed.source_evidence_sha256:
+        blockers.append(
+            "operator evidence: stored receipt source hashes do not recompute"
+        )
+    if recomputed.run_id != run.run_id:
         blockers.append("operator evidence: receipt run_id does not match run manifest")
     if metadata.get("run_id") != run.run_id:
         blockers.append("operator evidence: metadata run_id does not match run manifest")
