@@ -378,7 +378,7 @@ class GroupedSplit:
         return {
             "schema_version": self.schema_version,
             "purpose": self.purpose,
-            "policy": "stable_sha256_group_partition_v1",
+            "policy": "sha256_group_order_apportioned_partition_v1",
             "seed": self.seed,
             "group_by": list(self.group_by),
             "fractions": dict(self.fractions),
@@ -494,20 +494,77 @@ def build_grouped_split(
         "validation": [],
         "test": [],
     }
-    group_split: dict[str, str] = {}
-    for key in sorted(groups):
-        digest = hashlib.sha256(
+    fractions = {
+        "train": train,
+        "validation": validation,
+        "test": test,
+    }
+    positive_splits = [
+        name for name, fraction in fractions.items() if fraction > 0
+    ]
+    if len(groups) < len(positive_splits):
+        raise ValueError(
+            "not enough independent groups to populate every requested split"
+        )
+
+    ordered_groups = sorted(
+        groups,
+        key=lambda key: hashlib.sha256(
             (seed + "\0" + key).encode("utf-8")
-        ).digest()
-        unit = int.from_bytes(digest[:8], "big") / float(1 << 64)
-        if unit < train:
-            split = "train"
-        elif unit < train + validation:
-            split = "validation"
-        else:
-            split = "test"
-        group_split[key] = split
-        assignments[split].extend(sorted(groups[key]))
+        ).digest(),
+    )
+    raw_counts = {
+        name: fractions[name] * len(ordered_groups)
+        for name in fractions
+    }
+    counts = {
+        name: math.floor(raw_counts[name])
+        for name in fractions
+    }
+    remainder = len(ordered_groups) - sum(counts.values())
+    remainder_order = sorted(
+        fractions,
+        key=lambda name: (
+            raw_counts[name] - counts[name],
+            fractions[name],
+            name,
+        ),
+        reverse=True,
+    )
+    for index in range(remainder):
+        counts[remainder_order[index % len(remainder_order)]] += 1
+
+    for name in positive_splits:
+        if counts[name] > 0:
+            continue
+        donors = sorted(
+            (
+                donor
+                for donor in positive_splits
+                if counts[donor] > 1
+            ),
+            key=lambda donor: (
+                counts[donor],
+                fractions[donor],
+                donor,
+            ),
+            reverse=True,
+        )
+        if not donors:
+            raise ValueError(
+                "unable to allocate a non-empty requested split"
+            )
+        counts[donors[0]] -= 1
+        counts[name] += 1
+
+    group_split: dict[str, str] = {}
+    cursor = 0
+    for split in ("train", "validation", "test"):
+        stop = cursor + counts[split]
+        for key in ordered_groups[cursor:stop]:
+            group_split[key] = split
+            assignments[split].extend(sorted(groups[key]))
+        cursor = stop
 
     seen_groups: dict[str, str] = {}
     leakage = False
