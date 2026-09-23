@@ -1,0 +1,17 @@
+{
+  "schema_version": "motionos.geometry-measurements.v1",
+  "measurements": [
+    {
+      "time_ns": 1000000000,
+      "metric": "camera_reprojection_residual_px",
+      "value": 2.0,
+      "unit": "px"
+    },
+    {
+      "time_ns": 1000000000,
+      "metric": "cross_view_triangulation_disagreement_m",
+      "value": 0.015,
+      "unit": "m"
+    }
+  ]
+}

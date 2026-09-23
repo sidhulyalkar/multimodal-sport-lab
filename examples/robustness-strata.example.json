@@ -1,0 +1,20 @@
+{
+  "schema_version": "motionos.robustness-strata.v1",
+  "intervals": [
+    {
+      "start_ns": 0,
+      "end_ns": 10000000000,
+      "labels": {
+        "motion_speed": "controlled",
+        "occlusion": "clear",
+        "pose_confidence": "reviewed-high",
+        "distance_framing": "full-body",
+        "sensor_gap": "none",
+        "day_id": "day-001",
+        "remount_id": "remount-001",
+        "camera_view": "side"
+      }
+    }
+  ],
+  "frozen_before_residual_review": true
+}

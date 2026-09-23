@@ -1,0 +1,21 @@
+{
+  "schema_version": "motionos.visual-contact-events.v1",
+  "events": [
+    {
+      "time_ns": 1000000000,
+      "side": "left",
+      "event": "contact_onset",
+      "uncertainty_ns": 5000000
+    },
+    {
+      "time_ns": 1600000000,
+      "side": "left",
+      "event": "contact_release",
+      "uncertainty_ns": 5000000
+    }
+  ],
+  "review_protocol": {
+    "pressure_trace_hidden": true,
+    "events_frozen_before_comparison": true
+  }
+}
