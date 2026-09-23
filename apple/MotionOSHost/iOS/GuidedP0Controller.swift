@@ -113,8 +113,11 @@ final class GuidedP0Controller: ObservableObject {
             lastHostMonotonicNS = nil
 
             let now = Date()
+            let monotonicNow = MonotonicClock.nowNS()
             startedAt = now
             stepStartedAt = now
+            startedMonotonicNS = monotonicNow
+            stepStartedMonotonicNS = monotonicNow
             progress.start(plan: plan)
 
             try append(
@@ -134,11 +137,12 @@ final class GuidedP0Controller: ObservableObject {
         }
     }
 
-    func completeCurrentStep(at date: Date = Date()) {
+    func completeCurrentStep() {
         guard let step = currentStep else { return }
 
-        let stepElapsed = stepElapsedSeconds(at: date)
-        let planElapsed = planElapsedSeconds(at: date)
+        let nowNS = MonotonicClock.nowNS()
+        let stepElapsed = stepElapsedSeconds(nowNS: nowNS)
+        let planElapsed = planElapsedSeconds(nowNS: nowNS)
         guard step.canComplete(
             stepElapsedSeconds: stepElapsed,
             planElapsedSeconds: planElapsed
@@ -186,7 +190,8 @@ final class GuidedP0Controller: ObservableObject {
                 stepStartedAt = nil
                 notify(.success)
             } else {
-                stepStartedAt = date
+                stepStartedAt = Date()
+                stepStartedMonotonicNS = MonotonicClock.nowNS()
                 try appendCurrentStepStarted()
                 notify(.success)
             }
@@ -196,7 +201,7 @@ final class GuidedP0Controller: ObservableObject {
         }
     }
 
-    func skipCurrentStep(at date: Date = Date()) {
+    func skipCurrentStep() {
         guard let step = currentStep,
               step.allowsSkip
         else {
@@ -213,15 +218,37 @@ final class GuidedP0Controller: ObservableObject {
                     "plan_elapsed_seconds":
                         String(
                             format: "%.3f",
-                            planElapsedSeconds(at: date)
+                            planElapsedSeconds()
                         ),
                 ]
             )
             guard progress.skipCurrentStep(plan: plan) else {
                 throw GuidanceError.transitionRejected
             }
-            stepStartedAt = date
-            try appendCurrentStepStarted()
+            stepStartedAt = Date()
+            stepStartedMonotonicNS = MonotonicClock.nowNS()
+
+            if progress.state == .completed {
+                try append(
+                    kind: "protocol_completed",
+                    payload: [
+                        "plan_elapsed_seconds":
+                            String(
+                                format: "%.3f",
+                                planElapsedSeconds()
+                            ),
+                        "completed_step_count":
+                            String(progress.completedStepIDs.count),
+                        "skipped_step_count":
+                            String(progress.skippedStepIDs.count),
+                    ]
+                )
+                try closeJournal()
+                stepStartedAt = nil
+                stepStartedMonotonicNS = nil
+            } else {
+                try appendCurrentStepStarted()
+            }
             notify(.warning)
             errorMessage = nil
         } catch {
@@ -229,7 +256,7 @@ final class GuidedP0Controller: ObservableObject {
         }
     }
 
-    func cancel(at date: Date = Date()) {
+    func cancel() {
         guard progress.state == .running else { return }
 
         do {
@@ -241,7 +268,7 @@ final class GuidedP0Controller: ObservableObject {
                     "plan_elapsed_seconds":
                         String(
                             format: "%.3f",
-                            planElapsedSeconds(at: date)
+                            planElapsedSeconds()
                         ),
                 ]
             )
@@ -262,6 +289,8 @@ final class GuidedP0Controller: ObservableObject {
         guidanceID = nil
         startedAt = nil
         stepStartedAt = nil
+        startedMonotonicNS = nil
+        stepStartedMonotonicNS = nil
         evidenceBundle = nil
         errorMessage = nil
         sequence = 0
@@ -269,45 +298,55 @@ final class GuidedP0Controller: ObservableObject {
     }
 
     func planElapsedSeconds(
-        at date: Date = Date()
+        nowNS: UInt64 = MonotonicClock.nowNS()
     ) -> TimeInterval {
-        guard let startedAt else { return 0 }
-        return max(0, date.timeIntervalSince(startedAt))
+        guard let startedMonotonicNS,
+              nowNS >= startedMonotonicNS
+        else {
+            return 0
+        }
+        return Double(nowNS - startedMonotonicNS)
+            / 1_000_000_000.0
     }
 
     func stepElapsedSeconds(
-        at date: Date = Date()
+        nowNS: UInt64 = MonotonicClock.nowNS()
     ) -> TimeInterval {
-        guard let stepStartedAt else { return 0 }
-        return max(0, date.timeIntervalSince(stepStartedAt))
+        guard let stepStartedMonotonicNS,
+              nowNS >= stepStartedMonotonicNS
+        else {
+            return 0
+        }
+        return Double(nowNS - stepStartedMonotonicNS)
+            / 1_000_000_000.0
     }
 
-    func currentStepCanComplete(
-        at date: Date = Date()
-    ) -> Bool {
+    func currentStepCanComplete() -> Bool {
         guard let currentStep else { return false }
+        let nowNS = MonotonicClock.nowNS()
         return currentStep.canComplete(
-            stepElapsedSeconds: stepElapsedSeconds(at: date),
-            planElapsedSeconds: planElapsedSeconds(at: date)
+            stepElapsedSeconds: stepElapsedSeconds(nowNS: nowNS),
+            planElapsedSeconds: planElapsedSeconds(nowNS: nowNS)
         )
     }
 
-    func remainingGateSeconds(
-        at date: Date = Date()
-    ) -> TimeInterval {
+    func remainingGateSeconds() -> TimeInterval {
         guard let step = currentStep else { return 0 }
+        let nowNS = MonotonicClock.nowNS()
 
         var remaining: TimeInterval = 0
         if let minimum = step.minimumStepDurationSeconds {
             remaining = max(
                 remaining,
-                Double(minimum) - stepElapsedSeconds(at: date)
+                Double(minimum)
+                    - stepElapsedSeconds(nowNS: nowNS)
             )
         }
         if let minimum = step.minimumPlanElapsedSeconds {
             remaining = max(
                 remaining,
-                Double(minimum) - planElapsedSeconds(at: date)
+                Double(minimum)
+                    - planElapsedSeconds(nowNS: nowNS)
             )
         }
         return max(0, remaining)
@@ -316,6 +355,8 @@ final class GuidedP0Controller: ObservableObject {
     private var journalHandle: FileHandle?
     private var sequence: UInt64 = 0
     private var lastHostMonotonicNS: UInt64?
+    private var startedMonotonicNS: UInt64?
+    private var stepStartedMonotonicNS: UInt64?
 
     private func appendCurrentStepStarted() throws {
         guard let step = currentStep else { return }
