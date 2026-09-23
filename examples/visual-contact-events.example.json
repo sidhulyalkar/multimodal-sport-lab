@@ -13,5 +13,9 @@
       "event": "contact_release",
       "uncertainty_ns": 5000000
     }
-  ]
+  ],
+  "review_protocol": {
+    "pressure_trace_hidden": true,
+    "events_frozen_before_comparison": true
+  }
 }
