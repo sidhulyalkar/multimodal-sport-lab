@@ -1,0 +1,17 @@
+{
+  "schema_version": "motionos.external-dataset-registry.v1",
+  "datasets": [
+    {
+      "dataset_id": "totalcapture",
+      "name": "TotalCapture",
+      "source_reference": "REPLACE_WITH_DATASET_OWNER_LANDING_PAGE_OR_RECORD",
+      "license_or_terms_reference": "REPLACE_WITH_REVIEWED_TERMS_REFERENCE",
+      "authorization_status": "review_required",
+      "redistribution_permitted": false,
+      "notes": [
+        "Example registry entry only.",
+        "Update authorization status only after reviewing the current owner terms and obtaining required access."
+      ]
+    }
+  ]
+}
