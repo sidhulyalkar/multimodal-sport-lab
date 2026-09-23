@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -13,7 +14,9 @@ from motionos.insole import (
     RIGHT_IMU_STREAM,
     RIGHT_PRESSURE_STREAM,
     build_p2_capture_receipt,
+    build_p2_physical_receipt,
     import_opengo_text_export,
+    load_p2_physical_spec,
     parse_opengo_text_export,
 )
 from motionos.replay import replay_frames
@@ -424,3 +427,288 @@ def test_replay_surfaces_all_bilateral_insole_streams(tmp_path):
         LEFT_PRESSURE_STREAM,
         RIGHT_PRESSURE_STREAM,
     } <= observed
+
+
+def _write_p2_physical_export(
+    path: Path,
+    *,
+    field: bool,
+) -> None:
+    rows: list[str] = []
+    for index in range(11):
+        time_s = index * 0.01
+        if field:
+            left_force = 500.0
+            right_force = 500.0
+        elif index in {0, 1, 9, 10}:
+            left_force = 2.0
+            right_force = 2.0
+        elif index in {2, 3}:
+            left_force = 500.0
+            right_force = 500.0
+        elif index in {4, 5}:
+            left_force = 600.0
+            right_force = 400.0
+        elif index in {6, 7}:
+            left_force = 590.0
+            right_force = 410.0
+        else:
+            left_force = 500.0
+            right_force = 500.0
+
+        left = _side_values(
+            pressure=1.0,
+            accel=(0.0, 0.0, 1.0),
+            gyro=(0.0, 0.0, 0.0),
+            force=left_force,
+            cop=(-0.1, 0.0),
+        )
+        right = _side_values(
+            pressure=1.0,
+            accel=(0.0, 0.0, 1.0),
+            gyro=(0.0, 0.0, 0.0),
+            force=right_force,
+            cop=(0.1, 0.0),
+        )
+        rows.append(
+            "\t".join([f"{time_s:.2f}", *left, *right])
+        )
+
+    lines = [
+        "# Start time: 27.09.2023 10:21:14.922",
+        "# Duration: 00:00.100",
+        "# Sensor insoles: Left SN5968, Right SN9171",
+        "# Size: 7",
+        "# Recording type: normal",
+        "# Name: P2 physical fixture",
+        "# " + "\t".join(_channels()),
+        *rows,
+    ]
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _write_p2_physical_spec(
+    path: Path,
+    *,
+    wireless_separation_completed: bool = True,
+    known_static_load_n: float = 1000.0,
+) -> None:
+    path.write_text(
+        json.dumps(
+            {
+                "schema_version": "motionos.p2-physical-spec.v1",
+                "thresholds": {
+                    "min_bilateral_overlap_fraction": 0.95,
+                    "max_unloaded_total_force_n": 10.0,
+                    "known_static_load_n": known_static_load_n,
+                    "static_load_tolerance_fraction": 0.05,
+                    "max_repeatability_total_force_delta_fraction": 0.05,
+                    "max_repeatability_left_fraction_delta": 0.03,
+                },
+                "controlled_windows": {
+                    "unloaded_pre": {
+                        "start_ns": 0,
+                        "end_ns": 10_000_000,
+                    },
+                    "static_load": {
+                        "start_ns": 20_000_000,
+                        "end_ns": 30_000_000,
+                    },
+                    "repeatability_a": {
+                        "start_ns": 40_000_000,
+                        "end_ns": 50_000_000,
+                    },
+                    "repeatability_b": {
+                        "start_ns": 60_000_000,
+                        "end_ns": 70_000_000,
+                    },
+                    "unloaded_post": {
+                        "start_ns": 90_000_000,
+                        "end_ns": 100_000_000,
+                    },
+                },
+                "protocol": {
+                    "thresholds_frozen_before_review": True,
+                    "wireless_separation_completed": (
+                        wireless_separation_completed
+                    ),
+                    "don_doff_completed": True,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_p2_physical_receipt_passes_recomputed_controlled_and_field_gates(
+    tmp_path,
+):
+    controlled_export = tmp_path / "controlled.txt"
+    field_export = tmp_path / "field.txt"
+    spec_path = tmp_path / "p2-physical-spec.json"
+    _write_p2_physical_export(controlled_export, field=False)
+    _write_p2_physical_export(field_export, field=True)
+    _write_p2_physical_spec(spec_path)
+
+    controlled_session = import_opengo_text_export(
+        controlled_export,
+        tmp_path / "controlled-sessions",
+        session_id="p2-controlled",
+    )
+    field_session = import_opengo_text_export(
+        field_export,
+        tmp_path / "field-sessions",
+        session_id="p2-field",
+    )
+    spec = load_p2_physical_spec(spec_path)
+
+    receipt = build_p2_physical_receipt(
+        SessionReader(field_session),
+        SessionReader(controlled_session),
+        spec,
+        spec_sha256="a" * 64,
+        min_controlled_duration_s=0.09,
+        min_field_duration_s=0.09,
+    )
+
+    assert receipt.capture_passed is True
+    assert receipt.overlap_gate_passed is True
+    assert receipt.unloaded_gate_passed is True
+    assert receipt.static_load_gate_passed is True
+    assert receipt.repeatability_gate_passed is True
+    assert receipt.protocol_gate_passed is True
+    assert receipt.passed is True
+    assert receipt.static_load_relative_error == pytest.approx(0.0)
+    assert receipt.repeatability_total_force_delta_fraction == pytest.approx(
+        0.0
+    )
+    assert receipt.repeatability_left_fraction_delta == pytest.approx(0.01)
+    assert len(receipt.controlled_bundle_sha256) == 64
+    assert len(receipt.field_bundle_sha256) == 64
+    assert "not full 3d ground-reaction force" in (
+        str(receipt.to_dict()["claim_boundary"]).lower()
+    )
+
+
+def test_p2_physical_receipt_rejects_missing_wireless_separation(
+    tmp_path,
+):
+    controlled_export = tmp_path / "controlled.txt"
+    field_export = tmp_path / "field.txt"
+    spec_path = tmp_path / "p2-physical-spec.json"
+    _write_p2_physical_export(controlled_export, field=False)
+    _write_p2_physical_export(field_export, field=True)
+    _write_p2_physical_spec(
+        spec_path,
+        wireless_separation_completed=False,
+    )
+
+    controlled_session = import_opengo_text_export(
+        controlled_export,
+        tmp_path / "controlled-sessions",
+        session_id="p2-controlled",
+    )
+    field_session = import_opengo_text_export(
+        field_export,
+        tmp_path / "field-sessions",
+        session_id="p2-field",
+    )
+
+    receipt = build_p2_physical_receipt(
+        SessionReader(field_session),
+        SessionReader(controlled_session),
+        load_p2_physical_spec(spec_path),
+        spec_sha256="b" * 64,
+        min_controlled_duration_s=0.09,
+        min_field_duration_s=0.09,
+    )
+
+    assert receipt.protocol_gate_passed is False
+    assert receipt.passed is False
+
+
+def test_p2_physical_receipt_rejects_static_load_outside_frozen_tolerance(
+    tmp_path,
+):
+    controlled_export = tmp_path / "controlled.txt"
+    field_export = tmp_path / "field.txt"
+    spec_path = tmp_path / "p2-physical-spec.json"
+    _write_p2_physical_export(controlled_export, field=False)
+    _write_p2_physical_export(field_export, field=True)
+    _write_p2_physical_spec(
+        spec_path,
+        known_static_load_n=1200.0,
+    )
+
+    controlled_session = import_opengo_text_export(
+        controlled_export,
+        tmp_path / "controlled-sessions",
+        session_id="p2-controlled",
+    )
+    field_session = import_opengo_text_export(
+        field_export,
+        tmp_path / "field-sessions",
+        session_id="p2-field",
+    )
+
+    receipt = build_p2_physical_receipt(
+        SessionReader(field_session),
+        SessionReader(controlled_session),
+        load_p2_physical_spec(spec_path),
+        spec_sha256="c" * 64,
+        min_controlled_duration_s=0.09,
+        min_field_duration_s=0.09,
+    )
+
+    assert receipt.static_load_gate_passed is False
+    assert receipt.static_load_relative_error == pytest.approx(1 / 6)
+    assert receipt.passed is False
+
+
+def test_p2_physical_receipt_rejects_reimported_same_source_as_two_runs(
+    tmp_path,
+):
+    source = tmp_path / "same-export.txt"
+    spec_path = tmp_path / "p2-physical-spec.json"
+    _write_p2_physical_export(source, field=True)
+    _write_p2_physical_spec(spec_path)
+
+    controlled_session = import_opengo_text_export(
+        source,
+        tmp_path / "controlled-sessions",
+        session_id="p2-controlled-copy",
+    )
+    field_session = import_opengo_text_export(
+        source,
+        tmp_path / "field-sessions",
+        session_id="p2-field-copy",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="cannot reuse the same OpenGo source export",
+    ):
+        build_p2_physical_receipt(
+            SessionReader(field_session),
+            SessionReader(controlled_session),
+            load_p2_physical_spec(spec_path),
+            spec_sha256="d" * 64,
+            min_controlled_duration_s=0.09,
+            min_field_duration_s=0.09,
+        )
+
+
+def test_p2_physical_spec_rejects_overlapping_protocol_windows(
+    tmp_path,
+):
+    spec_path = tmp_path / "p2-physical-spec.json"
+    _write_p2_physical_spec(spec_path)
+    spec = json.loads(spec_path.read_text(encoding="utf-8"))
+    spec["controlled_windows"]["repeatability_b"]["start_ns"] = 50_000_000
+    spec_path.write_text(json.dumps(spec), encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match="protocol order without overlap",
+    ):
+        load_p2_physical_spec(spec_path)

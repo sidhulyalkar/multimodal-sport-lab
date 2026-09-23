@@ -18,7 +18,7 @@
     {
       "role": "insoles",
       "session": "data/p2/insole-session",
-      "receipt": "data/p2/insole-session/p2-capture-receipt.json",
+      "receipt": "data/p2/insole-session/p2-physical-receipt.json",
       "clock_sync": "data/sync/insoles-to-watch.json"
     },
     {

@@ -1,0 +1,39 @@
+{
+  "schema_version": "motionos.p2-physical-spec.v1",
+  "example_only": true,
+  "thresholds": {
+    "min_bilateral_overlap_fraction": "SET_BEFORE_RUN",
+    "max_unloaded_total_force_n": "SET_BEFORE_RUN",
+    "known_static_load_n": "SET_FROM_KNOWN_TEST_LOAD",
+    "static_load_tolerance_fraction": "SET_BEFORE_RUN",
+    "max_repeatability_total_force_delta_fraction": "SET_BEFORE_RUN",
+    "max_repeatability_left_fraction_delta": "SET_BEFORE_RUN"
+  },
+  "controlled_windows": {
+    "unloaded_pre": {
+      "start_ns": "SET_FROM_PROTOCOL_WINDOW",
+      "end_ns": "SET_FROM_PROTOCOL_WINDOW"
+    },
+    "static_load": {
+      "start_ns": "SET_FROM_PROTOCOL_WINDOW",
+      "end_ns": "SET_FROM_PROTOCOL_WINDOW"
+    },
+    "repeatability_a": {
+      "start_ns": "SET_FROM_PROTOCOL_WINDOW",
+      "end_ns": "SET_FROM_PROTOCOL_WINDOW"
+    },
+    "repeatability_b": {
+      "start_ns": "SET_FROM_PROTOCOL_WINDOW",
+      "end_ns": "SET_FROM_PROTOCOL_WINDOW"
+    },
+    "unloaded_post": {
+      "start_ns": "SET_FROM_PROTOCOL_WINDOW",
+      "end_ns": "SET_FROM_PROTOCOL_WINDOW"
+    }
+  },
+  "protocol": {
+    "thresholds_frozen_before_review": false,
+    "wireless_separation_completed": false,
+    "don_doff_completed": false
+  }
+}

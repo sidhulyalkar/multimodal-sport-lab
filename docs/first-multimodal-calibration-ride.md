@@ -43,11 +43,21 @@ The run spec may reference a body-model artifact:
 }
 ~~~
 
-At M0 this is a hashed reference only.
+A `motionos.body-model.v2` profile is hash-verified as run evidence. Replay
+always preserves the raw Vision root-relative joints. When the profile is valid,
+Replay Lab may additionally derive `registered_pose` in the declared
+personalized body frame using the explicit registration landmarks and the
+validated similarity-transform implementation.
 
-Do **not** warp Vision joints into a scanned body mesh yet. Raw Vision
-root-relative joints and the body-model artifact remain separate evidence
-layers until a spatial-registration method is independently validated.
+The raw camera event is never rewritten. Registration is derived evidence and
+carries the profile hash, transform, per-landmark residuals, RMS residual, and
+maximum residual. If registration fails for a frame, raw Vision pose remains
+available and the failure is explicit.
+
+For strict physical M0 closure, a personalized profile must identify the
+immutable source scan/artifact by SHA-256 and that exact source artifact must
+also be referenced by the run. If personalization is not being qualified in the
+first ride, omit the `body_model` profile rather than using an example profile.
 
 ## Longboard movement protocol
 
@@ -304,6 +314,40 @@ It does **not** relabel:
 - missing pressure as zero
 - missing HR as zero
 - unknown battery as 0%
+
+## Strict closure command
+
+`scripts/process_calibration_run.sh` intentionally generates reports and replay
+even when physical qualification is incomplete. That is useful for debugging a
+partial field run.
+
+Use the strict wrapper only when attempting to close M0-B:
+
+~~~bash
+bash scripts/finalize_m0_run.sh \
+  longboard-run.json \
+  data/calibration-run/longboard-calibration-001 \
+  10
+~~~
+
+It writes `m0-closure-receipt.json` and exits non-zero unless:
+
+- Watch, equipment, insoles, and camera each have a full `passed=true`
+  qualification receipt generated against the exact source-session bundle;
+- the P2 receipt comes from `validate-p2-physical`, not the capture-only
+  `validate-p2` command;
+- the exact hashed P2 qualification spec is included in the run as a
+  `p2_qualification_spec` artifact;
+- every non-reference source has a validated start/middle/end clock mapping;
+- operator journal, metadata, and operator receipt are present and hash-bound to
+  the run;
+- the operator run ID and protocol version match the calibration run;
+- all declared movement blocks were completed;
+- start/middle/end operator sync cues are present;
+- operator failure notes are propagated into `run.failure_modes`;
+- any personalized body model is physical, hash-verifiable, and linked to its
+  immutable source artifact;
+- no unresolved report blocker remains.
 
 ## Physical M0-B closure checklist
 

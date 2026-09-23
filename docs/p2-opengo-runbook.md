@@ -148,22 +148,60 @@ for both IMU and pressure streams.
 No universal overlap threshold is hard-coded in P2-A. A physical qualification
 protocol must freeze that acceptance threshold before reviewing the result.
 
-## Physical P2-B follow-up
+## Physical P2-B qualification
 
-Issue #14 tracks the hardware gate.
+MotionOS now has a strict physical P2 receipt in addition to the P2-A capture
+receipt. It deliberately requires **two distinct real sessions**:
 
-At minimum it should include:
+1. a controlled session of at least 10 minutes by default;
+2. a field session of at least 30 minutes by default.
 
-1. unloaded pressure baseline;
-2. known static-load sanity check;
-3. controlled bilateral movement;
-4. 10-minute capture;
-5. 30-minute field capture;
-6. don/doff repeatability;
-7. left/right timing coherence;
-8. synchronization landmarks against Watch and equipment pod;
-9. onboard recording / wireless separation challenge if the licensed direct SDK
-   is integrated.
+Before reviewing the result, copy
+`examples/p2-physical-qualification.example.json`, replace every placeholder,
+set `example_only` to `false`, and freeze the acceptance thresholds. The
+template is intentionally non-runnable so placeholder thresholds cannot
+accidentally qualify hardware.
+
+The controlled session must declare explicit device-time windows for:
+
+- unloaded baseline before loading;
+- known static load;
+- repeatability trial A;
+- repeatability trial B after don/doff;
+- unloaded baseline after loading.
+
+The physical spec also records the operator attestations that the thresholds
+were frozen before review, the wireless-separation challenge was completed, and
+the controlled don/doff action was completed.
+
+Then run:
+
+~~~bash
+motionos validate-p2-physical \
+  data/p2/<field-session> \
+  data/p2/<controlled-session> \
+  p2-physical-spec.json \
+  --receipt data/p2/p2-physical-receipt.json
+~~~
+
+The default duration gates are 600 seconds controlled and 1800 seconds field.
+They may be shortened only for development/test fixtures, not for the physical
+P2-B claim.
+
+`passed=true` requires all of the following to recompute:
+
+- both sessions independently pass P2-A capture integrity;
+- pressure and IMU bilateral overlap meet the frozen threshold in both runs;
+- both unloaded windows remain below the frozen total-force threshold;
+- the known-load median total force is within the frozen tolerance;
+- don/doff repeatability satisfies both the frozen total-force and left-load
+  fraction tolerances;
+- all required physical-protocol attestations are true.
+
+The receipt hashes the qualification spec and both MotionOS session bundles.
+It does not qualify cross-device timing. Insole→Watch synchronization remains a
+separate start/middle/end clock receipt in the calibration bundle, which keeps
+sensor-local qualification and cross-device timing evidence independent.
 
 ## Direct BLE dependency
 

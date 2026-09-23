@@ -491,9 +491,10 @@ def build_calibration_report(
         qualification = source["qualification"]
         assert isinstance(qualification, dict)
         state = qualification["state"]
-        if state in {"missing", "failed"}:
+        if state != "qualified":
             blockers.append(
-                f"{source['role']}: qualification receipt {state}"
+                f"{source['role']}: qualification receipt {state}; "
+                "full physical qualification required"
             )
 
         clock = source["clock"]

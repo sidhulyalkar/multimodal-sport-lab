@@ -22,8 +22,13 @@ from .camera import (
     write_camera_capture_receipt,
 )
 from .clock_sync import write_clock_sync
+from .closure import write_m0_closure_receipt
 from .equipment_cli import calibrate_equipment_mount_file
-from .insole import import_opengo_text_export, write_p2_capture_receipt
+from .insole import (
+    import_opengo_text_export,
+    write_p2_capture_receipt,
+    write_p2_physical_receipt,
+)
 from .mcap_io import export_mcap
 from .operator_evidence import write_operator_evidence_receipt
 from .p0 import import_watch_journal, write_p0_receipt
@@ -211,6 +216,18 @@ def _parser() -> argparse.ArgumentParser:
     run_replay.add_argument("output")
     run_replay.add_argument("--hz", type=float, default=10.0)
 
+    closure = sub.add_parser(
+        "validate-m0-closure",
+        help=(
+            "write a strict final M0 physical-integration closure receipt"
+        ),
+    )
+    closure.add_argument("run")
+    closure.add_argument(
+        "--receipt",
+        default="m0-closure-receipt.json",
+    )
+
     body_model = sub.add_parser(
         "validate-body-model",
         help="validate a personalized motionos.body-model.v2 profile",
@@ -265,6 +282,28 @@ def _parser() -> argparse.ArgumentParser:
     p2.add_argument("session")
     p2.add_argument("--min-duration", type=float, default=60.0)
     p2.add_argument("--receipt", default="p2-capture-receipt.json")
+
+    p2_physical = sub.add_parser(
+        "validate-p2-physical",
+        help="write a full controlled + field P2 physical qualification receipt",
+    )
+    p2_physical.add_argument("field_session")
+    p2_physical.add_argument("controlled_session")
+    p2_physical.add_argument("spec")
+    p2_physical.add_argument(
+        "--min-controlled-duration",
+        type=float,
+        default=600.0,
+    )
+    p2_physical.add_argument(
+        "--min-field-duration",
+        type=float,
+        default=1800.0,
+    )
+    p2_physical.add_argument(
+        "--receipt",
+        default="p2-physical-receipt.json",
+    )
     return parser
 
 
@@ -452,6 +491,14 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
 
+    if args.command == "validate-m0-closure":
+        receipt = write_m0_closure_receipt(
+            args.run,
+            args.receipt,
+        )
+        print(json.dumps(receipt.to_dict(), indent=2, sort_keys=True))
+        return 0 if receipt.passed else 2
+
     if args.command == "validate-body-model":
         profile = load_body_model_profile(args.profile)
         source_artifact_sha256 = None
@@ -533,6 +580,18 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(json.dumps(receipt.to_dict(), indent=2, sort_keys=True))
         return 0 if receipt.capture_passed else 2
+
+    if args.command == "validate-p2-physical":
+        receipt = write_p2_physical_receipt(
+            args.field_session,
+            args.controlled_session,
+            args.spec,
+            args.receipt,
+            min_controlled_duration_s=args.min_controlled_duration,
+            min_field_duration_s=args.min_field_duration,
+        )
+        print(json.dumps(receipt.to_dict(), indent=2, sort_keys=True))
+        return 0 if receipt.passed else 2
 
     if args.command == "validate-p1":
         if not args.capture_only:

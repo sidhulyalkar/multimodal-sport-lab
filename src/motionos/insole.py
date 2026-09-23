@@ -5,10 +5,12 @@ import hashlib
 import json
 import math
 import re
+import statistics
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from .provenance import session_evidence_sha256
 from .qc import StreamQC, inspect_stream
 from .schema import DeviceDescriptor, SensorEvent, SessionManifest
 from .session import SessionReader, SessionWriter
@@ -836,6 +838,567 @@ def write_p2_capture_receipt(
     receipt = build_p2_capture_receipt(
         SessionReader(session_dir),
         min_duration_s=min_duration_s,
+    )
+    output = Path(output_path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(
+        json.dumps(receipt.to_dict(), indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return receipt
+
+
+P2_PHYSICAL_SPEC_SCHEMA_VERSION = "motionos.p2-physical-spec.v1"
+P2_PHYSICAL_RECEIPT_SCHEMA_VERSION = "motionos.p2-physical-receipt.v1"
+P2_REQUIRED_CONTROLLED_WINDOWS = (
+    "unloaded_pre",
+    "static_load",
+    "repeatability_a",
+    "repeatability_b",
+    "unloaded_post",
+)
+
+
+@dataclass(frozen=True)
+class P2PressureWindow:
+    label: str
+    start_ns: int
+    end_ns: int
+    pair_count: int
+    median_total_force_n: float
+    max_total_force_n: float
+    median_left_load_fraction: float
+
+    def to_dict(self) -> dict[str, object]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class P2PhysicalReceipt:
+    field_session_id: str
+    controlled_session_id: str
+    passed: bool
+    capture_passed: bool
+    overlap_gate_passed: bool
+    unloaded_gate_passed: bool
+    static_load_gate_passed: bool
+    repeatability_gate_passed: bool
+    protocol_gate_passed: bool
+    min_controlled_duration_s: float
+    min_field_duration_s: float
+    min_bilateral_overlap_fraction: float
+    max_unloaded_total_force_n: float
+    known_static_load_n: float
+    static_load_tolerance_fraction: float
+    max_repeatability_total_force_delta_fraction: float
+    max_repeatability_left_fraction_delta: float
+    controlled_capture: P2CaptureReceipt
+    field_capture: P2CaptureReceipt
+    pressure_windows: tuple[P2PressureWindow, ...]
+    static_load_relative_error: float
+    repeatability_total_force_delta_fraction: float
+    repeatability_left_fraction_delta: float
+    thresholds_frozen_before_review: bool
+    wireless_separation_completed: bool
+    don_doff_completed: bool
+    qualification_spec_sha256: str
+    controlled_bundle_sha256: str
+    field_bundle_sha256: str
+    schema_version: str = P2_PHYSICAL_RECEIPT_SCHEMA_VERSION
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "schema_version": self.schema_version,
+            "protocol": "P2",
+            "controlled_session_id": self.controlled_session_id,
+            "field_session_id": self.field_session_id,
+            "capture_passed": self.capture_passed,
+            "passed": self.passed,
+            "gates": {
+                "bilateral_overlap": {
+                    "passed": self.overlap_gate_passed,
+                    "minimum_fraction": self.min_bilateral_overlap_fraction,
+                },
+                "unloaded_zero": {
+                    "passed": self.unloaded_gate_passed,
+                    "maximum_total_force_n": self.max_unloaded_total_force_n,
+                },
+                "known_static_load": {
+                    "passed": self.static_load_gate_passed,
+                    "known_load_n": self.known_static_load_n,
+                    "tolerance_fraction": self.static_load_tolerance_fraction,
+                    "relative_error": self.static_load_relative_error,
+                },
+                "don_doff_repeatability": {
+                    "passed": self.repeatability_gate_passed,
+                    "max_total_force_delta_fraction": (
+                        self.max_repeatability_total_force_delta_fraction
+                    ),
+                    "observed_total_force_delta_fraction": (
+                        self.repeatability_total_force_delta_fraction
+                    ),
+                    "max_left_fraction_delta": (
+                        self.max_repeatability_left_fraction_delta
+                    ),
+                    "observed_left_fraction_delta": (
+                        self.repeatability_left_fraction_delta
+                    ),
+                },
+                "physical_protocol": {
+                    "passed": self.protocol_gate_passed,
+                    "thresholds_frozen_before_review": (
+                        self.thresholds_frozen_before_review
+                    ),
+                    "wireless_separation_completed": (
+                        self.wireless_separation_completed
+                    ),
+                    "don_doff_completed": self.don_doff_completed,
+                    "authority": "operator_attestation_in_hashed_spec",
+                },
+            },
+            "minimum_required_duration_s": {
+                "controlled": self.min_controlled_duration_s,
+                "field": self.min_field_duration_s,
+            },
+            "pressure_windows": [
+                window.to_dict() for window in self.pressure_windows
+            ],
+            "controlled_capture": self.controlled_capture.to_dict(),
+            "field_capture": self.field_capture.to_dict(),
+            "qualification_spec_sha256": self.qualification_spec_sha256,
+            "session_bundle_sha256": {
+                "controlled": self.controlled_bundle_sha256,
+                "field": self.field_bundle_sha256,
+            },
+            "claim_boundary": (
+                "P2 passed=true qualifies bilateral insole capture, explicit "
+                "controlled pressure checks, and the attested physical protocol "
+                "against thresholds frozen in the hashed qualification spec. "
+                "Cross-device timing is qualified separately by the calibration "
+                "bundle clock receipt. Plantar/normal force is not full 3D "
+                "ground-reaction force."
+            ),
+        }
+
+
+def _p2_spec_number(
+    mapping: dict[str, object],
+    key: str,
+    *,
+    minimum: float = 0.0,
+    maximum: float | None = None,
+    strictly_positive: bool = False,
+) -> float:
+    try:
+        value = float(mapping[key])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError(f"P2 physical spec requires numeric {key!r}") from exc
+    if not math.isfinite(value):
+        raise ValueError(f"P2 physical spec {key!r} must be finite")
+    if strictly_positive and value <= minimum:
+        raise ValueError(f"P2 physical spec {key!r} must be > {minimum}")
+    if not strictly_positive and value < minimum:
+        raise ValueError(f"P2 physical spec {key!r} must be >= {minimum}")
+    if maximum is not None and value > maximum:
+        raise ValueError(f"P2 physical spec {key!r} must be <= {maximum}")
+    return value
+
+
+def load_p2_physical_spec(
+    path: str | Path,
+) -> dict[str, object]:
+    spec_path = Path(path)
+    raw = json.loads(spec_path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        raise TypeError("P2 physical spec must contain a JSON object")
+    if raw.get("schema_version") != P2_PHYSICAL_SPEC_SCHEMA_VERSION:
+        raise ValueError("unsupported P2 physical spec schema")
+    if raw.get("example_only") is True:
+        raise ValueError(
+            "P2 physical example spec must be replaced with run-specific "
+            "thresholds before qualification"
+        )
+
+    thresholds_raw = raw.get("thresholds")
+    windows_raw = raw.get("controlled_windows")
+    protocol_raw = raw.get("protocol")
+    if not isinstance(thresholds_raw, dict):
+        raise TypeError("P2 physical spec thresholds must be an object")
+    if not isinstance(windows_raw, dict):
+        raise TypeError("P2 physical spec controlled_windows must be an object")
+    if not isinstance(protocol_raw, dict):
+        raise TypeError("P2 physical spec protocol must be an object")
+
+    _p2_spec_number(
+        thresholds_raw,
+        "min_bilateral_overlap_fraction",
+        maximum=1.0,
+    )
+    _p2_spec_number(thresholds_raw, "max_unloaded_total_force_n")
+    _p2_spec_number(
+        thresholds_raw,
+        "known_static_load_n",
+        strictly_positive=True,
+    )
+    _p2_spec_number(
+        thresholds_raw,
+        "static_load_tolerance_fraction",
+        maximum=1.0,
+    )
+    _p2_spec_number(
+        thresholds_raw,
+        "max_repeatability_total_force_delta_fraction",
+        maximum=1.0,
+    )
+    _p2_spec_number(
+        thresholds_raw,
+        "max_repeatability_left_fraction_delta",
+        maximum=1.0,
+    )
+
+    previous_end_ns = -1
+    for label in P2_REQUIRED_CONTROLLED_WINDOWS:
+        window = windows_raw.get(label)
+        if not isinstance(window, dict):
+            raise TypeError(
+                f"P2 physical spec requires controlled window {label!r}"
+            )
+        try:
+            start_ns = int(window["start_ns"])
+            end_ns = int(window["end_ns"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError(
+                f"invalid P2 controlled window {label!r}"
+            ) from exc
+        if start_ns < 0 or end_ns <= start_ns:
+            raise ValueError(
+                f"P2 controlled window {label!r} must have 0 <= start < end"
+            )
+        if start_ns <= previous_end_ns:
+            raise ValueError(
+                "P2 controlled windows must follow protocol order without "
+                f"overlap; invalid window {label!r}"
+            )
+        previous_end_ns = end_ns
+
+    for key in (
+        "thresholds_frozen_before_review",
+        "wireless_separation_completed",
+        "don_doff_completed",
+    ):
+        if not isinstance(protocol_raw.get(key), bool):
+            raise TypeError(
+                f"P2 physical spec protocol.{key} must be boolean"
+            )
+
+    return dict(raw)
+
+
+def _paired_pressure_samples(
+    reader: SessionReader,
+    *,
+    start_ns: int,
+    end_ns: int,
+) -> list[tuple[float, float]]:
+    left = {
+        event.device_time_ns: event
+        for event in reader.iter_stream(LEFT_PRESSURE_STREAM)
+        if start_ns <= event.device_time_ns <= end_ns
+    }
+    right = {
+        event.device_time_ns: event
+        for event in reader.iter_stream(RIGHT_PRESSURE_STREAM)
+        if start_ns <= event.device_time_ns <= end_ns
+    }
+
+    pairs: list[tuple[float, float]] = []
+    for timestamp in sorted(left.keys() & right.keys()):
+        try:
+            left_force = float(left[timestamp].payload["normal_force_n"])
+            right_force = float(right[timestamp].payload["normal_force_n"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if (
+            math.isfinite(left_force)
+            and math.isfinite(right_force)
+            and left_force >= 0
+            and right_force >= 0
+        ):
+            pairs.append((left_force, right_force))
+    return pairs
+
+
+def _pressure_window(
+    reader: SessionReader,
+    *,
+    label: str,
+    start_ns: int,
+    end_ns: int,
+) -> P2PressureWindow:
+    pairs = _paired_pressure_samples(
+        reader,
+        start_ns=start_ns,
+        end_ns=end_ns,
+    )
+    if not pairs:
+        raise ValueError(
+            f"P2 controlled window {label!r} contains no bilateral pressure pairs"
+        )
+
+    totals = [left + right for left, right in pairs]
+    fractions = [
+        left / total
+        for (left, _right), total in zip(pairs, totals)
+        if total > 0
+    ]
+    if not fractions:
+        raise ValueError(
+            f"P2 controlled window {label!r} has zero total force only"
+        )
+
+    return P2PressureWindow(
+        label=label,
+        start_ns=start_ns,
+        end_ns=end_ns,
+        pair_count=len(pairs),
+        median_total_force_n=statistics.median(totals),
+        max_total_force_n=max(totals),
+        median_left_load_fraction=statistics.median(fractions),
+    )
+
+
+def build_p2_physical_receipt(
+    field_reader: SessionReader,
+    controlled_reader: SessionReader,
+    spec: dict[str, object],
+    *,
+    spec_sha256: str,
+    min_controlled_duration_s: float = 600.0,
+    min_field_duration_s: float = 1800.0,
+) -> P2PhysicalReceipt:
+    if min_controlled_duration_s <= 0 or min_field_duration_s <= 0:
+        raise ValueError("P2 physical minimum durations must be positive")
+    if (
+        field_reader.manifest.session_id
+        == controlled_reader.manifest.session_id
+    ):
+        raise ValueError(
+            "P2 controlled and field qualification must use distinct sessions"
+        )
+    if spec.get("schema_version") != P2_PHYSICAL_SPEC_SCHEMA_VERSION:
+        raise ValueError("unsupported P2 physical spec schema")
+
+    thresholds_raw = spec.get("thresholds")
+    windows_raw = spec.get("controlled_windows")
+    protocol_raw = spec.get("protocol")
+    if not isinstance(thresholds_raw, dict):
+        raise TypeError("P2 physical spec thresholds must be an object")
+    if not isinstance(windows_raw, dict):
+        raise TypeError("P2 physical spec controlled_windows must be an object")
+    if not isinstance(protocol_raw, dict):
+        raise TypeError("P2 physical spec protocol must be an object")
+
+    min_overlap = _p2_spec_number(
+        thresholds_raw,
+        "min_bilateral_overlap_fraction",
+        maximum=1.0,
+        strictly_positive=True,
+    )
+    max_unloaded = _p2_spec_number(
+        thresholds_raw,
+        "max_unloaded_total_force_n",
+    )
+    known_load = _p2_spec_number(
+        thresholds_raw,
+        "known_static_load_n",
+        strictly_positive=True,
+    )
+    static_tolerance = _p2_spec_number(
+        thresholds_raw,
+        "static_load_tolerance_fraction",
+        maximum=1.0,
+    )
+    max_repeat_force = _p2_spec_number(
+        thresholds_raw,
+        "max_repeatability_total_force_delta_fraction",
+        maximum=1.0,
+    )
+    max_repeat_fraction = _p2_spec_number(
+        thresholds_raw,
+        "max_repeatability_left_fraction_delta",
+        maximum=1.0,
+    )
+
+    controlled_capture = build_p2_capture_receipt(
+        controlled_reader,
+        min_duration_s=min_controlled_duration_s,
+    )
+    field_capture = build_p2_capture_receipt(
+        field_reader,
+        min_duration_s=min_field_duration_s,
+    )
+    controlled_source_hash = (
+        controlled_capture.source_evidence_sha256.get(
+            "opengo_text_export"
+        )
+    )
+    field_source_hash = field_capture.source_evidence_sha256.get(
+        "opengo_text_export"
+    )
+    if (
+        controlled_source_hash is not None
+        and controlled_source_hash == field_source_hash
+    ):
+        raise ValueError(
+            "P2 controlled and field qualification cannot reuse the same "
+            "OpenGo source export"
+        )
+
+    capture_passed = (
+        controlled_capture.capture_passed
+        and field_capture.capture_passed
+    )
+
+    overlap_values = (
+        controlled_capture.imu_bilateral_overlap.overlap_fraction,
+        controlled_capture.pressure_bilateral_overlap.overlap_fraction,
+        field_capture.imu_bilateral_overlap.overlap_fraction,
+        field_capture.pressure_bilateral_overlap.overlap_fraction,
+    )
+    overlap_gate = all(value >= min_overlap for value in overlap_values)
+
+    measurements: list[P2PressureWindow] = []
+    previous_end_ns = -1
+    for label in P2_REQUIRED_CONTROLLED_WINDOWS:
+        window = windows_raw.get(label)
+        if not isinstance(window, dict):
+            raise TypeError(
+                f"P2 physical spec requires controlled window {label!r}"
+            )
+        start_ns = int(window["start_ns"])
+        end_ns = int(window["end_ns"])
+        if start_ns <= previous_end_ns:
+            raise ValueError(
+                "P2 controlled windows must follow protocol order without "
+                f"overlap; invalid window {label!r}"
+            )
+        previous_end_ns = end_ns
+        measurements.append(
+            _pressure_window(
+                controlled_reader,
+                label=label,
+                start_ns=start_ns,
+                end_ns=end_ns,
+            )
+        )
+    by_label = {item.label: item for item in measurements}
+
+    unloaded_gate = (
+        by_label["unloaded_pre"].max_total_force_n <= max_unloaded
+        and by_label["unloaded_post"].max_total_force_n <= max_unloaded
+    )
+
+    static_force = by_label["static_load"].median_total_force_n
+    static_error = abs(static_force - known_load) / known_load
+    static_gate = static_error <= static_tolerance
+
+    repeat_a = by_label["repeatability_a"]
+    repeat_b = by_label["repeatability_b"]
+    repeat_denominator = (
+        repeat_a.median_total_force_n + repeat_b.median_total_force_n
+    ) / 2.0
+    if repeat_denominator <= 0:
+        repeat_force_delta = math.inf
+    else:
+        repeat_force_delta = (
+            abs(
+                repeat_a.median_total_force_n
+                - repeat_b.median_total_force_n
+            )
+            / repeat_denominator
+        )
+    repeat_fraction_delta = abs(
+        repeat_a.median_left_load_fraction
+        - repeat_b.median_left_load_fraction
+    )
+    repeatability_gate = (
+        repeat_force_delta <= max_repeat_force
+        and repeat_fraction_delta <= max_repeat_fraction
+    )
+
+    thresholds_frozen = (
+        protocol_raw.get("thresholds_frozen_before_review") is True
+    )
+    wireless_completed = (
+        protocol_raw.get("wireless_separation_completed") is True
+    )
+    don_doff_completed = protocol_raw.get("don_doff_completed") is True
+    protocol_gate = (
+        thresholds_frozen
+        and wireless_completed
+        and don_doff_completed
+    )
+
+    passed = (
+        capture_passed
+        and overlap_gate
+        and unloaded_gate
+        and static_gate
+        and repeatability_gate
+        and protocol_gate
+    )
+
+    return P2PhysicalReceipt(
+        field_session_id=field_reader.manifest.session_id,
+        controlled_session_id=controlled_reader.manifest.session_id,
+        passed=passed,
+        capture_passed=capture_passed,
+        overlap_gate_passed=overlap_gate,
+        unloaded_gate_passed=unloaded_gate,
+        static_load_gate_passed=static_gate,
+        repeatability_gate_passed=repeatability_gate,
+        protocol_gate_passed=protocol_gate,
+        min_controlled_duration_s=min_controlled_duration_s,
+        min_field_duration_s=min_field_duration_s,
+        min_bilateral_overlap_fraction=min_overlap,
+        max_unloaded_total_force_n=max_unloaded,
+        known_static_load_n=known_load,
+        static_load_tolerance_fraction=static_tolerance,
+        max_repeatability_total_force_delta_fraction=max_repeat_force,
+        max_repeatability_left_fraction_delta=max_repeat_fraction,
+        controlled_capture=controlled_capture,
+        field_capture=field_capture,
+        pressure_windows=tuple(measurements),
+        static_load_relative_error=static_error,
+        repeatability_total_force_delta_fraction=repeat_force_delta,
+        repeatability_left_fraction_delta=repeat_fraction_delta,
+        thresholds_frozen_before_review=thresholds_frozen,
+        wireless_separation_completed=wireless_completed,
+        don_doff_completed=don_doff_completed,
+        qualification_spec_sha256=spec_sha256,
+        controlled_bundle_sha256=session_evidence_sha256(controlled_reader),
+        field_bundle_sha256=session_evidence_sha256(field_reader),
+    )
+
+
+def write_p2_physical_receipt(
+    field_session_dir: str | Path,
+    controlled_session_dir: str | Path,
+    spec_path: str | Path,
+    output_path: str | Path,
+    *,
+    min_controlled_duration_s: float = 600.0,
+    min_field_duration_s: float = 1800.0,
+) -> P2PhysicalReceipt:
+    spec_file = Path(spec_path)
+    spec = load_p2_physical_spec(spec_file)
+    receipt = build_p2_physical_receipt(
+        SessionReader(field_session_dir),
+        SessionReader(controlled_session_dir),
+        spec,
+        spec_sha256=_sha256_file(spec_file),
+        min_controlled_duration_s=min_controlled_duration_s,
+        min_field_duration_s=min_field_duration_s,
     )
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
