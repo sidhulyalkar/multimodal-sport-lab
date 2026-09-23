@@ -251,13 +251,6 @@ def _vector3(value: object, *, label: str) -> tuple[float, float, float]:
     return point
 
 
-def _add(
-    left: tuple[float, float, float],
-    right: tuple[float, float, float],
-) -> tuple[float, float, float]:
-    return tuple(left[index] + right[index] for index in range(3))
-
-
 def _subtract(
     left: tuple[float, float, float],
     right: tuple[float, float, float],
@@ -414,7 +407,7 @@ def _camera_angular_velocity(
                 current_vector,
                 label="current segment",
             )
-        except KeyError:
+        except (KeyError, TypeError):
             skipped["missing_joint_or_invalid_pose"] += 1
             continue
         except ValueError:
@@ -480,18 +473,31 @@ def _nearest_imu(
     samples: list[MappedImuSample],
     times: list[int],
     target_time_ns: int,
-) -> MappedImuSample | None:
+    *,
+    excluded_indices: set[int],
+) -> tuple[int, MappedImuSample] | None:
     if not samples:
         return None
-    index = bisect.bisect_left(times, target_time_ns)
-    candidates = []
-    if index < len(samples):
-        candidates.append(samples[index])
-    if index > 0:
-        candidates.append(samples[index - 1])
+    insertion = bisect.bisect_left(times, target_time_ns)
+    candidates: list[tuple[int, MappedImuSample]] = []
+    left = insertion - 1
+    right = insertion
+    while left >= 0 or right < len(samples):
+        if left >= 0 and left not in excluded_indices:
+            candidates.append((left, samples[left]))
+        if right < len(samples) and right not in excluded_indices:
+            candidates.append((right, samples[right]))
+        if candidates:
+            break
+        left -= 1
+        right += 1
+    if not candidates:
+        return None
     return min(
         candidates,
-        key=lambda item: abs(item.reference_time_ns - target_time_ns),
+        key=lambda item: abs(
+            item[1].reference_time_ns - target_time_ns
+        ),
     )
 
 
@@ -678,19 +684,25 @@ def _imu_video_comparison(
 
     samples: list[dict[str, object]] = []
     unmatched_visual = 0
+    used_imu_indices: set[int] = set()
     for visual_sample in visual:
-        matched = _nearest_imu(
+        nearest = _nearest_imu(
             imu_samples,
             imu_times,
             visual_sample.time_ns,
+            excluded_indices=used_imu_indices,
         )
+        if nearest is None:
+            unmatched_visual += 1
+            continue
+        matched_index, matched = nearest
         if (
-            matched is None
-            or abs(matched.reference_time_ns - visual_sample.time_ns)
+            abs(matched.reference_time_ns - visual_sample.time_ns)
             > max_pairing_delta_ns
         ):
             unmatched_visual += 1
             continue
+        used_imu_indices.add(matched_index)
 
         axial = _scale(
             visual_sample.segment_unit,
@@ -901,7 +913,7 @@ def _pressure_video_comparison(
         label=f"{comparison_id}.visual_events",
     )
     stream = _text(raw.get("stream", ""), label=f"{comparison_id}.stream")
-    threshold = _nonnegative_number(
+    threshold = _positive_number(
         raw.get("force_threshold_n"),
         label=f"{comparison_id}.force_threshold_n",
     )
@@ -1011,6 +1023,7 @@ def _body_registration_geometry(
     raw: object,
     *,
     base: Path,
+    camera: SessionReference,
     intervals: list[dict[str, object]],
 ) -> dict[str, object] | None:
     if raw is None:
@@ -1025,6 +1038,18 @@ def _body_registration_geometry(
         raise TypeError("body registration report must be a JSON object")
     if data.get("schema_version") != BODY_REGISTRATION_SCHEMA_VERSION:
         raise ValueError("unsupported body registration report schema")
+    camera_raw = data.get("camera_session")
+    if not isinstance(camera_raw, dict):
+        raise TypeError(
+            "body registration report camera_session must be an object"
+        )
+    if str(camera_raw.get("session_id", "")) != (
+        camera.reader.manifest.session_id
+    ):
+        raise ValueError("body registration camera session ID mismatch")
+    if str(camera_raw.get("bundle_sha256", "")) != camera.bundle_sha256:
+        raise ValueError("body registration camera bundle hash mismatch")
+
     frames_raw = data.get("frames")
     if not isinstance(frames_raw, list):
         raise TypeError("body registration frames must be a list")
@@ -1197,6 +1222,7 @@ def build_cross_modal_residual_report(
     body_registration = _body_registration_geometry(
         raw.get("body_registration_report"),
         base=spec_file.parent,
+        camera=camera,
         intervals=intervals,
     )
     geometry = _geometry_measurements(
