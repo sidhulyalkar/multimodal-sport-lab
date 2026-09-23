@@ -22,6 +22,8 @@ M0 is split into a software evidence gate and a physical-device qualification ga
 - [x] Real iPhone + watchOS host application targets.
 - [x] MetaMotionS durable flash-ingress software path.
 - [x] Bilateral OpenGo exported-evidence ingress.
+- [x] P2 controlled + field physical-qualification receipt with frozen
+  thresholds and hash-bound protocol windows.
 - [x] iPhone video + Vision 3D pose evidence path.
 - [x] Hash-verified calibration bundle, run report, and Replay Lab export.
 - [x] Operator field-run journal and evidence validation.
