@@ -32,6 +32,7 @@ final class WatchSessionController: ObservableObject {
     @Published private(set) var recentMedianIMUHz: Double?
     @Published private(set) var maxIMUGapMS: Double = 0
     @Published private(set) var nonMonotonicIMUCount: UInt64 = 0
+    @Published private(set) var watchBatteryLevel: Double?
     @Published private(set) var lastIMUSampleReceivedAt: Date?
     @Published private(set) var startedAt: Date?
     @Published private(set) var lastTransferredURL: URL?
@@ -126,6 +127,7 @@ final class WatchSessionController: ObservableObject {
         recentMedianIMUHz = nil
         maxIMUGapMS = 0
         nonMonotonicIMUCount = 0
+        watchBatteryLevel = nil
         lastIMUSampleReceivedAt = nil
         heartRateSequence = 0
         finalized = false
@@ -148,6 +150,11 @@ final class WatchSessionController: ObservableObject {
 
             let requestedMotionHz = 50.0
             let device = WKInterfaceDevice.current()
+            device.isBatteryMonitoringEnabled = true
+            let battery = device.batteryLevel
+            watchBatteryLevel = battery >= 0
+                ? Double(battery)
+                : nil
             let appVersion = Bundle.main.object(
                 forInfoDictionaryKey: "CFBundleShortVersionString"
             ) as? String ?? "unknown"
@@ -155,28 +162,34 @@ final class WatchSessionController: ObservableObject {
                 forInfoDictionaryKey: "CFBundleVersion"
             ) as? String ?? "unknown"
 
+            var watchMetadata: [String: JSONValue] = [
+                "device_name": .string(device.name),
+                "model": .string(device.model),
+                "localized_model": .string(device.localizedModel),
+                "system_name": .string(device.systemName),
+                "system_version": .string(device.systemVersion),
+                "requested_imu_hz": .number(requestedMotionHz),
+                "app_version": .string(appVersion),
+                "app_build": .string(appBuild),
+                "wrist_location": .string(
+                    device.wristLocation == .left ? "left" : "right"
+                ),
+                "crown_orientation": .string(
+                    device.crownOrientation == .left ? "left" : "right"
+                ),
+            ]
+            if let watchBatteryLevel {
+                watchMetadata["battery_level_fraction"] =
+                    .number(watchBatteryLevel)
+            }
+
             let metadataEvent = SensorEnvelope(
                 sessionID: id,
                 deviceID: "apple-watch",
                 stream: "/meta/watch",
                 sequence: 0,
                 deviceTimeNS: MonotonicClock.nowNS(),
-                payload: [
-                    "device_name": .string(device.name),
-                    "model": .string(device.model),
-                    "localized_model": .string(device.localizedModel),
-                    "system_name": .string(device.systemName),
-                    "system_version": .string(device.systemVersion),
-                    "requested_imu_hz": .number(requestedMotionHz),
-                    "app_version": .string(appVersion),
-                    "app_build": .string(appBuild),
-                    "wrist_location": .string(
-                        device.wristLocation == .left ? "left" : "right"
-                    ),
-                    "crown_orientation": .string(
-                        device.crownOrientation == .left ? "left" : "right"
-                    ),
-                ]
+                payload: watchMetadata
             )
             eventCount = try await pipeline.append(metadataEvent)
 
@@ -421,6 +434,12 @@ final class WatchSessionController: ObservableObject {
             return
         }
 
+        let device = WKInterfaceDevice.current()
+        let battery = device.batteryLevel
+        watchBatteryLevel = battery >= 0
+            ? Double(battery)
+            : nil
+
         var message: [String: Any] = [
             "motionos_message": "watch_capture_health_v1",
             "session_id": id,
@@ -438,6 +457,10 @@ final class WatchSessionController: ObservableObject {
         }
         if let heartRateBPM {
             message["heart_rate_bpm"] = heartRateBPM
+        }
+        if let watchBatteryLevel {
+            message["watch_battery_level_fraction"] =
+                watchBatteryLevel
         }
 
         if transport.sendMessage(message) {
