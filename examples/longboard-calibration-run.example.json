@@ -106,6 +106,10 @@
   "failure_modes": [],
   "artifacts": [
     {
+      "kind": "p2_qualification_spec",
+      "path": "../data/p2/p2-physical-spec.json"
+    },
+    {
       "kind": "body_model_source",
       "path": "../profiles/body-scan-source.glb"
     },
