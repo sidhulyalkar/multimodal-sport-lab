@@ -5,6 +5,8 @@ import pytest
 from motionos.experiments import (
     build_experiment_manifest,
     build_grouped_split,
+    verify_experiment_manifest,
+    verify_grouped_split,
 )
 from motionos.provenance import session_evidence_sha256, sha256_file
 from motionos.session import SessionReader
@@ -115,6 +117,13 @@ def test_experiment_manifest_binds_registry_session_and_artifact(tmp_path):
     assert source_by_role["session"].session_id == (
         SessionReader(session).manifest.session_id
     )
+    verified = verify_experiment_manifest(output)
+    assert verified["passed"] is True
+    assert verified["source_count"] == 2
+
+    note.write_text('{"operator":"tampered"}\n', encoding="utf-8")
+    with pytest.raises(ValueError, match="source hash mismatch"):
+        verify_experiment_manifest(output)
 
 
 def test_experiment_manifest_rejects_ineligible_target(tmp_path):
@@ -200,6 +209,28 @@ def test_grouped_split_is_deterministic_and_run_leakage_safe(tmp_path):
     }
     assert sample_split["d1-rep0"] == sample_split["d1-rep1"]
     assert sample_split["d2-rep0"] == sample_split["d2-rep1"]
+    assert all(first.assignments[name] for name in first.assignments)
+
+    verified = verify_grouped_split(
+        tmp_path / "split-a.json",
+        index,
+    )
+    assert verified["passed"] is True
+    assert verified["sample_count"] == 8
+
+    raw = json.loads(index.read_text(encoding="utf-8"))
+    raw["samples"].append(
+        {
+            "sample_id": "new-sample",
+            "day_id": "d5",
+            "run_id": "r5",
+            "remount_id": "m5",
+            "repetition_id": "rep0",
+        }
+    )
+    index.write_text(json.dumps(raw), encoding="utf-8")
+    with pytest.raises(ValueError, match="source index hash mismatch"):
+        verify_grouped_split(tmp_path / "split-a.json", index)
 
 
 def test_primary_split_rejects_window_only_grouping(tmp_path):
@@ -224,3 +255,41 @@ def test_primary_split_rejects_window_only_grouping(tmp_path):
             seed="frozen-v1",
             purpose="primary",
         )
+
+
+def test_experiment_manifest_rejects_non_exact_commit(tmp_path):
+    registry = tmp_path / "registry.json"
+    _write_registry(registry)
+    artifact = tmp_path / "artifact.txt"
+    artifact.write_text("fixture", encoding="utf-8")
+    spec = tmp_path / "spec.json"
+    spec.write_text(
+        json.dumps(
+            {
+                "experiment_id": "exp-1",
+                "sport": "longboard",
+                "protocol_version": "v1",
+                "repository_commit": "main",
+                "observability_registry": "registry.json",
+                "targets": ["board_rate"],
+                "acquisition": {
+                    "subject_id": "p1",
+                    "day_id": "d1",
+                    "run_id": "r1",
+                    "remount_id": "m1",
+                },
+                "sources": [
+                    {
+                        "role": "fixture",
+                        "kind": "artifact",
+                        "source_type": "artifact",
+                        "path": "artifact.txt",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="exact 40-character Git SHA"):
+        build_experiment_manifest(spec, tmp_path / "out.json")
