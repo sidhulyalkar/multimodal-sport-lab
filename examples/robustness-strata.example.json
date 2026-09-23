@@ -15,5 +15,6 @@
         "camera_view": "side"
       }
     }
-  ]
+  ],
+  "frozen_before_residual_review": true
 }
