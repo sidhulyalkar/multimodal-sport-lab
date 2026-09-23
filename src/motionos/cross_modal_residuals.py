@@ -351,7 +351,7 @@ def _segment_vector(
         )
     joints = event_payload.get("joints_root_relative_m")
     if not isinstance(joints, dict):
-        raise ValueError("camera pose lacks joints_root_relative_m")
+        raise TypeError("camera pose lacks joints_root_relative_m")
     if proximal_joint not in joints or distal_joint not in joints:
         raise KeyError(
             f"camera pose lacks {proximal_joint!r} or {distal_joint!r}"
