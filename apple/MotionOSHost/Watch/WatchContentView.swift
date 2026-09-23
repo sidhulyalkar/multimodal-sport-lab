@@ -125,6 +125,18 @@ struct WatchContentView: View {
                     : Color.red
             )
 
+            if let battery = controller.watchBatteryLevel {
+                Text(
+                    String(format: "battery %.0f%%", battery * 100)
+                )
+                .font(.system(.caption2, design: .monospaced))
+                .foregroundStyle(
+                    battery >= 0.20
+                        ? Color.secondary
+                        : Color.yellow
+                )
+            }
+
             if let start = controller.startedAt {
                 TimelineView(.periodic(from: .now, by: 1)) { context in
                     HStack {
