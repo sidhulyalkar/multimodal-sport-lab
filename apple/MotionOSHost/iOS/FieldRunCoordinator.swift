@@ -109,6 +109,7 @@ final class FieldRunCoordinator: ObservableObject {
         case invalidState(String)
         case unknownBlock(String)
         case invalidSyncLabel(String)
+        case duplicateSyncLabel(String)
         case emptyFailureNote
         case journalUnavailable
         case appendAfterSeal
@@ -121,6 +122,8 @@ final class FieldRunCoordinator: ObservableObject {
                 "Unknown field-protocol block: \(id)"
             case .invalidSyncLabel(let label):
                 "Sync cue must be start, middle, or end; got \(label)."
+            case .duplicateSyncLabel(let label):
+                "Sync cue \(label) is already recorded for this run."
             case .emptyFailureNote:
                 "Failure note cannot be empty."
             case .journalUnavailable:
@@ -148,6 +151,34 @@ final class FieldRunCoordinator: ObservableObject {
     @Published private(set) var errorMessage: String?
 
     let protocolBlocks = FieldProtocolBlock.longboardM0
+
+    var closureWarnings: [String] {
+        var warnings: [String] = []
+
+        let missingBlocks = protocolBlocks.filter {
+            !completedBlockIDs.contains($0.id)
+        }
+        if !missingBlocks.isEmpty {
+            warnings.append(
+                "\(missingBlocks.count) protocol block(s) incomplete"
+            )
+        }
+
+        let missingCues = ["start", "middle", "end"].filter {
+            !syncCueLabels.contains($0)
+        }
+        if !missingCues.isEmpty {
+            warnings.append(
+                "missing sync cue(s): " + missingCues.joined(separator: ", ")
+            )
+        }
+
+        if activeBlockID != nil {
+            warnings.append("a protocol block is still active")
+        }
+
+        return warnings
+    }
 
     private var directoryURL: URL?
     private var journalURL: URL?
@@ -299,6 +330,10 @@ final class FieldRunCoordinator: ObservableObject {
         let normalized = label.lowercased()
         guard ["start", "middle", "end"].contains(normalized) else {
             fail(CoordinatorError.invalidSyncLabel(label))
+            return
+        }
+        guard !syncCueLabels.contains(normalized) else {
+            fail(CoordinatorError.duplicateSyncLabel(normalized))
             return
         }
 
