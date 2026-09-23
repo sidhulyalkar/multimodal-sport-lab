@@ -333,7 +333,11 @@ bash scripts/finalize_m0_run.sh \
 It writes `m0-closure-receipt.json` and exits non-zero unless:
 
 - Watch, equipment, insoles, and camera each have a full `passed=true`
-  qualification receipt;
+  qualification receipt generated against the exact source-session bundle;
+- the P2 receipt comes from `validate-p2-physical`, not the capture-only
+  `validate-p2` command;
+- the exact hashed P2 qualification spec is included in the run as a
+  `p2_qualification_spec` artifact;
 - every non-reference source has a validated start/middle/end clock mapping;
 - operator journal, metadata, and operator receipt are present and hash-bound to
   the run;
