@@ -28,12 +28,19 @@ from .camera import (
 from .clock_sync import write_clock_sync
 from .closure import write_m0_closure_receipt
 from .equipment_cli import calibrate_equipment_mount_file
+from .experiments import (
+    build_experiment_manifest,
+    build_grouped_split,
+    verify_experiment_manifest,
+    verify_grouped_split,
+)
 from .insole import (
     import_opengo_text_export,
     write_p2_capture_receipt,
     write_p2_physical_receipt,
 )
 from .mcap_io import export_mcap
+from .observability import load_observability_registry
 from .operator_evidence import write_operator_evidence_receipt
 from .p0 import import_watch_journal, write_p0_receipt
 from .p1 import (
@@ -41,6 +48,7 @@ from .p1 import (
     write_impulse_clock_observations,
     write_p1_receipt,
 )
+from .public_data import index_totalcapture
 from .qc import session_qc
 from .replay import replay_frames
 from .session import SessionReader
@@ -323,6 +331,64 @@ def _parser() -> argparse.ArgumentParser:
         "--receipt",
         default="p2-physical-receipt.json",
     )
+
+    observability = sub.add_parser(
+        "validate-observability",
+        help="validate and summarize an M1 observability registry",
+    )
+    observability.add_argument("registry")
+
+    experiment = sub.add_parser(
+        "build-experiment-manifest",
+        help="build a provenance-bound M1 experiment manifest",
+    )
+    experiment.add_argument("spec")
+    experiment.add_argument("output")
+
+    experiment_verify = sub.add_parser(
+        "verify-experiment-manifest",
+        help="recompute hashes and target eligibility for an M1 experiment",
+    )
+    experiment_verify.add_argument("manifest")
+
+    grouped_split = sub.add_parser(
+        "build-grouped-split",
+        help="build a deterministic leakage-safe grouped dataset split",
+    )
+    grouped_split.add_argument("index")
+    grouped_split.add_argument("output")
+    grouped_split.add_argument(
+        "--group-by",
+        type=_channel_keys,
+        required=True,
+        help="comma-separated acquisition fields defining an indivisible group",
+    )
+    grouped_split.add_argument("--seed", required=True)
+    grouped_split.add_argument("--train-fraction", type=float, default=0.7)
+    grouped_split.add_argument(
+        "--validation-fraction",
+        type=float,
+        default=0.15,
+    )
+    grouped_split.add_argument(
+        "--purpose",
+        choices=("primary", "development"),
+        default="primary",
+    )
+
+    split_verify = sub.add_parser(
+        "verify-grouped-split",
+        help="verify a grouped split against its exact sample index",
+    )
+    split_verify.add_argument("split")
+    split_verify.add_argument("index")
+
+    totalcapture = sub.add_parser(
+        "index-totalcapture",
+        help="index an authorized local TotalCapture extraction without copying it",
+    )
+    totalcapture.add_argument("root")
+    totalcapture.add_argument("output")
     return parser
 
 
@@ -637,6 +703,78 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(json.dumps(receipt.to_dict(), indent=2, sort_keys=True))
         return 0 if receipt.passed else 2
+
+    if args.command == "validate-observability":
+        registry = load_observability_registry(args.registry)
+        counts = {
+            state: sum(
+                item.observability == state
+                for item in registry.variables
+            )
+            for state in ("observable", "conditional", "unidentifiable")
+        }
+        print(
+            json.dumps(
+                {
+                    "schema_version": registry.schema_version,
+                    "registry_id": registry.registry_id,
+                    "sport": registry.sport,
+                    "variable_count": len(registry.variables),
+                    "teacher_eligible_count": sum(
+                        item.teacher_eligible
+                        for item in registry.variables
+                    ),
+                    "observability_counts": counts,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    if args.command == "build-experiment-manifest":
+        manifest = build_experiment_manifest(args.spec, args.output)
+        print(json.dumps(manifest.to_dict(), indent=2, sort_keys=True))
+        return 0
+
+    if args.command == "verify-experiment-manifest":
+        result = verify_experiment_manifest(args.manifest)
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+
+    if args.command == "build-grouped-split":
+        split = build_grouped_split(
+            args.index,
+            args.output,
+            group_by=args.group_by,
+            seed=args.seed,
+            train_fraction=args.train_fraction,
+            validation_fraction=args.validation_fraction,
+            purpose=args.purpose,
+        )
+        print(json.dumps(split.to_dict(), indent=2, sort_keys=True))
+        return 0 if split.leakage_check_passed else 2
+
+    if args.command == "verify-grouped-split":
+        result = verify_grouped_split(args.split, args.index)
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+
+    if args.command == "index-totalcapture":
+        payload = index_totalcapture(args.root, args.output)
+        print(
+            json.dumps(
+                {
+                    "schema_version": payload["schema_version"],
+                    "dataset": payload["dataset"],
+                    "sample_count": len(payload["samples"]),
+                    "output": args.output,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
 
     if args.command == "validate-p1":
         if not args.capture_only:

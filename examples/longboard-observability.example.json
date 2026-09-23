@@ -1,0 +1,138 @@
+{
+  "schema_version": "motionos.observability-registry.v1",
+  "registry_id": "longboard-m1-a0-v1",
+  "sport": "longboard",
+  "variables": [
+    {
+      "variable_id": "wrist_angular_velocity",
+      "label": "watch-side wrist angular velocity",
+      "units": "rad/s",
+      "coordinate_frame": "watch_sensor_or_registered_forearm",
+      "observability": "observable",
+      "teacher_eligible": true,
+      "directly_observed_by": ["watch_gyro"],
+      "indirectly_observed_by": ["calibrated_video_pose"],
+      "required_transforms": ["watch_sensor_to_forearm_when_anatomical_frame_is_used"],
+      "reference_sources": ["watch_gyro", "calibrated_video_pose"],
+      "known_ambiguities": [
+        "watch sensor frame is not automatically an anatomical forearm frame"
+      ],
+      "non_claims": [
+        "does not establish elbow or shoulder torque"
+      ]
+    },
+    {
+      "variable_id": "board_angular_velocity",
+      "label": "longboard angular velocity",
+      "units": "rad/s",
+      "coordinate_frame": "equipment_frame",
+      "observability": "observable",
+      "teacher_eligible": true,
+      "directly_observed_by": ["equipment_gyro"],
+      "indirectly_observed_by": ["calibrated_video_equipment_pose"],
+      "required_transforms": ["equipment_sensor_to_equipment"],
+      "reference_sources": ["equipment_gyro", "calibrated_video_equipment_pose"],
+      "known_ambiguities": [
+        "video derivative quality depends on frame rate and marker visibility"
+      ],
+      "non_claims": [
+        "angular velocity alone does not establish absolute board orientation"
+      ]
+    },
+    {
+      "variable_id": "left_load_fraction",
+      "label": "left plantar normal-load fraction",
+      "units": "fraction",
+      "coordinate_frame": "bilateral_feet",
+      "observability": "observable",
+      "teacher_eligible": true,
+      "directly_observed_by": ["left_pressure", "right_pressure"],
+      "indirectly_observed_by": ["calibrated_video_support_geometry"],
+      "required_transforms": [],
+      "reference_sources": ["bilateral_pressure"],
+      "known_ambiguities": [
+        "requires temporally overlapping left and right pressure measurements"
+      ],
+      "non_claims": [
+        "not full 3D ground-reaction force"
+      ]
+    },
+    {
+      "variable_id": "foot_contact_timing",
+      "label": "foot contact onset and release timing",
+      "units": "event_time",
+      "coordinate_frame": "reference_timeline",
+      "observability": "observable",
+      "teacher_eligible": true,
+      "directly_observed_by": ["bilateral_pressure"],
+      "indirectly_observed_by": ["calibrated_video_pose"],
+      "required_transforms": ["device_clock_to_reference_time"],
+      "reference_sources": ["bilateral_pressure", "calibrated_video"],
+      "known_ambiguities": [
+        "visual and pressure definitions of contact may differ physically"
+      ],
+      "non_claims": [
+        "contact timing does not identify full contact force vector"
+      ]
+    },
+    {
+      "variable_id": "global_body_translation",
+      "label": "global body translation",
+      "units": "m",
+      "coordinate_frame": "calibrated_world",
+      "observability": "conditional",
+      "teacher_eligible": true,
+      "directly_observed_by": ["calibrated_multiview_video"],
+      "indirectly_observed_by": ["wearable_imu"],
+      "required_transforms": ["camera_to_world"],
+      "reference_sources": ["calibrated_multiview_video"],
+      "known_ambiguities": [
+        "single uncalibrated monocular video is insufficient for metric world translation",
+        "inertial integration drifts"
+      ],
+      "non_claims": [
+        "not available as metric world translation when camera calibration is absent"
+      ]
+    },
+    {
+      "variable_id": "full_joint_torque",
+      "label": "full-body joint torque",
+      "units": "N*m",
+      "coordinate_frame": "anatomical",
+      "observability": "unidentifiable",
+      "teacher_eligible": false,
+      "directly_observed_by": [],
+      "indirectly_observed_by": ["video_pose", "imu", "plantar_pressure"],
+      "required_transforms": [],
+      "reference_sources": [],
+      "known_ambiguities": [
+        "current sensor set lacks sufficient force and inverse-dynamics constraints"
+      ],
+      "non_claims": [
+        "MotionOS M1-A does not estimate validated joint torque"
+      ]
+    },
+    {
+      "variable_id": "full_3d_ground_reaction_force",
+      "label": "full 3D ground-reaction force",
+      "units": "N",
+      "coordinate_frame": "world",
+      "observability": "unidentifiable",
+      "teacher_eligible": false,
+      "directly_observed_by": [],
+      "indirectly_observed_by": ["plantar_pressure"],
+      "required_transforms": [],
+      "reference_sources": [],
+      "known_ambiguities": [
+        "plantar normal pressure does not measure the complete 3D force vector"
+      ],
+      "non_claims": [
+        "bilateral insoles are not treated as force plates"
+      ]
+    }
+  ],
+  "notes": [
+    "Teacher eligibility means the variable may enter a future teacher target only after its reference quality is characterized.",
+    "Unidentifiable variables remain explicit so downstream models cannot quietly invent them."
+  ]
+}
