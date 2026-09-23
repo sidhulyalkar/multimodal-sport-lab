@@ -113,4 +113,51 @@ final class MotionOSAppleCaptureTests: XCTestCase {
         }
     }
 
+
+    func testSampleTimingHealthTracksRateMedianAndGap() {
+        var health = SampleTimingHealth(recentWindowSize: 4)
+        for timestamp in [
+            UInt64(0),
+            20_000_000,
+            40_000_000,
+            60_000_000,
+            100_000_000,
+        ] {
+            health.observe(timestampNS: timestamp)
+        }
+
+        XCTAssertEqual(health.sampleCount, 5)
+        XCTAssertEqual(health.nonMonotonicCount, 0)
+        XCTAssertEqual(health.effectiveHz ?? 0, 40.0, accuracy: 1e-9)
+        XCTAssertEqual(health.recentMedianIntervalNS, 20_000_000)
+        XCTAssertEqual(health.recentMedianHz ?? 0, 50.0, accuracy: 1e-9)
+        XCTAssertEqual(health.maxGapMS, 40.0, accuracy: 1e-9)
+    }
+
+    func testSampleTimingHealthFlagsNonMonotonicTimestamp() {
+        var health = SampleTimingHealth()
+        health.observe(timestampNS: 100)
+        health.observe(timestampNS: 90)
+        health.observe(timestampNS: 200)
+
+        XCTAssertEqual(health.sampleCount, 3)
+        XCTAssertEqual(health.nonMonotonicCount, 1)
+        XCTAssertEqual(health.lastTimestampNS, 200)
+        XCTAssertEqual(health.maxGapNS, 100)
+    }
+
+    func testFileEvidenceDigestUsesExactBytes() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try Data("motionos\n".utf8).write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let evidence = try FileEvidence.digest(url, chunkSize: 3)
+
+        XCTAssertEqual(evidence.byteCount, 9)
+        XCTAssertEqual(
+            evidence.sha256,
+            "813916c35345e2efead732487f339a103a320fb00fca8c2e0618e594783536af"
+        )
+    }
 }

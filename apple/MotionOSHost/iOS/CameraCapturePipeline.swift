@@ -32,6 +32,48 @@ struct CameraCaptureConfiguration: Sendable {
     }
 }
 
+struct CameraLiveCaptureStats: Equatable, Sendable {
+    let deliveredFrames: UInt64
+    let writtenFrames: UInt64
+    let writerBackpressureFrames: UInt64
+    let droppedFrames: UInt64
+    let poseScheduledFrames: UInt64
+    let poseDetectedFrames: UInt64
+    let poseNoResultFrames: UInt64
+    let poseErrorFrames: UInt64
+    let firstPTSNS: UInt64?
+    let lastPTSNS: UInt64?
+
+    var durationSeconds: Double {
+        guard let firstPTSNS,
+              let lastPTSNS,
+              lastPTSNS > firstPTSNS
+        else {
+            return 0
+        }
+        return Double(lastPTSNS - firstPTSNS) / 1_000_000_000.0
+    }
+
+    var effectiveDeliveredFPS: Double? {
+        guard deliveredFrames >= 2,
+              durationSeconds > 0
+        else {
+            return nil
+        }
+        return Double(deliveredFrames - 1) / durationSeconds
+    }
+
+    var writtenFraction: Double? {
+        guard deliveredFrames > 0 else { return nil }
+        return Double(writtenFrames) / Double(deliveredFrames)
+    }
+
+    var poseSuccessFraction: Double? {
+        guard poseScheduledFrames > 0 else { return nil }
+        return Double(poseDetectedFrames) / Double(poseScheduledFrames)
+    }
+}
+
 struct CameraEvidenceBundle: Sendable {
     let directory: URL
     let videoURL: URL
@@ -131,6 +173,24 @@ final class CameraCapturePipeline:
         super.init()
     }
 
+    var captureSessionForPreview: AVCaptureSession {
+        captureSession
+    }
+
+    func startPreview() async throws -> CameraCaptureConfiguration {
+        let configuration = try await configure()
+
+        await withCheckedContinuation { continuation in
+            sessionQueue.async {
+                if !self.captureSession.isRunning {
+                    self.captureSession.startRunning()
+                }
+                continuation.resume()
+            }
+        }
+        return configuration
+    }
+
     func configure() async throws -> CameraCaptureConfiguration {
         try await withCheckedThrowingContinuation { continuation in
             sessionQueue.async {
@@ -168,12 +228,22 @@ final class CameraCapturePipeline:
 
         await withCheckedContinuation { continuation in
             sessionQueue.async {
-                self.captureSession.startRunning()
+                if !self.captureSession.isRunning {
+                    self.captureSession.startRunning()
+                }
                 continuation.resume()
             }
         }
 
         return configuration
+    }
+
+    func liveStats() async -> CameraLiveCaptureStats {
+        await withCheckedContinuation { continuation in
+            outputQueue.async {
+                continuation.resume(returning: self.makeLiveStats())
+            }
+        }
     }
 
     func stopRecording() async throws -> CameraEvidenceBundle {
@@ -577,6 +647,21 @@ final class CameraCapturePipeline:
             // A drop-journal failure will be reflected by final evidence
             // counts/hash validation rather than synthesized data.
         }
+    }
+
+    private func makeLiveStats() -> CameraLiveCaptureStats {
+        CameraLiveCaptureStats(
+            deliveredFrames: deliveredFrameCount,
+            writtenFrames: writtenFrameCount,
+            writerBackpressureFrames: writerBackpressureCount,
+            droppedFrames: droppedFrameCount,
+            poseScheduledFrames: poseScheduledCount,
+            poseDetectedFrames: poseDetectedCount,
+            poseNoResultFrames: poseNoResultCount,
+            poseErrorFrames: poseErrorCount,
+            firstPTSNS: firstPTSNS,
+            lastPTSNS: lastPTSNS
+        )
     }
 
     private func finishRecordingOnOutputQueue(

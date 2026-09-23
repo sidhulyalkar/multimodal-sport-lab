@@ -31,7 +31,28 @@ struct CameraCaptureCard: View {
                 configurationSummary(configuration)
             }
 
+            if camera.phase == .ready || camera.phase == .recording {
+                CameraPreviewView(session: camera.previewSession)
+                    .aspectRatio(16.0 / 9.0, contentMode: .fit)
+                    .background(.black)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+
+                Text(
+                    "Framing preview only. Keep the athlete, feet, board, "
+                        + "and calibration target inside the measurable region."
+                )
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            }
+
             controls
+
+            if let stats = camera.liveStats,
+               camera.phase == .recording
+                    || camera.phase == .finalizing
+                    || camera.phase == .evidenceReady {
+                liveHealth(stats)
+            }
 
             if let bundle = camera.evidenceBundle {
                 evidence(bundle)
@@ -122,6 +143,115 @@ struct CameraCaptureCard: View {
                 .foregroundStyle(.secondary)
             }
         }
+    }
+
+    private func liveHealth(
+        _ stats: CameraLiveCaptureStats
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack {
+                Label(
+                    cameraHealthLabel(stats),
+                    systemImage: cameraHealthSymbol(stats)
+                )
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(cameraHealthColor(stats))
+
+                Spacer()
+
+                Text(duration(stats.durationSeconds))
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack {
+                healthMetric(
+                    "FPS",
+                    stats.effectiveDeliveredFPS.map {
+                        String(format: "%.1f", $0)
+                    } ?? "…"
+                )
+                healthMetric(
+                    "written",
+                    "(stats.writtenFrames)/(stats.deliveredFrames)"
+                )
+                healthMetric(
+                    "drops",
+                    "(stats.droppedFrames)"
+                )
+            }
+
+            HStack {
+                healthMetric(
+                    "backpressure",
+                    "(stats.writerBackpressureFrames)"
+                )
+                healthMetric(
+                    "pose",
+                    stats.poseSuccessFraction.map {
+                        String(format: "%.0f%%", $0 * 100)
+                    } ?? "…"
+                )
+                healthMetric(
+                    "pose errs",
+                    "(stats.poseErrorFrames)"
+                )
+            }
+
+            Text(
+                "Live values are operator diagnostics only. "
+                    + "The sealed MOV, frame journal, PTS, and hashes remain authoritative."
+            )
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func healthMetric(
+        _ label: String,
+        _ value: String
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(label.uppercased())
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.system(.caption, design: .monospaced))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func cameraHealthLabel(
+        _ stats: CameraLiveCaptureStats
+    ) -> String {
+        if stats.writerBackpressureFrames > 0
+            || stats.droppedFrames > 0
+            || stats.poseErrorFrames > 0 {
+            return "Capture needs review"
+        }
+        return "Capture healthy so far"
+    }
+
+    private func cameraHealthSymbol(
+        _ stats: CameraLiveCaptureStats
+    ) -> String {
+        cameraHealthLabel(stats) == "Capture healthy so far"
+            ? "waveform.path.ecg"
+            : "exclamationmark.triangle.fill"
+    }
+
+    private func cameraHealthColor(
+        _ stats: CameraLiveCaptureStats
+    ) -> Color {
+        cameraHealthLabel(stats) == "Capture healthy so far"
+            ? .green
+            : .yellow
+    }
+
+    private func duration(_ seconds: Double) -> String {
+        let value = max(0, Int(seconds.rounded(.down)))
+        return String(format: "%02d:%02d", value / 60, value % 60)
     }
 
     private func configurationSummary(

@@ -30,8 +30,25 @@ struct WatchContentView: View {
                     controller.retryTransfer()
                 }
                 .buttonStyle(.borderedProminent)
+            } else if controller.state == .transferQueued {
+                Label("Transfer queued", systemImage: "arrow.up.doc.fill")
+                    .foregroundStyle(.yellow)
+                Text("Journal remains safe locally.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            } else if controller.state == .transportComplete {
+                Label("Sent to iPhone", systemImage: "iphone.and.arrow.forward")
+                    .foregroundStyle(.yellow)
+                Text("Waiting for hash-verified receipt.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                Button("Retry if needed") {
+                    controller.retryTransfer()
+                }
+                .buttonStyle(.bordered)
             } else if controller.state == .transferred {
-                Label("Journal queued", systemImage: "checkmark.circle.fill")
+                Label("Verified on iPhone", systemImage: "checkmark.seal.fill")
                     .foregroundStyle(.green)
                 Text(controller.sessionID ?? "")
                     .font(.system(size: 8, design: .monospaced))
@@ -62,22 +79,82 @@ struct WatchContentView: View {
 
     private var metrics: some View {
         VStack(spacing: 4) {
-            if let bpm = controller.heartRateBPM {
-                Text("\(Int(bpm.rounded())) BPM")
-                    .font(.system(.title3, design: .rounded).weight(.semibold))
-            } else {
-                Text("HR …")
-                    .foregroundStyle(.secondary)
+            HStack(spacing: 8) {
+                if let bpm = controller.heartRateBPM {
+                    Text("\(Int(bpm.rounded())) BPM")
+                        .font(
+                            .system(.caption, design: .rounded)
+                                .weight(.semibold)
+                        )
+                } else {
+                    Text("HR …")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                if let hz = controller.recentMedianIMUHz {
+                    Text(String(format: "%.1f Hz", hz))
+                        .font(
+                            .system(.caption, design: .monospaced)
+                                .weight(.semibold)
+                        )
+                } else {
+                    Text("Hz …")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
-            Text("\(controller.eventCount) events")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+            Text(
+                "\(controller.imuSampleCount) IMU · "
+                    + "\(controller.heartRateEventCount) HR"
+            )
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+
+            Text(
+                String(
+                    format: "max gap %.0f ms",
+                    controller.maxIMUGapMS
+                )
+            )
+            .font(.system(.caption2, design: .monospaced))
+            .foregroundStyle(
+                controller.nonMonotonicIMUCount == 0
+                    ? Color.secondary
+                    : Color.red
+            )
+
+            if let battery = controller.watchBatteryLevel {
+                Text(
+                    String(format: "battery %.0f%%", battery * 100)
+                )
+                .font(.system(.caption2, design: .monospaced))
+                .foregroundStyle(
+                    battery >= 0.20
+                        ? Color.secondary
+                        : Color.yellow
+                )
+            }
 
             if let start = controller.startedAt {
                 TimelineView(.periodic(from: .now, by: 1)) { context in
-                    Text(duration(from: start, to: context.date))
-                        .font(.system(.caption, design: .monospaced))
+                    HStack {
+                        Text(duration(from: start, to: context.date))
+                        if let last = controller.lastIMUSampleReceivedAt {
+                            let age = max(
+                                0,
+                                context.date.timeIntervalSince(last)
+                            )
+                            Text(
+                                age < 2
+                                    ? "LIVE"
+                                    : String(format: "STALE %.0fs", age)
+                            )
+                            .foregroundStyle(age < 2 ? .green : .red)
+                        }
+                    }
+                    .font(.system(.caption2, design: .monospaced))
                 }
             }
         }
@@ -111,9 +188,15 @@ struct WatchContentView: View {
     private var statusColor: Color {
         switch controller.state {
         case .running: .green
-        case .paused, .starting, .ending, .authorizing: .yellow
-        case .failed: .red
-        default: .gray
+        case .paused, .starting, .ending, .authorizing,
+                .transferQueued, .transportComplete:
+            .yellow
+        case .transferred:
+            .green
+        case .failed:
+            .red
+        default:
+            .gray
         }
     }
 

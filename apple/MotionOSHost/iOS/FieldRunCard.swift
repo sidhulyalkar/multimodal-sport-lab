@@ -8,6 +8,7 @@ struct FieldRunCard: View {
     @EnvironmentObject private var camera: CameraCaptureController
 
     @State private var failureNote = ""
+    @State private var confirmIncompleteSeal = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -40,6 +41,21 @@ struct FieldRunCard: View {
             .foregroundStyle(.secondary)
         }
         .cardStyle()
+        .confirmationDialog(
+            "Seal incomplete operator evidence?",
+            isPresented: $confirmIncompleteSeal,
+            titleVisibility: .visible
+        ) {
+            Button(
+                "Seal Incomplete Evidence",
+                role: .destructive
+            ) {
+                fieldRun.seal(readiness: readinessSnapshot)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(fieldRun.closureWarnings.joined(separator: "\n"))
+        }
     }
 
     private var header: some View {
@@ -113,7 +129,7 @@ struct FieldRunCard: View {
             .buttonStyle(.borderedProminent)
 
             Button {
-                fieldRun.seal(readiness: readinessSnapshot)
+                confirmIncompleteSeal = true
             } label: {
                 Label(
                     "Seal Without Starting",
@@ -126,8 +142,25 @@ struct FieldRunCard: View {
         case .running:
             readinessSummary
 
+            if !fieldRun.closureWarnings.isEmpty {
+                VStack(alignment: .leading, spacing: 3) {
+                    ForEach(fieldRun.closureWarnings, id: \.self) { warning in
+                        Label(
+                            warning,
+                            systemImage: "exclamationmark.triangle"
+                        )
+                        .font(.caption2)
+                        .foregroundStyle(.yellow)
+                    }
+                }
+            }
+
             Button(role: .destructive) {
-                fieldRun.seal(readiness: readinessSnapshot)
+                if fieldRun.closureWarnings.isEmpty {
+                    fieldRun.seal(readiness: readinessSnapshot)
+                } else {
+                    confirmIncompleteSeal = true
+                }
             } label: {
                 Label(
                     "Seal Operator Evidence",
@@ -312,7 +345,55 @@ struct FieldRunCard: View {
                     systemImage: "square.and.arrow.up"
                 )
             }
+
+            let completeItems = completeEvidenceURLs(
+                operatorBundle: bundle
+            )
+            if completeItems.count > 2 {
+                ShareLink(items: completeItems) {
+                    Label(
+                        "Share complete local run evidence",
+                        systemImage: "shippingbox.and.arrow.backward"
+                    )
+                }
+
+                Text(
+                    "\(completeItems.count) files · Watch, pod, camera, "
+                        + "and operator artifacts are shared as independent files."
+                )
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            }
         }
+    }
+
+    private func completeEvidenceURLs(
+        operatorBundle: OperatorEvidenceBundle
+    ) -> [URL] {
+        var urls = [
+            operatorBundle.journalURL,
+            operatorBundle.metadataURL,
+        ]
+
+        if let watchJournal = inbox.latestJournalURL {
+            urls.append(watchJournal)
+        }
+        if let watchMetadata = inbox.latestHostMetadataURL {
+            urls.append(watchMetadata)
+        }
+
+        if let podBundle = pod.evidenceBundle {
+            urls.append(podBundle.journalURL)
+            urls.append(podBundle.metadataURL)
+        }
+
+        if let cameraBundle = camera.evidenceBundle {
+            urls.append(cameraBundle.videoURL)
+            urls.append(cameraBundle.journalURL)
+            urls.append(cameraBundle.metadataURL)
+        }
+
+        return urls
     }
 
     private func syncButton(_ label: String) -> some View {

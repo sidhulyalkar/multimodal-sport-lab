@@ -19,12 +19,18 @@ final class CameraCaptureController: ObservableObject {
     @Published private(set) var phase: Phase = .idle
     @Published private(set) var configuration: CameraCaptureConfiguration?
     @Published private(set) var evidenceBundle: CameraEvidenceBundle?
+    @Published private(set) var liveStats: CameraLiveCaptureStats?
     @Published private(set) var errorMessage: String?
 
     private let pipeline = CameraCapturePipeline()
+    private var statsTask: Task<Void, Never>?
 
     var authorizationStatus: AVAuthorizationStatus {
         AVCaptureDevice.authorizationStatus(for: .video)
+    }
+
+    var previewSession: AVCaptureSession {
+        pipeline.captureSessionForPreview
     }
 
     func prepare() async {
@@ -36,7 +42,7 @@ final class CameraCaptureController: ObservableObject {
                 return
             }
 
-            configuration = try await pipeline.configure()
+            configuration = try await pipeline.startPreview()
             phase = .ready
         } catch {
             fail(error)
@@ -46,6 +52,7 @@ final class CameraCaptureController: ObservableObject {
     func startRecording() async {
         errorMessage = nil
         evidenceBundle = nil
+        liveStats = nil
 
         do {
             let authorized = try await ensureAuthorization()
@@ -61,6 +68,7 @@ final class CameraCaptureController: ObservableObject {
                 hostOSVersion: UIDevice.current.systemVersion
             )
             phase = .recording
+            startStatsPolling()
         } catch {
             fail(error)
         }
@@ -70,12 +78,26 @@ final class CameraCaptureController: ObservableObject {
         guard phase == .recording else { return }
         phase = .finalizing
         errorMessage = nil
+        statsTask?.cancel()
+        statsTask = nil
 
         do {
+            liveStats = await pipeline.liveStats()
             evidenceBundle = try await pipeline.stopRecording()
             phase = .evidenceReady
         } catch {
             fail(error)
+        }
+    }
+
+    private func startStatsPolling() {
+        statsTask?.cancel()
+        statsTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                self.liveStats = await self.pipeline.liveStats()
+                try? await Task.sleep(for: .milliseconds(500))
+            }
         }
     }
 
@@ -100,6 +122,8 @@ final class CameraCaptureController: ObservableObject {
     }
 
     private func fail(_ error: Error) {
+        statsTask?.cancel()
+        statsTask = nil
         phase = .failed
         errorMessage = error.localizedDescription
     }
