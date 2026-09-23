@@ -1056,6 +1056,7 @@ def load_p2_physical_spec(
         maximum=1.0,
     )
 
+    previous_end_ns = -1
     for label in P2_REQUIRED_CONTROLLED_WINDOWS:
         window = windows_raw.get(label)
         if not isinstance(window, dict):
@@ -1073,6 +1074,12 @@ def load_p2_physical_spec(
             raise ValueError(
                 f"P2 controlled window {label!r} must have 0 <= start < end"
             )
+        if start_ns <= previous_end_ns:
+            raise ValueError(
+                "P2 controlled windows must follow protocol order without "
+                f"overlap; invalid window {label!r}"
+            )
+        previous_end_ns = end_ns
 
     for key in (
         "thresholds_frozen_before_review",
@@ -1261,18 +1268,27 @@ def build_p2_physical_receipt(
     overlap_gate = all(value >= min_overlap for value in overlap_values)
 
     measurements: list[P2PressureWindow] = []
+    previous_end_ns = -1
     for label in P2_REQUIRED_CONTROLLED_WINDOWS:
         window = windows_raw.get(label)
         if not isinstance(window, dict):
             raise TypeError(
                 f"P2 physical spec requires controlled window {label!r}"
             )
+        start_ns = int(window["start_ns"])
+        end_ns = int(window["end_ns"])
+        if start_ns <= previous_end_ns:
+            raise ValueError(
+                "P2 controlled windows must follow protocol order without "
+                f"overlap; invalid window {label!r}"
+            )
+        previous_end_ns = end_ns
         measurements.append(
             _pressure_window(
                 controlled_reader,
                 label=label,
-                start_ns=int(window["start_ns"]),
-                end_ns=int(window["end_ns"]),
+                start_ns=start_ns,
+                end_ns=end_ns,
             )
         )
     by_label = {item.label: item for item in measurements}
