@@ -25,6 +25,7 @@ class M0ClosureReceipt:
     passed: bool
     source_qualification: dict[str, str]
     operator_evidence: dict[str, object]
+    p2_qualification_spec: dict[str, object]
     body_model: dict[str, object]
     unresolved_blockers: tuple[str, ...]
     schema_version: str = CLOSURE_SCHEMA_VERSION
@@ -256,6 +257,57 @@ def _operator_evidence_status(
     return summary
 
 
+def _p2_qualification_spec_status(
+    source_reports: dict[str, dict[str, object]],
+    artifact_index: dict[str, list[object]],
+    blockers: list[str],
+) -> dict[str, object]:
+    source = source_reports.get("insoles")
+    if source is None:
+        return {"state": "unavailable"}
+
+    qualification = source.get("qualification")
+    receipt = (
+        qualification.get("receipt")
+        if isinstance(qualification, dict)
+        else None
+    )
+    if not isinstance(receipt, dict) or receipt.get("passed") is not True:
+        return {
+            "state": "unqualified",
+            "reason": "P2 physical receipt is not passing",
+        }
+
+    refs = artifact_index.get("p2_qualification_spec", [])
+    if len(refs) != 1:
+        blockers.append(
+            "P2: expected exactly one p2_qualification_spec run artifact"
+        )
+        return {
+            "state": "unqualified",
+            "reason": "missing_or_ambiguous_spec_artifact",
+        }
+
+    ref = refs[0]
+    expected_sha256 = receipt.get("qualification_spec_sha256")
+    if ref.sha256 != expected_sha256:
+        blockers.append(
+            "P2: qualification spec artifact hash does not match receipt"
+        )
+        return {
+            "state": "unqualified",
+            "reason": "spec_hash_mismatch",
+            "run_artifact_sha256": ref.sha256,
+            "receipt_spec_sha256": expected_sha256,
+        }
+
+    return {
+        "state": "qualified",
+        "artifact_path": ref.path,
+        "sha256": ref.sha256,
+    }
+
+
 def _body_model_status(
     run_manifest: Path,
     run,
@@ -384,6 +436,11 @@ def evaluate_m0_closure(run_path: str | Path) -> M0ClosureReceipt:
         artifact_index,
         blockers,
     )
+    p2_spec_status = _p2_qualification_spec_status(
+        source_reports,
+        artifact_index,
+        blockers,
+    )
     body_status = _body_model_status(
         run_manifest,
         run,
@@ -397,6 +454,7 @@ def evaluate_m0_closure(run_path: str | Path) -> M0ClosureReceipt:
         passed=not blockers,
         source_qualification=source_qualification,
         operator_evidence=operator_status,
+        p2_qualification_spec=p2_spec_status,
         body_model=body_status,
         unresolved_blockers=tuple(blockers),
     )
