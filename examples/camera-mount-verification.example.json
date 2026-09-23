@@ -1,0 +1,19 @@
+{
+  "schema_version": "motionos.camera-mount-verification.v1",
+  "camera_id": "REPLACE_WITH_AVFOUNDATION_CAMERA_UNIQUE_ID",
+  "session_id": "REPLACE_WITH_CAMERA_SESSION_ID",
+  "calibration_sha256": "REPLACE_WITH_CAMERA_CALIBRATION_SHA256",
+  "observed_world_from_camera": [
+    [1.0, 0.0, 0.0, -0.5],
+    [0.0, 1.0, 0.0, 0.0],
+    [0.0, 0.0, 1.0, 0.0],
+    [0.0, 0.0, 0.0, 1.0]
+  ],
+  "source_evidence": [
+    {
+      "role": "mount_check_image",
+      "path": "REPLACE_WITH_CAPTURE_TIME_BOARD_IMAGE",
+      "sha256": "REPLACE_WITH_64_HEX_SHA256"
+    }
+  ]
+}
