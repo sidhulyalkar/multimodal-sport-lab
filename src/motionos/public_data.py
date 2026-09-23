@@ -7,7 +7,7 @@ from pathlib import Path
 from .provenance import sha256_file
 
 TOTALCAPTURE_INDEX_SCHEMA_VERSION = "motionos.public-totalcapture-index.v1"
-_SUBJECT = re.compile(r"^[sS](\\d+)$")
+_SUBJECT = re.compile(r"^[sS](\d+)$")
 
 
 def _artifact(path: Path, *, root: Path) -> dict[str, object]:
