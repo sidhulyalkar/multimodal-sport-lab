@@ -173,6 +173,24 @@ final class CameraCapturePipeline:
         super.init()
     }
 
+    var captureSessionForPreview: AVCaptureSession {
+        captureSession
+    }
+
+    func startPreview() async throws -> CameraCaptureConfiguration {
+        let configuration = try await configure()
+
+        await withCheckedContinuation { continuation in
+            sessionQueue.async {
+                if !self.captureSession.isRunning {
+                    self.captureSession.startRunning()
+                }
+                continuation.resume()
+            }
+        }
+        return configuration
+    }
+
     func configure() async throws -> CameraCaptureConfiguration {
         try await withCheckedThrowingContinuation { continuation in
             sessionQueue.async {
@@ -210,7 +228,9 @@ final class CameraCapturePipeline:
 
         await withCheckedContinuation { continuation in
             sessionQueue.async {
-                self.captureSession.startRunning()
+                if !self.captureSession.isRunning {
+                    self.captureSession.startRunning()
+                }
                 continuation.resume()
             }
         }
