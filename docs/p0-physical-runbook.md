@@ -85,14 +85,19 @@ Stop from Apple Watch.
 Expected Watch result:
 - Motion capture stops.
 - HealthKit workout ends.
-- journal closes.
+- journal closes and is hashed locally.
 - if WatchConnectivity is activated, transfer queues;
 - otherwise the Watch shows **Journal safe on Watch** and a Retry Transfer control.
+- a queued transfer is **not** labeled verified.
+- after iPhone hash verification and receipt acknowledgment, Watch shows
+  **Verified on iPhone**.
 
 Expected iPhone result:
-- recovered journal card appears;
-- session ID is visible;
-- raw journal is available through Share and the Files app.
+- recovered journal card appears only after SHA-256 / byte-count verification;
+- session ID, abbreviated hash, and file size are visible;
+- identical retransfers remain idempotent;
+- a same-session/different-bytes collision fails closed;
+- raw journal + iPhone host metadata are available through Share and Files.
 
 ## Export and process the journal
 
@@ -143,6 +148,10 @@ bash scripts/process_p0_watch.sh /path/to/watch.jsonl data/p0 1800
 ```
 
 The P0 gate deliberately does not hard-code a 50 Hz accuracy tolerance. It reports the observed effective rate. Freeze a rate tolerance only after real-device data shows the Watch's actual sampling behavior.
+
+The Watch and iPhone now display timestamp-derived live sampling diagnostics
+during capture. Treat these as operator feedback only; the sealed journal and
+P0 receipt remain authoritative.
 
 ## What to inspect manually
 
