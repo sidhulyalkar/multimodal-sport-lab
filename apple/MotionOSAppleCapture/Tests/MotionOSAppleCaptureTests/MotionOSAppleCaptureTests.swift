@@ -145,4 +145,19 @@ final class MotionOSAppleCaptureTests: XCTestCase {
         XCTAssertEqual(health.lastTimestampNS, 200)
         XCTAssertEqual(health.maxGapNS, 100)
     }
+
+    func testFileEvidenceDigestUsesExactBytes() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try Data("motionos\n".utf8).write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let evidence = try FileEvidence.digest(url, chunkSize: 3)
+
+        XCTAssertEqual(evidence.byteCount, 9)
+        XCTAssertEqual(
+            evidence.sha256,
+            "62fb3aa9b6638da340e22b4641e152750257347807a943bccf01fc760d46763d"
+        )
+    }
 }
