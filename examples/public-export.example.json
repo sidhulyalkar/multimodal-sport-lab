@@ -1,0 +1,19 @@
+{
+  "schema_version": "motionos.public-export.v1",
+  "export_id": "synthetic-demo-export-v1",
+  "purpose": "demonstrate the public-export contract without participant data",
+  "artifacts": [
+    {
+      "path": "public-export-demo-artifact.json",
+      "sha256": "15c0cf5d08ed0a343069d7787b8d2456e88e574cffdf4361316b130ab7c1bb86",
+      "classification": "synthetic",
+      "release_basis": "synthetic",
+      "transformation": "generated fixture; no participant source"
+    }
+  ],
+  "attestations": {
+    "raw_identifying_excluded": true,
+    "consent_or_license_verified": true,
+    "metadata_minimized": true
+  }
+}
