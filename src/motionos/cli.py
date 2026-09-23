@@ -26,6 +26,10 @@ from .camera import (
     write_camera_capture_receipt,
 )
 from .clock_sync import write_clock_sync
+from .clock_uncertainty import (
+    analyze_clock_uncertainty,
+    query_clock_uncertainty,
+)
 from .closure import write_m0_closure_receipt
 from .data_governance import (
     validate_external_dataset_registry,
@@ -405,6 +409,30 @@ def _parser() -> argparse.ArgumentParser:
         help="validate external-dataset authorization and redistribution metadata",
     )
     dataset_registry.add_argument("registry")
+
+    clock_uncertainty = sub.add_parser(
+        "analyze-clock-uncertainty",
+        help="derive weighted timing uncertainty from a validated clock-sync v1 receipt",
+    )
+    clock_uncertainty.add_argument("reference_session")
+    clock_uncertainty.add_argument("target_session")
+    clock_uncertainty.add_argument("clock_sync")
+    clock_uncertainty.add_argument("output")
+    clock_uncertainty.add_argument(
+        "--default-uncertainty-ms",
+        type=float,
+        help=(
+            "explicit fallback for v1 landmarks whose uncertainty_ns is zero; "
+            "omitting it fails closed"
+        ),
+    )
+
+    clock_query = sub.add_parser(
+        "query-clock-uncertainty",
+        help="map one target device timestamp with M1 timing uncertainty",
+    )
+    clock_query.add_argument("analysis")
+    clock_query.add_argument("device_time_ns", type=int)
     return parser
 
 
@@ -799,6 +827,30 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "validate-dataset-registry":
         result = validate_external_dataset_registry(args.registry)
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+
+    if args.command == "analyze-clock-uncertainty":
+        default_ns = (
+            args.default_uncertainty_ms * 1e6
+            if args.default_uncertainty_ms is not None
+            else None
+        )
+        result = analyze_clock_uncertainty(
+            args.reference_session,
+            args.target_session,
+            args.clock_sync,
+            args.output,
+            default_uncertainty_ns=default_ns,
+        )
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+
+    if args.command == "query-clock-uncertainty":
+        result = query_clock_uncertainty(
+            args.analysis,
+            args.device_time_ns,
+        )
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0
 
