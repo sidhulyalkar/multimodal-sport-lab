@@ -118,6 +118,22 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
         }
     }
 
+    @discardableResult
+    func sendGuidedProtocolCue(
+        plan: GuidedProtocolPlan,
+        step: GuidedProtocolStep
+    ) -> Bool {
+        transport.sendMessage(
+            [
+                "motionos_message": "guided_protocol_cue_v1",
+                "plan_id": plan.id,
+                "plan_version": plan.version,
+                "step_id": step.id,
+                "step_title": step.title,
+            ]
+        )
+    }
+
     func watchCaptureHealthAge(
         at date: Date = Date()
     ) -> TimeInterval? {
