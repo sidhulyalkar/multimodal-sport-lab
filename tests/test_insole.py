@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -493,7 +494,7 @@ def _write_p2_physical_spec(
     known_static_load_n: float = 1000.0,
 ) -> None:
     path.write_text(
-        __import__("json").dumps(
+        json.dumps(
             {
                 "schema_version": "motionos.p2-physical-spec.v1",
                 "thresholds": {
@@ -695,3 +696,19 @@ def test_p2_physical_receipt_rejects_reimported_same_source_as_two_runs(
             min_controlled_duration_s=0.09,
             min_field_duration_s=0.09,
         )
+
+
+def test_p2_physical_spec_rejects_overlapping_protocol_windows(
+    tmp_path,
+):
+    spec_path = tmp_path / "p2-physical-spec.json"
+    _write_p2_physical_spec(spec_path)
+    spec = json.loads(spec_path.read_text(encoding="utf-8"))
+    spec["controlled_windows"]["repeatability_b"]["start_ns"] = 50_000_000
+    spec_path.write_text(json.dumps(spec), encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match="protocol order without overlap",
+    ):
+        load_p2_physical_spec(spec_path)
