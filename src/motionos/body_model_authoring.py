@@ -5,7 +5,6 @@ import math
 import statistics
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any
 
 from .body_model import (
     BODY_MODEL_SCHEMA_VERSION,
