@@ -140,3 +140,8 @@ proof that the requested motion occurred.
 The guided runner writes a separate append-only operator journal. Those
 annotations document protocol execution only and are not cross-device
 synchronization authority.
+
+When WatchConnectivity is immediately reachable, the iPhone also sends the
+newly active step title to Watch for a best-effort haptic/display cue. Cue
+delivery is not required for protocol validity and is never synchronization
+evidence.
