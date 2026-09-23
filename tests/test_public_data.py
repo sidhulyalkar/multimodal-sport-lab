@@ -1,5 +1,3 @@
-import json
-
 import pytest
 
 from motionos.public_data import index_totalcapture
