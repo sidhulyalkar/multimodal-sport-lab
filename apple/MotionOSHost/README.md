@@ -14,6 +14,24 @@ This intentionally separates:
 
 Live mirroring is never treated as the only copy of raw samples.
 
+## Field observability
+
+The native apps expose live diagnostics so an operator can catch obvious
+capture failures while they are still fixable:
+
+- Watch timestamp-derived recent/effective IMU rate;
+- maximum observed Watch device-time gap;
+- non-monotonic timestamp count;
+- HR event count and Watch battery;
+- iPhone battery and free-storage preflight margins;
+- live camera delivered/written frames, PTS-derived FPS, writer
+  backpressure, AVFoundation drops, and Vision pose outcomes;
+- camera framing preview before recording.
+
+These values are **operator feedback only**. They do not replace the sealed
+journals, native timestamps, file hashes, or repository-side qualification
+receipts.
+
 ## Generate the Xcode project
 
 Install XcodeGen 2.46+:
@@ -60,10 +78,65 @@ Apple Watch launched/woken
                Stop on Watch
                   │
                   ▼
-        close + transferFile
+        close + hash journal
                   │
                   ▼
-           iPhone journal inbox
+             transfer queued
+                  │
+                  ▼
+       WatchConnectivity finished
+                  │
+                  ▼
+     iPhone verifies SHA-256 + size
+                  │
+                  ▼
+       durable receipt ack → Watch
 ```
 
 After transfer, run the Python P0 importer/validator from the repository to create a reproducible qualification receipt.
+
+
+## Verified Watch evidence handoff
+
+The Watch never labels a journal "verified" merely because
+`WCSession.transferFile` accepted it.
+
+The UI distinguishes:
+
+1. **Journal safe on Watch**
+2. **Transfer queued**
+3. **Sent to iPhone / waiting for receipt**
+4. **Verified on iPhone**
+
+The iPhone recomputes SHA-256 and byte count before accepting the journal.
+An identical retry for the same session is idempotent. The same session ID
+with different bytes fails closed instead of overwriting prior evidence.
+
+The source journal remains on Watch if transfer or acknowledgment fails.
+
+## Guided P0 mode
+
+The iPhone app contains a guided P0-A / P0-B runner backed by the versioned
+`GuidedProtocolPlan` contract.
+
+P0-A encodes the real runbook requirements, including:
+
+- 60 s stationary baseline;
+- five roll/pitch/yaw repetitions, manually confirmed;
+- three deliberate impulses;
+- 2 min walking;
+- >=1 min phone lock;
+- >=1 min app background;
+- >=1 min temporary phone separation;
+- >=10 min total guided capture.
+
+P0-B requires >=5 min stationary and >=30 min total guided capture while
+retaining the dynamic/background/separation challenges.
+
+Minimum-duration gates use the monotonic MotionOS clock, not wall time.
+The user still explicitly completes each step. A timer is never treated as
+proof that the requested motion occurred.
+
+The guided runner writes a separate append-only operator journal. Those
+annotations document protocol execution only and are not cross-device
+synchronization authority.
