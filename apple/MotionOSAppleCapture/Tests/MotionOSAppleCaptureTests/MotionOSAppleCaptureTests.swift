@@ -157,7 +157,7 @@ final class MotionOSAppleCaptureTests: XCTestCase {
         XCTAssertEqual(evidence.byteCount, 9)
         XCTAssertEqual(
             evidence.sha256,
-            "62fb3aa9b6638da340e22b4641e152750257347807a943bccf01fc760d46763d"
+            "813916c35345e2efead732487f339a103a320fb00fca8c2e0618e594783536af"
         )
     }
 }
