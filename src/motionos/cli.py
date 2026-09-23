@@ -3,6 +3,10 @@ from __future__ import annotations
 import argparse
 import json
 
+from .body_authoring import (
+    build_body_model_from_spec,
+    write_body_registration_report,
+)
 from .body_model import (
     load_body_model_profile,
     verify_body_model_source_artifact,
@@ -227,6 +231,21 @@ def _parser() -> argparse.ArgumentParser:
         "--receipt",
         default="m0-closure-receipt.json",
     )
+
+    body_build = sub.add_parser(
+        "build-body-model",
+        help="build a hash-bound personalized body model from measured landmarks",
+    )
+    body_build.add_argument("spec")
+    body_build.add_argument("output")
+
+    body_eval = sub.add_parser(
+        "evaluate-body-registration",
+        help="evaluate personalized body registration repeatability",
+    )
+    body_eval.add_argument("profile")
+    body_eval.add_argument("camera_session")
+    body_eval.add_argument("output")
 
     body_model = sub.add_parser(
         "validate-body-model",
@@ -498,6 +517,32 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(json.dumps(receipt.to_dict(), indent=2, sort_keys=True))
         return 0 if receipt.passed else 2
+
+    if args.command == "build-body-model":
+        profile = build_body_model_from_spec(args.spec, args.output)
+        print(json.dumps(profile.to_dict(), indent=2, sort_keys=True))
+        return 0
+
+    if args.command == "evaluate-body-registration":
+        report = write_body_registration_report(
+            args.profile,
+            args.camera_session,
+            args.output,
+        )
+        print(
+            json.dumps(
+                {
+                    "schema_version": report["schema_version"],
+                    "profile_id": report["profile"]["model_id"],
+                    "camera_session_id": report["camera_session"]["session_id"],
+                    "frame_accounting": report["frame_accounting"],
+                    "output": args.output,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
 
     if args.command == "validate-body-model":
         profile = load_body_model_profile(args.profile)

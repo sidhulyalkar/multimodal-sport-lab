@@ -28,6 +28,7 @@ Most fitness systems collapse very different sports into distance, heart rate, a
 - Watch, equipment, bilateral foot pressure/IMU, and camera-pose topics.
 - Calibration mode (camera teacher) and field mode (wearables only).
 - Personalized body-model validation + auditable Vision-to-body registration.
+- Deterministic scan/landmark body-profile authoring + multi-pose registration repeatability.
 - Deterministic multimodal simulator with realistic clock offsets/drift.
 - Synchronized replay frames and per-stream QC.
 - M0 required-stream validation gate.
@@ -113,6 +114,8 @@ src/motionos/                 Python reference core
   simulate.py                 deterministic full-stack synthetic capture
   sync.py                     physical impulse sync checks
   pose.py                     body model + pose alignment
+  body_model.py               personalized geometry + similarity registration
+  body_authoring.py           scan-profile builder + repeatability reports
   replay.py                   synchronized timeline replay
   qc.py                       rate/gap/drop/sync diagnostics
   validate.py                 M0 evidence gate
