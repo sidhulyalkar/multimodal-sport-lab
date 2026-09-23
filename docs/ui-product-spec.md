@@ -81,6 +81,24 @@ Watch:
 - large Stop/Pause affordances
 - haptic warning if a required stream fails
 
+
+## Metric capability contract
+
+The UI must decide what it can display from explicit session capabilities, not
+from whether the payload came from a demo or a generated file.
+
+Every displayed metric belongs to one of three classes:
+- **measured**: directly supported by a sensor with declared units/frame;
+- **derived**: computed by a versioned deterministic estimator with provenance;
+- **inferred**: model output with model/version and uncertainty semantics.
+
+If a capability is absent, show unavailable rather than substituting a plausible
+number. Examples:
+- no validated speed source -> no measured speed;
+- equipment gyro alone -> angular rate, not automatically board roll angle;
+- plantar pressure -> normal plantar load/CoP semantics, not full 3D GRF;
+- raw Vision pose -> camera/Vision teacher coordinates, not world ground truth.
+
 ## Replay screen
 
 The central canvas is the athlete + equipment, not a chart.
@@ -96,8 +114,8 @@ The central canvas is the athlete + equipment, not a chart.
 │          ═════════════════ board             │
 │                                              │
 │ L foot 38%                    R foot 62%      │
-│ board roll -14° · speed 7.8 m/s · HR 154    │
-│ pose confidence 0.86 · sync ±3.2 ms          │
+│ board |gyro| 41°/s · speed — · HR 154       │
+│ pose observed · clock residual 3.2 ms         │
 ├──────────────────────────────────────────────┤
 │ pressure │ board │ HR │ events │ uncertainty │
 │───────────────●──────────────────────────────│
@@ -135,10 +153,10 @@ Expose:
 - left/right load ratio
 - within-foot COP
 - COP velocity
-- board roll/yaw
-- pressure→equipment response lag
-- stabilization events
-- uncertainty/confidence
+- board angular-rate observations; roll/yaw only when a validated orientation estimator exists
+- pressure→equipment response lag when timing uncertainty is small enough to resolve it
+- stabilization events only under a versioned detector definition
+- uncertainty/confidence with units or calibration semantics
 
 A future summary score may be added only after its definition and validation are inspectable.
 
