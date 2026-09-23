@@ -1195,6 +1195,7 @@ def build_p2_physical_receipt(
         thresholds_raw,
         "min_bilateral_overlap_fraction",
         maximum=1.0,
+        strictly_positive=True,
     )
     max_unloaded = _p2_spec_number(
         thresholds_raw,
@@ -1229,6 +1230,23 @@ def build_p2_physical_receipt(
         field_reader,
         min_duration_s=min_field_duration_s,
     )
+    controlled_source_hash = (
+        controlled_capture.source_evidence_sha256.get(
+            "opengo_text_export"
+        )
+    )
+    field_source_hash = field_capture.source_evidence_sha256.get(
+        "opengo_text_export"
+    )
+    if (
+        controlled_source_hash is not None
+        and controlled_source_hash == field_source_hash
+    ):
+        raise ValueError(
+            "P2 controlled and field qualification cannot reuse the same "
+            "OpenGo source export"
+        )
+
     capture_passed = (
         controlled_capture.capture_passed
         and field_capture.capture_passed
