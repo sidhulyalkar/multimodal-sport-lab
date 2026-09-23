@@ -43,6 +43,18 @@ def _nonempty(value: object, *, label: str) -> str:
     return text
 
 
+def _repository_commit(value: object) -> str:
+    commit = _nonempty(value, label="repository_commit").lower()
+    if len(commit) != 40 or any(
+        char not in "0123456789abcdef"
+        for char in commit
+    ):
+        raise ValueError(
+            "repository_commit must be an exact 40-character Git SHA"
+        )
+    return commit
+
+
 def _string_list(value: object, *, label: str) -> tuple[str, ...]:
     if not isinstance(value, list):
         raise TypeError(f"{label} must be a list")
@@ -338,9 +350,8 @@ def build_experiment_manifest(
             raw.get("protocol_version", ""),
             label="protocol_version",
         ),
-        repository_commit=_nonempty(
+        repository_commit=_repository_commit(
             raw.get("repository_commit", ""),
-            label="repository_commit",
         ),
         observability_registry_path=_portable(
             registry_path,
@@ -358,6 +369,118 @@ def build_experiment_manifest(
         encoding="utf-8",
     )
     return manifest
+
+
+def verify_experiment_manifest(
+    manifest_path: str | Path,
+) -> dict[str, object]:
+    manifest = Path(manifest_path).resolve()
+    raw = json.loads(manifest.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        raise TypeError("experiment manifest must contain a JSON object")
+    if raw.get("schema_version") != EXPERIMENT_SCHEMA_VERSION:
+        raise ValueError("unsupported experiment manifest schema")
+    _repository_commit(raw.get("repository_commit", ""))
+
+    registry_raw = raw.get("observability_registry")
+    if not isinstance(registry_raw, dict):
+        raise TypeError("experiment observability_registry must be an object")
+    registry_path = _resolve(
+        _nonempty(
+            registry_raw.get("path", ""),
+            label="observability_registry.path",
+        ),
+        base=manifest.parent,
+    )
+    expected_registry_hash = _nonempty(
+        registry_raw.get("sha256", ""),
+        label="observability_registry.sha256",
+    )
+    if sha256_file(registry_path) != expected_registry_hash:
+        raise ValueError("observability registry hash mismatch")
+    registry = load_observability_registry(registry_path)
+    variables = registry.by_id()
+
+    targets = _string_list(raw.get("targets", []), label="targets")
+    for target in targets:
+        variable = variables.get(target)
+        if variable is None:
+            raise ValueError(
+                f"experiment target missing from registry: {target}"
+            )
+        if not variable.teacher_eligible:
+            raise ValueError(
+                f"experiment target is not teacher-eligible: {target}"
+            )
+
+    sources_raw = raw.get("sources")
+    if not isinstance(sources_raw, list) or not sources_raw:
+        raise ValueError("experiment manifest requires sources")
+    for index, item in enumerate(sources_raw):
+        if not isinstance(item, dict):
+            raise TypeError(f"experiment source {index} must be an object")
+        path = _resolve(
+            _nonempty(item.get("path", ""), label=f"source {index}.path"),
+            base=manifest.parent,
+        )
+        expected = _nonempty(
+            item.get("sha256", ""),
+            label=f"source {index}.sha256",
+        )
+        source_type = _nonempty(
+            item.get("source_type", ""),
+            label=f"source {index}.source_type",
+        )
+        if source_type == "session":
+            reader = SessionReader(path)
+            actual = session_evidence_sha256(reader)
+            if str(item.get("session_id", "")) != reader.manifest.session_id:
+                raise ValueError(
+                    f"experiment source {index} session ID mismatch"
+                )
+        elif source_type == "artifact":
+            actual = sha256_file(path)
+        else:
+            raise ValueError(
+                f"unsupported experiment source_type: {source_type}"
+            )
+        if actual != expected:
+            raise ValueError(
+                f"experiment source hash mismatch at index {index}"
+            )
+
+    models_raw = raw.get("models", [])
+    if not isinstance(models_raw, list):
+        raise TypeError("experiment models must be a list")
+    for index, item in enumerate(models_raw):
+        if not isinstance(item, dict):
+            raise TypeError(f"experiment model {index} must be an object")
+        weights_path = item.get("weights_path")
+        weights_hash = item.get("weights_sha256")
+        if weights_path is None and weights_hash is None:
+            continue
+        if not isinstance(weights_path, str) or not isinstance(
+            weights_hash,
+            str,
+        ):
+            raise ValueError(
+                f"experiment model {index} weights path/hash must coexist"
+            )
+        resolved = _resolve(weights_path, base=manifest.parent)
+        if sha256_file(resolved) != weights_hash:
+            raise ValueError(
+                f"experiment model weights hash mismatch at index {index}"
+            )
+
+    return {
+        "schema_version": EXPERIMENT_SCHEMA_VERSION,
+        "experiment_id": raw.get("experiment_id"),
+        "passed": True,
+        "source_count": len(sources_raw),
+        "target_count": len(targets),
+        "model_count": len(models_raw),
+        "manifest_sha256": sha256_file(manifest),
+    }
 
 
 @dataclass(frozen=True)
@@ -599,3 +722,84 @@ def build_grouped_split(
         encoding="utf-8",
     )
     return result
+
+
+def verify_grouped_split(
+    split_path: str | Path,
+    index_path: str | Path,
+) -> dict[str, object]:
+    split_file = Path(split_path)
+    index_file = Path(index_path)
+    raw = json.loads(split_file.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        raise TypeError("grouped split must contain a JSON object")
+    if raw.get("schema_version") != SPLIT_SCHEMA_VERSION:
+        raise ValueError("unsupported grouped split schema")
+    if raw.get("source_index_sha256") != sha256_file(index_file):
+        raise ValueError("grouped split source index hash mismatch")
+
+    group_by = _string_list(raw.get("group_by", []), label="group_by")
+    if not group_by:
+        raise ValueError("grouped split group_by must not be empty")
+    samples = _sample_index(index_file)
+    sample_by_id = {
+        str(sample["sample_id"]): sample
+        for sample in samples
+    }
+
+    assignments_raw = raw.get("assignments")
+    if not isinstance(assignments_raw, dict):
+        raise TypeError("grouped split assignments must be an object")
+    group_assignments = raw.get("group_assignments")
+    if not isinstance(group_assignments, dict):
+        raise TypeError("grouped split group_assignments must be an object")
+
+    seen: dict[str, str] = {}
+    for split in ("train", "validation", "test"):
+        sample_ids = assignments_raw.get(split)
+        if not isinstance(sample_ids, list):
+            raise TypeError(
+                f"grouped split assignments.{split} must be a list"
+            )
+        for sample_id_raw in sample_ids:
+            sample_id = str(sample_id_raw)
+            if sample_id not in sample_by_id:
+                raise ValueError(
+                    f"grouped split references unknown sample: {sample_id}"
+                )
+            if sample_id in seen:
+                raise ValueError(
+                    f"sample appears in multiple splits: {sample_id}"
+                )
+            seen[sample_id] = split
+
+            key = _group_key(sample_by_id[sample_id], group_by)
+            expected_split = group_assignments.get(key)
+            if expected_split != split:
+                raise ValueError(
+                    f"group leakage or stale group assignment: {key}"
+                )
+
+    missing = sorted(set(sample_by_id) - set(seen))
+    if missing:
+        raise ValueError(
+            "grouped split omits samples: " + ", ".join(missing)
+        )
+
+    expected_groups = {
+        _group_key(sample, group_by)
+        for sample in samples
+    }
+    if set(group_assignments) != expected_groups:
+        raise ValueError(
+            "grouped split group assignment set does not match source index"
+        )
+
+    return {
+        "schema_version": SPLIT_SCHEMA_VERSION,
+        "passed": True,
+        "sample_count": len(samples),
+        "group_count": len(expected_groups),
+        "split_sha256": sha256_file(split_file),
+        "source_index_sha256": sha256_file(index_file),
+    }
