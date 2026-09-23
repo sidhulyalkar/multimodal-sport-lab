@@ -4,8 +4,18 @@ import json
 import re
 from pathlib import Path
 
+from .provenance import sha256_file
+
 TOTALCAPTURE_INDEX_SCHEMA_VERSION = "motionos.public-totalcapture-index.v1"
 _SUBJECT = re.compile(r"^[sS](\\d+)$")
+
+
+def _artifact(path: Path, *, root: Path) -> dict[str, object]:
+    return {
+        "path": str(path.relative_to(root)),
+        "sha256": sha256_file(path),
+        "size_bytes": path.stat().st_size,
+    }
 
 
 def index_totalcapture(
@@ -72,17 +82,20 @@ def index_totalcapture(
                     "intensity": sequence,
                     "modalities": {
                         "imu": [
-                            str(path.relative_to(root))
+                            _artifact(path, root=root)
                             for path in sensor_files
                         ],
-                        "vicon_position": str(gt_path.relative_to(root)),
+                        "vicon_position": _artifact(
+                            gt_path,
+                            root=root,
+                        ),
                         "vicon_orientation": (
-                            str(orientation.relative_to(root))
+                            _artifact(orientation, root=root)
                             if orientation.is_file()
                             else None
                         ),
                         "video": [
-                            str(path.relative_to(root))
+                            _artifact(path, root=root)
                             for path in videos
                         ],
                     },
