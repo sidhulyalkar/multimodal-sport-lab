@@ -1,3 +1,4 @@
+import MotionOSAppleCapture
 import SwiftUI
 
 struct GuidedP0Card: View {
