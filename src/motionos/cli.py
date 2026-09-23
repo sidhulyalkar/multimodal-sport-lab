@@ -7,6 +7,10 @@ from .body_model import (
     load_body_model_profile,
     verify_body_model_source_artifact,
 )
+from .body_model_authoring import (
+    build_body_model_profile,
+    write_registration_repeatability_report,
+)
 from .calibration import (
     build_calibration_bundle,
     calibration_gap_regions,
@@ -210,6 +214,21 @@ def _parser() -> argparse.ArgumentParser:
     run_replay.add_argument("run")
     run_replay.add_argument("output")
     run_replay.add_argument("--hz", type=float, default=10.0)
+
+    body_build = sub.add_parser(
+        "build-body-model",
+        help="build motionos.body-model.v2 from scan + landmark authoring spec",
+    )
+    body_build.add_argument("spec")
+    body_build.add_argument("output")
+
+    body_repeatability = sub.add_parser(
+        "evaluate-body-registration",
+        help="evaluate body-registration repeatability across camera pose frames",
+    )
+    body_repeatability.add_argument("profile")
+    body_repeatability.add_argument("camera_session")
+    body_repeatability.add_argument("output")
 
     body_model = sub.add_parser(
         "validate-body-model",
@@ -450,6 +469,39 @@ def main(argv: list[str] | None = None) -> int:
                 sort_keys=True,
             )
         )
+        return 0
+
+    if args.command == "build-body-model":
+        profile = build_body_model_profile(
+            args.spec,
+            args.output,
+        )
+        print(
+            json.dumps(
+                {
+                    "schema_version": profile.schema_version,
+                    "model_id": profile.model_id,
+                    "profile_sha256": profile.profile_sha256,
+                    "source_artifact_sha256":
+                        profile.source.artifact_sha256,
+                    "segments_m": dict(
+                        sorted(profile.segments_m.items())
+                    ),
+                    "output": args.output,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    if args.command == "evaluate-body-registration":
+        report = write_registration_repeatability_report(
+            args.profile,
+            args.camera_session,
+            args.output,
+        )
+        print(json.dumps(report.to_dict(), indent=2, sort_keys=True))
         return 0
 
     if args.command == "validate-body-model":
