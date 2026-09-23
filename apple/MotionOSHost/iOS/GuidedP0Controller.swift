@@ -118,7 +118,6 @@ final class GuidedP0Controller: ObservableObject {
             stepStartedAt = now
             startedMonotonicNS = monotonicNow
             stepStartedMonotonicNS = monotonicNow
-            progress.start(plan: plan)
 
             try append(
                 kind: "protocol_started",
@@ -129,10 +128,13 @@ final class GuidedP0Controller: ObservableObject {
                         "operator_guidance_only_not_sync_authority",
                 ]
             )
-            try appendCurrentStepStarted()
+            try appendStepStarted(plan.steps[0])
+
+            progress.start(plan: plan)
             notify(.success)
             errorMessage = nil
         } catch {
+            cleanupFailedStart()
             fail(error)
         }
     }
@@ -188,6 +190,7 @@ final class GuidedP0Controller: ObservableObject {
                 )
                 try closeJournal()
                 stepStartedAt = nil
+                stepStartedMonotonicNS = nil
                 notify(.success)
             } else {
                 stepStartedAt = Date()
@@ -275,6 +278,7 @@ final class GuidedP0Controller: ObservableObject {
             progress.cancel()
             try closeJournal()
             stepStartedAt = nil
+            stepStartedMonotonicNS = nil
             notify(.warning)
             errorMessage = nil
         } catch {
@@ -360,19 +364,41 @@ final class GuidedP0Controller: ObservableObject {
 
     private func appendCurrentStepStarted() throws {
         guard let step = currentStep else { return }
+        try appendStepStarted(step)
+    }
+
+    private func appendStepStarted(
+        _ step: GuidedProtocolStep
+    ) throws {
         try append(
             kind: "step_started",
             step: step,
             payload: [
                 "instruction": step.instruction,
                 "minimum_step_duration_seconds":
-                    step.minimumStepDurationSeconds.map(String.init)
-                    ?? "none",
+                    step.minimumStepDurationSeconds.map {
+                        String($0)
+                    } ?? "none",
                 "minimum_plan_elapsed_seconds":
-                    step.minimumPlanElapsedSeconds.map(String.init)
-                    ?? "none",
+                    step.minimumPlanElapsedSeconds.map {
+                        String($0)
+                    } ?? "none",
             ]
         )
+    }
+
+    private func cleanupFailedStart() {
+        try? journalHandle?.close()
+        journalHandle = nil
+        progress.reset()
+        guidanceID = nil
+        startedAt = nil
+        stepStartedAt = nil
+        startedMonotonicNS = nil
+        stepStartedMonotonicNS = nil
+        evidenceBundle = nil
+        sequence = 0
+        lastHostMonotonicNS = nil
     }
 
     private func append(
