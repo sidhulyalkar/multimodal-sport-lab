@@ -46,6 +46,7 @@ For the post-M0 measurement, fusion, and cross-sport program, see [`docs/m1-scie
 The reproducible M1 experiment/observability/split contract is in [`docs/m1-experiment-contract.md`](docs/m1-experiment-contract.md).
 Participant/video/body-scan handling and public-export rules are in [`docs/privacy-data-governance.md`](docs/privacy-data-governance.md).
 M1 weighted timing uncertainty and extrapolation diagnostics are documented in [`docs/m1-clock-uncertainty.md`](docs/m1-clock-uncertainty.md).
+Deterministic IMU/video, pressure/video, and geometry residual benchmarking is documented in [`docs/m1-cross-modal-residuals.md`](docs/m1-cross-modal-residuals.md).
 
 ## Quick start
 
