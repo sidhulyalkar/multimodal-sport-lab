@@ -47,6 +47,7 @@ The reproducible M1 experiment/observability/split contract is in [`docs/m1-expe
 Participant/video/body-scan handling and public-export rules are in [`docs/privacy-data-governance.md`](docs/privacy-data-governance.md).
 M1 weighted timing uncertainty and extrapolation diagnostics are documented in [`docs/m1-clock-uncertainty.md`](docs/m1-clock-uncertainty.md).
 Deterministic IMU/video, pressure/video, and geometry residual benchmarking is documented in [`docs/m1-cross-modal-residuals.md`](docs/m1-cross-modal-residuals.md).
+Metric world-frame, multi-camera rig qualification, and triangulation are documented in [`docs/m1-world-geometry.md`](docs/m1-world-geometry.md).
 
 ## Quick start
 

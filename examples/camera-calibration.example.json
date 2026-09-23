@@ -1,0 +1,62 @@
+{
+  "schema_version": "motionos.camera-calibration.v1",
+  "calibration_id": "camera-a-calibration-v1",
+  "camera_id": "REPLACE_WITH_AVFOUNDATION_CAMERA_UNIQUE_ID",
+  "camera_frame_convention": "+X right,+Y down,+Z forward",
+  "image_size_px": [1920, 1080],
+  "intrinsics": [
+    [1000.0, 0.0, 960.0],
+    [0.0, 1000.0, 540.0],
+    [0.0, 0.0, 1.0]
+  ],
+  "distortion": {
+    "model": "brown_conrady_5",
+    "coefficients": [0.0, 0.0, 0.0, 0.0, 0.0]
+  },
+  "world_from_camera": [
+    [1.0, 0.0, 0.0, -0.5],
+    [0.0, 1.0, 0.0, 0.0],
+    [0.0, 0.0, 1.0, 0.0],
+    [0.0, 0.0, 0.0, 1.0]
+  ],
+  "world_frame": {
+    "path": "world-frame.example.json",
+    "sha256": "REPLACE_WITH_WORLD_FRAME_SHA256"
+  },
+  "calibration_board": {
+    "path": "calibration-board.example.json",
+    "sha256": "REPLACE_WITH_BOARD_JSON_SHA256"
+  },
+  "reprojection": {
+    "rms_px": 0.5,
+    "max_px": 1.5,
+    "observation_count": 100
+  },
+  "acceptance": {
+    "max_reprojection_rms_px": 1.0,
+    "max_reprojection_max_px": 2.0,
+    "thresholds_frozen_before_review": true
+  },
+  "camera_identity": {
+    "device_model": "REPLACE_WITH_IPHONE_MODEL",
+    "camera_unique_id": "REPLACE_WITH_AVFOUNDATION_CAMERA_UNIQUE_ID",
+    "device_type": "builtInWideAngleCamera",
+    "position": "back",
+    "format_width": 1920,
+    "format_height": 1080,
+    "pixel_format": "32BGRA"
+  },
+  "source_timestamp_basis": "avcapture_presentation_timestamp",
+  "source_evidence": [
+    {
+      "role": "calibration_capture",
+      "path": "REPLACE_WITH_CALIBRATION_CAPTURE",
+      "sha256": "REPLACE_WITH_64_HEX_SHA256"
+    }
+  ],
+  "software": {
+    "name": "REPLACE_WITH_CALIBRATION_TOOL",
+    "version": "REPLACE_WITH_EXACT_VERSION"
+  },
+  "frozen_before_rig_capture": true
+}

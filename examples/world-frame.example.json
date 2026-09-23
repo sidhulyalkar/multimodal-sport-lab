@@ -1,0 +1,13 @@
+{
+  "schema_version": "motionos.world-frame.v1",
+  "frame_id": "longboard-calibration-world-v1",
+  "units": "m",
+  "axes": {
+    "x": "rider right",
+    "y": "up",
+    "z": "forward along calibration lane"
+  },
+  "origin_description": "center of the calibration-board bottom edge",
+  "gravity_direction": [0.0, -1.0, 0.0],
+  "calibration_board_sha256": "REPLACE_WITH_BOARD_JSON_SHA256"
+}

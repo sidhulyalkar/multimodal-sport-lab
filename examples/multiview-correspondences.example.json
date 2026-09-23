@@ -1,0 +1,26 @@
+{
+  "schema_version": "motionos.multiview-correspondences.v1",
+  "rig_id": "longboard-two-camera-v1",
+  "rig_receipt_sha256": "REPLACE_WITH_CAMERA_RIG_RECEIPT_SHA256",
+  "frozen_before_geometry_review": true,
+  "points": [
+    {
+      "point_id": "left-wrist-frame-0001",
+      "reference_time_ns": 1000000000,
+      "observations": {
+        "REPLACE_CAMERA_A_ID": {
+          "u_px": 900,
+          "v_px": 500,
+          "source_frame_sequence": 0,
+          "source_frame_pts_ns": 1000000000
+        },
+        "REPLACE_CAMERA_B_ID": {
+          "u_px": 1020,
+          "v_px": 500,
+          "source_frame_sequence": 0,
+          "source_frame_pts_ns": 1000000000
+        }
+      }
+    }
+  ]
+}

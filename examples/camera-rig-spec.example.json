@@ -1,0 +1,52 @@
+{
+  "schema_version": "motionos.camera-rig-spec.v1",
+  "rig_id": "longboard-two-camera-v1",
+  "thresholds_frozen_before_review": true,
+  "min_pairwise_baseline_m": 0.75,
+  "min_pairwise_view_angle_deg": 5,
+  "max_mount_translation_drift_m": 0.01,
+  "max_mount_rotation_drift_deg": 1,
+  "reference_session": {
+    "session": "REPLACE_WITH_WATCH_REFERENCE_SESSION",
+    "bundle_sha256": "REPLACE_WITH_SESSION_BUNDLE_SHA256"
+  },
+  "cameras": [
+    {
+      "calibration": {
+        "path": "camera-a-calibration.json",
+        "sha256": "REPLACE_WITH_CAMERA_A_CALIBRATION_SHA256"
+      },
+      "camera_session": {
+        "session": "REPLACE_WITH_CAMERA_A_SESSION",
+        "bundle_sha256": "REPLACE_WITH_CAMERA_A_BUNDLE_SHA256"
+      },
+      "clock_uncertainty": {
+        "path": "camera-a-clock-uncertainty.json",
+        "sha256": "REPLACE_WITH_CLOCK_ARTIFACT_SHA256"
+      },
+      "mount_verification": {
+        "path": "camera-a-mount-verification.json",
+        "sha256": "REPLACE_WITH_MOUNT_ARTIFACT_SHA256"
+      }
+    },
+    {
+      "calibration": {
+        "path": "camera-b-calibration.json",
+        "sha256": "REPLACE_WITH_CAMERA_B_CALIBRATION_SHA256"
+      },
+      "camera_session": {
+        "session": "REPLACE_WITH_CAMERA_B_SESSION",
+        "bundle_sha256": "REPLACE_WITH_CAMERA_B_BUNDLE_SHA256"
+      },
+      "clock_uncertainty": {
+        "path": "camera-b-clock-uncertainty.json",
+        "sha256": "REPLACE_WITH_CLOCK_ARTIFACT_SHA256"
+      },
+      "mount_verification": {
+        "path": "camera-b-mount-verification.json",
+        "sha256": "REPLACE_WITH_MOUNT_ARTIFACT_SHA256"
+      }
+    }
+  ],
+  "max_correspondence_time_delta_ms": 10
+}
