@@ -13,3 +13,10 @@ data/
 
 # Generated local Replay Lab evidence payloads
 web/replay-lab/session.json
+
+# Private participant / consent evidence
+private/
+participant-data/
+profiles/private/
+exports/private/
+consent/
