@@ -3,6 +3,10 @@ from __future__ import annotations
 import argparse
 import json
 
+from .body_model import (
+    load_body_model_profile,
+    verify_body_model_source_artifact,
+)
 from .calibration import (
     build_calibration_bundle,
     calibration_gap_regions,
@@ -206,6 +210,13 @@ def _parser() -> argparse.ArgumentParser:
     run_replay.add_argument("run")
     run_replay.add_argument("output")
     run_replay.add_argument("--hz", type=float, default=10.0)
+
+    body_model = sub.add_parser(
+        "validate-body-model",
+        help="validate a personalized motionos.body-model.v2 profile",
+    )
+    body_model.add_argument("profile")
+    body_model.add_argument("--source-artifact")
 
     camera_import = sub.add_parser(
         "import-camera-evidence",
@@ -434,6 +445,39 @@ def main(argv: list[str] | None = None) -> int:
                     "run_id": payload["run"]["run_id"],
                     "frames": len(payload["frames"]),
                     "output": args.output,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    if args.command == "validate-body-model":
+        profile = load_body_model_profile(args.profile)
+        source_artifact_sha256 = None
+        if args.source_artifact is not None:
+            source_artifact_sha256 = verify_body_model_source_artifact(
+                profile,
+                args.source_artifact,
+            )
+        print(
+            json.dumps(
+                {
+                    "schema_version": profile.schema_version,
+                    "model_id": profile.model_id,
+                    "profile_sha256": profile.profile_sha256,
+                    "source_type": profile.source.type,
+                    "source_artifact_sha256": source_artifact_sha256,
+                    "frame_convention": profile.frame_convention,
+                    "height_m": profile.height_m,
+                    "landmark_count": len(profile.landmarks_m),
+                    "segment_count": len(profile.segments_m),
+                    "registration_landmarks": list(
+                        profile.registration_landmarks
+                    ),
+                    "segments_m": dict(
+                        sorted(profile.segments_m.items())
+                    ),
                 },
                 indent=2,
                 sort_keys=True,

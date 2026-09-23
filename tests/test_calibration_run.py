@@ -417,8 +417,35 @@ def _build_four_role_fixture(tmp_path: Path) -> tuple[Path, Path]:
     body_model.write_text(
         json.dumps(
             {
-                "schema_version": "motionos.body-model.fixture.v1",
-                "source": "synthetic-test-only",
+                "schema_version": "motionos.body-model.v2",
+                "model_id": "fixture-personalized-body",
+                "height_m": 1.8,
+                "frame_convention": "+X right,+Y up,+Z forward",
+                "landmarks_m": {
+                    "root": [0.0, 0.0, 0.0],
+                    "head": [0.0, 1.7, 0.0],
+                    "leftHand": [-0.5, 1.0, 0.1],
+                    "rightHand": [0.5, 1.0, -0.1],
+                },
+                "segments_m": {
+                    "left_upper_limb": 0.71,
+                    "right_upper_limb": 0.74,
+                },
+                "joint_limits_deg": {},
+                "registration_landmarks": [
+                    "root",
+                    "head",
+                    "leftHand",
+                    "rightHand",
+                ],
+                "source": {
+                    "type": "synthetic_test_profile",
+                    "artifact_sha256": None,
+                    "notes": "identity transform fixture",
+                },
+                "metadata": {
+                    "asymmetry_preserved": True,
+                },
             }
         ),
         encoding="utf-8",
@@ -542,6 +569,11 @@ def test_run_manifest_report_and_replay_are_hash_verified(tmp_path):
     assert payload["schema_version"] == "motionos.replay-lab.v1"
     assert payload["run"]["run_id"] == "longboard-calibration-001"
     assert len(payload["devices"]) == 4
+    assert payload["body_registration"]["state"] == "available"
+    assert (
+        payload["body_registration"]["profile_id"]
+        == "fixture-personalized-body"
+    )
     assert payload["frames"]
 
     frame = next(
@@ -565,6 +597,18 @@ def test_run_manifest_report_and_replay_are_hash_verified(tmp_path):
     assert (
         frame["camera"]["pose3d"]["coordinate_frame"]
         == "vision_root_joint_relative_meters"
+    )
+    registered_pose = frame["camera"]["pose3d"]["registered_pose"]
+    assert registered_pose is not None
+    assert registered_pose["coordinate_frame"] == "personalized_body_model"
+    assert registered_pose["derived"] is True
+    assert (
+        registered_pose["joints_body_model_m"]["head"]
+        == pytest.approx([0.0, 1.7, 0.0])
+    )
+    assert (
+        registered_pose["registration"]["residual_rms_m"]
+        < 1e-9
     )
     assert (
         frame["camera"]["pose3d"]["raw_device_time_ns"]
@@ -674,3 +718,33 @@ def test_report_keeps_recorded_failure_modes_as_blockers(tmp_path):
     assert report["unresolved_blockers"] == [
         "recorded failure: camera mount moved after middle landmark"
     ]
+
+
+
+def test_replay_falls_back_to_raw_pose_when_body_profile_is_invalid(tmp_path):
+    spec, run_path = _build_four_role_fixture(tmp_path)
+
+    raw_spec = json.loads(spec.read_text(encoding="utf-8"))
+    body_model_path = Path(raw_spec["profiles"][0]["path"])
+    body_model_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "motionos.body-model.legacy",
+                "source": "legacy fixture",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    build_calibration_run(spec, run_path)
+    payload = build_replay_lab_payload(run_path, frame_hz=10.0)
+
+    assert payload["body_registration"]["state"] == "unavailable"
+    frame = next(
+        item
+        for item in payload["frames"]
+        if item["time_ns"] == 100_000_000
+    )
+    pose = frame["camera"]["pose3d"]
+    assert pose["registered_pose"] is None
+    assert pose["joints_root_relative_m"]["head"] == [0.0, 1.7, 0.0]
