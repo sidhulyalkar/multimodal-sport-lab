@@ -28,7 +28,12 @@ from .camera import (
 from .clock_sync import write_clock_sync
 from .closure import write_m0_closure_receipt
 from .equipment_cli import calibrate_equipment_mount_file
-from .experiments import build_experiment_manifest, build_grouped_split
+from .experiments import (
+    build_experiment_manifest,
+    build_grouped_split,
+    verify_experiment_manifest,
+    verify_grouped_split,
+)
 from .insole import (
     import_opengo_text_export,
     write_p2_capture_receipt,
@@ -340,6 +345,12 @@ def _parser() -> argparse.ArgumentParser:
     experiment.add_argument("spec")
     experiment.add_argument("output")
 
+    experiment_verify = sub.add_parser(
+        "verify-experiment-manifest",
+        help="recompute hashes and target eligibility for an M1 experiment",
+    )
+    experiment_verify.add_argument("manifest")
+
     grouped_split = sub.add_parser(
         "build-grouped-split",
         help="build a deterministic leakage-safe grouped dataset split",
@@ -364,6 +375,13 @@ def _parser() -> argparse.ArgumentParser:
         choices=("primary", "development"),
         default="primary",
     )
+
+    split_verify = sub.add_parser(
+        "verify-grouped-split",
+        help="verify a grouped split against its exact sample index",
+    )
+    split_verify.add_argument("split")
+    split_verify.add_argument("index")
 
     totalcapture = sub.add_parser(
         "index-totalcapture",
@@ -719,6 +737,11 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(manifest.to_dict(), indent=2, sort_keys=True))
         return 0
 
+    if args.command == "verify-experiment-manifest":
+        result = verify_experiment_manifest(args.manifest)
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+
     if args.command == "build-grouped-split":
         split = build_grouped_split(
             args.index,
@@ -731,6 +754,11 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(json.dumps(split.to_dict(), indent=2, sort_keys=True))
         return 0 if split.leakage_check_passed else 2
+
+    if args.command == "verify-grouped-split":
+        result = verify_grouped_split(args.split, args.index)
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
 
     if args.command == "index-totalcapture":
         payload = index_totalcapture(args.root, args.output)
