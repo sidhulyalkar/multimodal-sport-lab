@@ -66,6 +66,56 @@ def _artifact_index(run) -> dict[str, list[object]]:
     return index
 
 
+def _source_receipt_binding_blockers(
+    source: dict[str, object],
+) -> list[str]:
+    role = str(source.get("role", ""))
+    qualification = source.get("qualification")
+    if not isinstance(qualification, dict):
+        return [f"{role}: qualification payload is missing"]
+
+    receipt = qualification.get("receipt")
+    if not isinstance(receipt, dict):
+        return [f"{role}: qualification receipt payload is missing"]
+
+    expected_protocol = {
+        "watch": "P0",
+        "equipment": "P1",
+        "insoles": "P2",
+        "camera": "P5A-camera",
+    }.get(role)
+    blockers: list[str] = []
+    if expected_protocol is not None and receipt.get("protocol") != expected_protocol:
+        blockers.append(
+            f"{role}: qualification protocol does not match "
+            f"{expected_protocol}"
+        )
+
+    expected_session_id = source.get("session_id")
+    expected_bundle_sha256 = source.get("bundle_sha256")
+    if role == "insoles":
+        receipt_session_id = receipt.get("field_session_id")
+        bundle_raw = receipt.get("session_bundle_sha256")
+        receipt_bundle_sha256 = (
+            bundle_raw.get("field")
+            if isinstance(bundle_raw, dict)
+            else None
+        )
+    else:
+        receipt_session_id = receipt.get("session_id")
+        receipt_bundle_sha256 = receipt.get("bundle_sha256")
+
+    if receipt_session_id != expected_session_id:
+        blockers.append(
+            f"{role}: qualification receipt session does not match source"
+        )
+    if receipt_bundle_sha256 != expected_bundle_sha256:
+        blockers.append(
+            f"{role}: qualification receipt bundle hash does not match source"
+        )
+    return blockers
+
+
 def _operator_evidence_status(
     run_manifest: Path,
     run,
@@ -322,6 +372,10 @@ def evaluate_m0_closure(run_path: str | Path) -> M0ClosureReceipt:
             )
             if message not in blockers:
                 blockers.append(message)
+        else:
+            blockers.extend(
+                _source_receipt_binding_blockers(source)
+            )
 
     artifact_index = _artifact_index(run)
     operator_status = _operator_evidence_status(
