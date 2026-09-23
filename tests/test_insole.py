@@ -527,6 +527,7 @@ def _write_p2_physical_spec(
                     },
                 },
                 "protocol": {
+                    "thresholds_frozen_before_review": True,
                     "wireless_separation_completed": (
                         wireless_separation_completed
                     ),
