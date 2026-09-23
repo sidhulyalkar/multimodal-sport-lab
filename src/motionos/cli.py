@@ -30,8 +30,8 @@ from .clock_uncertainty import (
     analyze_clock_uncertainty,
     query_clock_uncertainty,
 )
-from .cross_modal_residuals import build_cross_modal_residual_report
 from .closure import write_m0_closure_receipt
+from .cross_modal_residuals import build_cross_modal_residual_report
 from .data_governance import (
     validate_external_dataset_registry,
     validate_public_export_manifest,
