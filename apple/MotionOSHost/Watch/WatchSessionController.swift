@@ -16,6 +16,8 @@ final class WatchSessionController: ObservableObject {
         case paused
         case ending
         case journalReady
+        case transferQueued
+        case transportComplete
         case transferred
         case failed
     }
@@ -24,6 +26,13 @@ final class WatchSessionController: ObservableObject {
     @Published private(set) var sessionID: String?
     @Published private(set) var heartRateBPM: Double?
     @Published private(set) var eventCount = 0
+    @Published private(set) var imuSampleCount: UInt64 = 0
+    @Published private(set) var heartRateEventCount: UInt64 = 0
+    @Published private(set) var observedIMUHz: Double?
+    @Published private(set) var recentMedianIMUHz: Double?
+    @Published private(set) var maxIMUGapMS: Double = 0
+    @Published private(set) var nonMonotonicIMUCount: UInt64 = 0
+    @Published private(set) var lastIMUSampleReceivedAt: Date?
     @Published private(set) var startedAt: Date?
     @Published private(set) var lastTransferredURL: URL?
     @Published private(set) var errorMessage: String?
@@ -36,6 +45,9 @@ final class WatchSessionController: ObservableObject {
     private var finalized = false
     private var heartRateSequence: UInt64 = 0
     private var closedJournalURL: URL?
+    private var closedJournalEvidence: FileEvidenceDigest?
+    private var imuHealth = SampleTimingHealth()
+    private var lastTelemetrySentAt = Date.distantPast
 
     private init() {
         workout.onHeartRateBPM = { [weak self] bpm, timestamp in
@@ -59,6 +71,25 @@ final class WatchSessionController: ObservableObject {
             guard let self else { return }
             Task { @MainActor in
                 await self.finalizeAndTransfer()
+            }
+        }
+
+        transport.onFileTransferFinished = {
+            [weak self] url, metadata, error in
+            guard let self else { return }
+            Task { @MainActor in
+                self.handleTransferFinished(
+                    url: url,
+                    metadata: metadata,
+                    error: error
+                )
+            }
+        }
+
+        transport.onUserInfoReceived = { [weak self] userInfo in
+            guard let self else { return }
+            Task { @MainActor in
+                self.handleUserInfo(userInfo)
             }
         }
     }
@@ -89,10 +120,20 @@ final class WatchSessionController: ObservableObject {
         errorMessage = nil
         heartRateBPM = nil
         eventCount = 0
+        imuSampleCount = 0
+        heartRateEventCount = 0
+        observedIMUHz = nil
+        recentMedianIMUHz = nil
+        maxIMUGapMS = 0
+        nonMonotonicIMUCount = 0
+        lastIMUSampleReceivedAt = nil
         heartRateSequence = 0
         finalized = false
         closedJournalURL = nil
+        closedJournalEvidence = nil
         lastTransferredURL = nil
+        imuHealth = SampleTimingHealth()
+        lastTelemetrySentAt = .distantPast
 
         let id = Self.makeSessionID()
         sessionID = id
@@ -182,8 +223,12 @@ final class WatchSessionController: ObservableObject {
     }
 
     func retryTransfer() {
-        guard let journalURL = closedJournalURL,
-              let id = sessionID
+        guard [
+            CaptureState.journalReady,
+            .transportComplete,
+        ].contains(state),
+        let journalURL = closedJournalURL,
+        let id = sessionID
         else {
             return
         }
@@ -199,6 +244,22 @@ final class WatchSessionController: ObservableObject {
 
         do {
             let count = try await pipeline.append(event)
+
+            if event.stream == "/body/watch/imu" {
+                imuHealth.observe(timestampNS: event.deviceTimeNS)
+                imuSampleCount = imuHealth.sampleCount
+                lastIMUSampleReceivedAt = Date()
+
+                if imuHealth.sampleCount.isMultiple(of: 25) {
+                    observedIMUHz = imuHealth.effectiveHz
+                    recentMedianIMUHz = imuHealth.recentMedianHz
+                    maxIMUGapMS = imuHealth.maxGapMS
+                    nonMonotonicIMUCount =
+                        imuHealth.nonMonotonicCount
+                }
+                publishCaptureHealthIfNeeded()
+            }
+
             if count.isMultiple(of: 25) {
                 eventCount = count
             }
@@ -212,6 +273,7 @@ final class WatchSessionController: ObservableObject {
         timestamp: UInt64
     ) async {
         heartRateBPM = bpm
+        heartRateEventCount += 1
         guard let id = sessionID else { return }
 
         let event = SensorEnvelope(
@@ -248,6 +310,7 @@ final class WatchSessionController: ObservableObject {
             let id = pipeline.sessionID
 
             closedJournalURL = journalURL
+            closedJournalEvidence = try FileEvidence.digest(journalURL)
             self.pipeline = nil
 
             if shouldPreserveFailure {
@@ -268,20 +331,117 @@ final class WatchSessionController: ObservableObject {
         journalURL: URL,
         sessionID: String
     ) {
+        guard let evidence = closedJournalEvidence else {
+            errorMessage = "Closed Watch journal has no verified digest."
+            state = .journalReady
+            return
+        }
+
         let transfer = transport.transferJournal(
             journalURL,
             metadata: [
                 "session_id": sessionID,
                 "schema_version": "motionos.m0.v1",
                 "stream": "/body/watch",
+                "journal_sha256": evidence.sha256,
+                "journal_byte_count": evidence.byteCount,
             ]
         )
 
         if transfer != nil {
             lastTransferredURL = journalURL
-            state = .transferred
+            errorMessage = nil
+            state = .transferQueued
         } else {
+            errorMessage = (
+                "WatchConnectivity is not active yet. "
+                + "The journal remains safe on Watch."
+            )
             state = .journalReady
+        }
+    }
+
+    private func handleTransferFinished(
+        url: URL,
+        metadata: [String: Any]?,
+        error: Error?
+    ) {
+        guard let id = sessionID,
+              metadata?["session_id"] as? String == id
+        else {
+            return
+        }
+
+        if let error {
+            errorMessage = (
+                "Journal transfer failed: "
+                + error.localizedDescription
+                + ". Source remains safe on Watch."
+            )
+            state = .journalReady
+            return
+        }
+
+        if state != .transferred {
+            state = .transportComplete
+        }
+    }
+
+    private func handleUserInfo(
+        _ userInfo: [String: Any]
+    ) {
+        guard userInfo["motionos_message"] as? String
+                == "journal_received_ack",
+              let id = sessionID,
+              userInfo["session_id"] as? String == id,
+              let evidence = closedJournalEvidence,
+              let receivedHash = userInfo["journal_sha256"] as? String
+        else {
+            return
+        }
+
+        guard receivedHash.lowercased() == evidence.sha256 else {
+            errorMessage = (
+                "iPhone receipt hash did not match the Watch journal. "
+                + "Source remains safe on Watch."
+            )
+            state = .journalReady
+            return
+        }
+
+        errorMessage = nil
+        state = .transferred
+    }
+
+    private func publishCaptureHealthIfNeeded() {
+        let now = Date()
+        guard now.timeIntervalSince(lastTelemetrySentAt) >= 2.0,
+              let id = sessionID
+        else {
+            return
+        }
+
+        var message: [String: Any] = [
+            "motionos_message": "watch_capture_health_v1",
+            "session_id": id,
+            "sent_at_unix_s": now.timeIntervalSince1970,
+            "imu_sample_count": imuSampleCount,
+            "hr_event_count": heartRateEventCount,
+            "max_imu_gap_ms": maxIMUGapMS,
+            "non_monotonic_imu_count": nonMonotonicIMUCount,
+        ]
+        if let observedIMUHz {
+            message["observed_imu_hz"] = observedIMUHz
+        }
+        if let recentMedianIMUHz {
+            message["recent_median_imu_hz"] = recentMedianIMUHz
+        }
+        if let heartRateBPM {
+            message["heart_rate_bpm"] = heartRateBPM
+        }
+
+        if transport.sendMessage(message) {
+            lastTelemetrySentAt = now
         }
     }
 
