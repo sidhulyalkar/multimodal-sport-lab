@@ -7,7 +7,10 @@ from dataclasses import dataclass
 from itertools import combinations
 from pathlib import Path
 
-from .clock_uncertainty import CLOCK_UNCERTAINTY_SCHEMA_VERSION
+from .clock_uncertainty import (
+    CLOCK_UNCERTAINTY_SCHEMA_VERSION,
+    WeightedAffineClockModel,
+)
 from .provenance import session_evidence_sha256, sha256_file
 from .session import SessionReader
 
@@ -229,6 +232,7 @@ class RigCamera:
     calibration: CameraCalibration
     calibration_sha256: str
     clock_uncertainty_sha256: str
+    clock_model: WeightedAffineClockModel
     mount_verification_sha256: str
     mount_translation_drift_m: float
     mount_rotation_drift_deg: float
@@ -239,7 +243,10 @@ class RigCamera:
             "session_id": self.session_id,
             "session_bundle_sha256": self.session_bundle_sha256,
             "calibration_sha256": self.calibration_sha256,
-            "clock_uncertainty_sha256": self.clock_uncertainty_sha256,
+            "clock_uncertainty": {
+                "sha256": self.clock_uncertainty_sha256,
+                "weighted_affine": self.clock_model.to_dict(),
+            },
             "mount_verification_sha256":
                 self.mount_verification_sha256,
             "mount_translation_drift_m":
@@ -884,6 +891,40 @@ def _mount_verification(
     return artifact.sha256, translation_drift, rotation_drift
 
 
+def _clock_model_from_dict(
+    raw: object,
+    *,
+    label: str,
+) -> WeightedAffineClockModel:
+    if not isinstance(raw, dict):
+        raise TypeError(f"{label} must be an object")
+    covariance = raw.get("covariance_at_origin")
+    if not isinstance(covariance, dict):
+        raise TypeError(f"{label}.covariance_at_origin must be an object")
+    model = WeightedAffineClockModel(
+        slope=float(raw["slope"]),
+        intercept_ns=float(raw["intercept_ns"]),
+        origin_device_time_ns=float(raw["origin_device_time_ns"]),
+        origin_session_time_ns=float(raw["origin_session_time_ns"]),
+        residual_rms_ns=float(raw["residual_rms_ns"]),
+        reduced_chi_square=float(raw["reduced_chi_square"]),
+        variance_scale=float(raw["variance_scale"]),
+        origin_variance_ns2=float(
+            covariance["origin_variance_ns2"]
+        ),
+        origin_slope_covariance_ns=float(
+            covariance["origin_slope_covariance_ns"]
+        ),
+        slope_variance=float(covariance["slope_variance"]),
+        observations_used=int(raw["observations_used"]),
+        support_start_ns=int(raw["support_start_ns"]),
+        support_end_ns=int(raw["support_end_ns"]),
+    )
+    if model.support_end_ns <= model.support_start_ns:
+        raise ValueError(f"{label} clock support must span time")
+    return model
+
+
 def _clock_mapping(
     raw: object,
     *,
@@ -893,7 +934,7 @@ def _clock_mapping(
     camera_reader: SessionReader,
     camera_bundle_sha256: str,
     camera_id: str,
-) -> str:
+) -> tuple[str, WeightedAffineClockModel]:
     artifact = _artifact_reference(
         raw,
         base=base,
@@ -918,7 +959,11 @@ def _clock_mapping(
         raise ValueError(f"{camera_id} clock target session mismatch")
     if str(target.get("bundle_sha256", "")) != camera_bundle_sha256:
         raise ValueError(f"{camera_id} clock target bundle mismatch")
-    return artifact.sha256
+    model = _clock_model_from_dict(
+        data.get("weighted_affine"),
+        label=f"{camera_id}.weighted_affine",
+    )
+    return artifact.sha256, model
 
 
 def build_camera_rig_receipt(
@@ -947,6 +992,10 @@ def build_camera_rig_receipt(
     max_rotation_drift = _nonnegative(
         raw.get("max_mount_rotation_drift_deg"),
         label="max_mount_rotation_drift_deg",
+    )
+    max_correspondence_time_delta_ms = _positive(
+        raw.get("max_correspondence_time_delta_ms"),
+        label="max_correspondence_time_delta_ms",
     )
 
     _ref_path, reference_reader, reference_bundle = _session_reference(
@@ -1015,7 +1064,7 @@ def build_camera_rig_receipt(
         elif calibration.board_sha256 != board_hash:
             raise ValueError("camera rig calibration-board hashes do not match")
 
-        clock_hash = _clock_mapping(
+        clock_hash, clock_model = _clock_mapping(
             item.get("clock_uncertainty"),
             base=spec_file.parent,
             reference_reader=reference_reader,
@@ -1042,6 +1091,7 @@ def build_camera_rig_receipt(
                 calibration=calibration,
                 calibration_sha256=calibration.artifact_sha256,
                 clock_uncertainty_sha256=clock_hash,
+                clock_model=clock_model,
                 mount_verification_sha256=mount_hash,
                 mount_translation_drift_m=translation_drift,
                 mount_rotation_drift_deg=rotation_drift,
@@ -1102,6 +1152,8 @@ def build_camera_rig_receipt(
             "min_pairwise_view_angle_deg": min_view_angle,
             "max_mount_translation_drift_m": max_translation_drift,
             "max_mount_rotation_drift_deg": max_rotation_drift,
+            "max_correspondence_time_delta_ms":
+                max_correspondence_time_delta_ms,
             "frozen_before_review": True,
         },
         "gates": {
@@ -1492,6 +1544,7 @@ def triangulate_multiview(
     if not isinstance(cameras_raw, list) or len(cameras_raw) < 2:
         raise ValueError("camera-rig receipt requires at least two cameras")
     calibrations: dict[str, CameraCalibration] = {}
+    clock_models: dict[str, WeightedAffineClockModel] = {}
     for index, item in enumerate(cameras_raw):
         if not isinstance(item, dict):
             raise TypeError(f"rig camera {index} must be an object")
@@ -1504,6 +1557,26 @@ def triangulate_multiview(
             label=f"{calibration.camera_id}.world_from_camera",
         )
         calibrations[calibration.camera_id] = calibration
+        clock_raw = item.get("clock_uncertainty")
+        if not isinstance(clock_raw, dict):
+            raise TypeError(
+                f"rig camera {index} clock_uncertainty must be an object"
+            )
+        clock_models[calibration.camera_id] = _clock_model_from_dict(
+            clock_raw.get("weighted_affine"),
+            label=f"{calibration.camera_id}.weighted_affine",
+        )
+
+    thresholds = rig.get("thresholds")
+    if not isinstance(thresholds, dict):
+        raise TypeError("camera-rig receipt thresholds must be an object")
+    max_time_delta_ns = round(
+        _positive(
+            thresholds.get("max_correspondence_time_delta_ms"),
+            label="max_correspondence_time_delta_ms",
+        )
+        * 1e6
+    )
 
     correspondence_path = Path(correspondences_path).resolve()
     correspondence = _json_object(
@@ -1550,7 +1623,10 @@ def triangulate_multiview(
             )
 
         rays: list[tuple[Vector3, Vector3]] = []
-        parsed_observations: dict[str, tuple[float, float]] = {}
+        parsed_observations: dict[
+            str,
+            tuple[float, float, int, int, int, float],
+        ] = {}
         for camera_id, observation in observations_raw.items():
             if camera_id not in calibrations:
                 raise ValueError(
@@ -1578,7 +1654,45 @@ def triangulate_multiview(
                     f"point {point_id} observation {camera_id} "
                     "falls outside image bounds"
                 )
-            parsed_observations[str(camera_id)] = (u_px, v_px)
+            source_frame_sequence = int(
+                observation["source_frame_sequence"]
+            )
+            source_frame_pts_ns = int(
+                observation["source_frame_pts_ns"]
+            )
+            if source_frame_sequence < 0 or source_frame_pts_ns < 0:
+                raise ValueError(
+                    f"point {point_id} observation {camera_id} "
+                    "frame sequence/PTS must be non-negative"
+                )
+            clock_model = clock_models[str(camera_id)]
+            if clock_model.outside_support_ns(source_frame_pts_ns) > 0:
+                raise ValueError(
+                    f"point {point_id} observation {camera_id} "
+                    "is outside clock landmark support"
+                )
+            mapped_reference_time_ns = clock_model.map(
+                source_frame_pts_ns
+            )
+            time_delta_ns = (
+                mapped_reference_time_ns - reference_time_ns
+            )
+            if abs(time_delta_ns) > max_time_delta_ns:
+                raise ValueError(
+                    f"point {point_id} observation {camera_id} "
+                    "exceeds the frozen correspondence time tolerance"
+                )
+            predictive_std_ns = clock_model.predictive_std_ns(
+                source_frame_pts_ns
+            )
+            parsed_observations[str(camera_id)] = (
+                u_px,
+                v_px,
+                source_frame_sequence,
+                source_frame_pts_ns,
+                mapped_reference_time_ns,
+                predictive_std_ns,
+            )
             rays.append(
                 _pixel_to_world_ray(
                     calibration,
@@ -1603,7 +1717,16 @@ def triangulate_multiview(
         disagreement_values.append(disagreement)
 
         residuals: dict[str, float] = {}
-        for camera_id, (u_px, v_px) in parsed_observations.items():
+        timing: dict[str, dict[str, object]] = {}
+        for camera_id, observation in parsed_observations.items():
+            (
+                u_px,
+                v_px,
+                source_frame_sequence,
+                source_frame_pts_ns,
+                mapped_reference_time_ns,
+                predictive_std_ns,
+            ) = observation
             projected = _project_world_point(
                 calibrations[camera_id],
                 point_world,
@@ -1614,6 +1737,16 @@ def triangulate_multiview(
             )
             residuals[camera_id] = residual
             reprojection_values.append(residual)
+            timing[camera_id] = {
+                "source_frame_sequence": source_frame_sequence,
+                "source_frame_pts_ns": source_frame_pts_ns,
+                "mapped_reference_time_ns": mapped_reference_time_ns,
+                "time_delta_ms": (
+                    mapped_reference_time_ns - reference_time_ns
+                )
+                / 1e6,
+                "clock_predictive_std_ms": predictive_std_ns / 1e6,
+            }
 
         mean_reprojection = statistics.mean(residuals.values())
         points.append(
@@ -1623,6 +1756,7 @@ def triangulate_multiview(
                 "world_position_m": list(point_world),
                 "camera_count": len(parsed_observations),
                 "reprojection_residual_px": dict(sorted(residuals.items())),
+                "timing": dict(sorted(timing.items())),
                 "mean_reprojection_residual_px": mean_reprojection,
                 "ray_disagreement_rms_m": disagreement,
             }
