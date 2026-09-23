@@ -77,6 +77,11 @@ struct PhoneContentView: View {
                     .font(.system(.subheadline, design: .monospaced))
                     .foregroundStyle(stateColor)
             }
+
+            if coordinator.state == .running
+                || coordinator.state == .paused {
+                watchHealthSummary
+            }
         }
         .cardStyle()
     }
@@ -142,9 +147,35 @@ struct PhoneContentView: View {
                 Text(url.lastPathComponent)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Label("Copied into iPhone Documents", systemImage: "checkmark.circle.fill")
-                    .font(.caption)
-                    .foregroundStyle(.green)
+                Label(
+                    "Hash-verified in iPhone Documents",
+                    systemImage: "checkmark.seal.fill"
+                )
+                .font(.caption)
+                .foregroundStyle(.green)
+
+                if let hash = inbox.latestJournalSHA256,
+                   let bytes = inbox.latestJournalByteCount {
+                    Text(
+                        "\(hash.prefix(12))… · "
+                            + ByteCountFormatter.string(
+                                fromByteCount: Int64(bytes),
+                                countStyle: .file
+                            )
+                    )
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+                }
+
+                if inbox.latestDuplicateRetransfer {
+                    Label(
+                        "Identical retry received; original evidence preserved",
+                        systemImage: "arrow.triangle.2.circlepath"
+                    )
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                }
 
                 if let hostURL = inbox.latestHostMetadataURL {
                     ShareLink(items: [url, hostURL]) {
@@ -168,6 +199,89 @@ struct PhoneContentView: View {
             }
         }
         .cardStyle()
+    }
+
+    private var watchHealthSummary: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            if let health = coordinator.watchCaptureHealth {
+                let age = coordinator.watchCaptureHealthAge(
+                    at: context.date
+                ) ?? .infinity
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack {
+                        Label(
+                            age <= 5
+                                ? "Watch capture alive"
+                                : "Watch telemetry stale",
+                            systemImage: age <= 5
+                                ? "waveform.path.ecg"
+                                : "exclamationmark.triangle"
+                        )
+                        .foregroundStyle(age <= 5 ? .green : .yellow)
+
+                        Spacer()
+
+                        Text(
+                            age <= 5
+                                ? String(format: "%.0fs ago", age)
+                                : String(format: "%.0fs stale", age)
+                        )
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    }
+
+                    HStack {
+                        metric(
+                            "IMU",
+                            health.recentMedianIMUHz.map {
+                                String(format: "%.1f Hz", $0)
+                            } ?? "warming up"
+                        )
+                        metric(
+                            "gap",
+                            String(
+                                format: "%.0f ms",
+                                health.maxIMUGapMS
+                            )
+                        )
+                        metric(
+                            "samples",
+                            "\(health.imuSampleCount)"
+                        )
+                    }
+
+                    Text(
+                        "Live telemetry is operator feedback only; "
+                            + "sealed Watch journal timestamps remain authoritative."
+                    )
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                }
+                .padding(.top, 4)
+            } else {
+                Text(
+                    coordinator.watchReachable
+                        ? "Waiting for live Watch capture health…"
+                        : "Watch live telemetry unavailable; background capture may still be valid."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func metric(
+        _ label: String,
+        _ value: String
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(label.uppercased())
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.system(.caption, design: .monospaced))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func readinessRow(_ title: String, value: Bool, detail: String) -> some View {
