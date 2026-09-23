@@ -135,22 +135,59 @@ def _run_with_operator_evidence(
     return tmp_path / "run.json", run
 
 
-def _report(*, insole_state: str = "qualified") -> dict[str, object]:
+def _report(
+    *,
+    insole_state: str = "qualified",
+    bad_watch_bundle: bool = False,
+) -> dict[str, object]:
     states = {
         "watch": "qualified",
         "equipment": "qualified",
         "insoles": insole_state,
         "camera": "qualified",
     }
-    return {
-        "unresolved_blockers": [],
-        "sources": [
+    protocols = {
+        "watch": "P0",
+        "equipment": "P1",
+        "insoles": "P2",
+        "camera": "P5A-camera",
+    }
+    sources: list[dict[str, object]] = []
+    for role, state in states.items():
+        session_id = f"{role}-session"
+        bundle_sha256 = role[0] * 64
+        if role == "insoles":
+            receipt = {
+                "protocol": "P2",
+                "field_session_id": session_id,
+                "session_bundle_sha256": {
+                    "field": bundle_sha256,
+                },
+            }
+        else:
+            receipt = {
+                "protocol": protocols[role],
+                "session_id": session_id,
+                "bundle_sha256": (
+                    "0" * 64
+                    if role == "watch" and bad_watch_bundle
+                    else bundle_sha256
+                ),
+            }
+        sources.append(
             {
                 "role": role,
-                "qualification": {"state": state},
+                "session_id": session_id,
+                "bundle_sha256": bundle_sha256,
+                "qualification": {
+                    "state": state,
+                    "receipt": receipt,
+                },
             }
-            for role, state in states.items()
-        ],
+        )
+    return {
+        "unresolved_blockers": [],
+        "sources": sources,
     }
 
 
@@ -225,5 +262,30 @@ def test_m0_closure_requires_operator_failures_in_run_manifest(
     assert receipt.passed is False
     assert any(
         "failure notes not propagated" in blocker
+        for blocker in receipt.unresolved_blockers
+    )
+
+
+def test_m0_closure_rejects_receipt_from_different_source_bundle(
+    tmp_path,
+    monkeypatch,
+):
+    run_path, run = _run_with_operator_evidence(tmp_path)
+
+    monkeypatch.setattr(
+        "motionos.closure.load_calibration_run",
+        lambda *_args, **_kwargs: run,
+    )
+    monkeypatch.setattr(
+        "motionos.closure.build_calibration_report",
+        lambda *_args, **_kwargs: _report(bad_watch_bundle=True),
+    )
+
+    receipt = evaluate_m0_closure(run_path)
+
+    assert receipt.passed is False
+    assert any(
+        "watch: qualification receipt bundle hash does not match source"
+        in blocker
         for blocker in receipt.unresolved_blockers
     )
