@@ -1,0 +1,11 @@
+{
+  "schema_version": "motionos.sample-index.example.v1",
+  "samples": [
+    {"sample_id": "d1-r1-rep1", "subject_id": "p001", "sport": "longboard", "day_id": "d1", "remount_id": "m1", "run_id": "r1", "repetition_id": "rep1", "camera_view": "a", "intensity": "slow"},
+    {"sample_id": "d1-r1-rep2", "subject_id": "p001", "sport": "longboard", "day_id": "d1", "remount_id": "m1", "run_id": "r1", "repetition_id": "rep2", "camera_view": "a", "intensity": "slow"},
+    {"sample_id": "d1-r2-rep1", "subject_id": "p001", "sport": "longboard", "day_id": "d1", "remount_id": "m2", "run_id": "r2", "repetition_id": "rep1", "camera_view": "b", "intensity": "medium"},
+    {"sample_id": "d2-r3-rep1", "subject_id": "p001", "sport": "longboard", "day_id": "d2", "remount_id": "m3", "run_id": "r3", "repetition_id": "rep1", "camera_view": "a", "intensity": "fast"},
+    {"sample_id": "d2-r3-rep2", "subject_id": "p001", "sport": "longboard", "day_id": "d2", "remount_id": "m3", "run_id": "r3", "repetition_id": "rep2", "camera_view": "a", "intensity": "fast"},
+    {"sample_id": "d3-r4-rep1", "subject_id": "p001", "sport": "longboard", "day_id": "d3", "remount_id": "m4", "run_id": "r4", "repetition_id": "rep1", "camera_view": "b", "intensity": "medium"}
+  ]
+}
