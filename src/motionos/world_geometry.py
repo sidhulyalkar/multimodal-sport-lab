@@ -134,6 +134,14 @@ class CameraCalibration:
     reprojection_max_px: float
     observation_count: int
     source_evidence_sha256: dict[str, str]
+    source_timestamp_basis: str
+    device_model: str
+    device_type: str
+    camera_position: str
+    pixel_format: str
+    max_reprojection_rms_px: float
+    max_reprojection_max_px: float
+    quality_passed: bool
     software_name: str
     software_version: str
     frozen_before_rig_capture: bool
@@ -188,6 +196,22 @@ class CameraCalibration:
             "source_evidence_sha256": dict(
                 sorted(self.source_evidence_sha256.items())
             ),
+            "source_timestamp_basis": self.source_timestamp_basis,
+            "camera_identity": {
+                "device_model": self.device_model,
+                "camera_unique_id": self.camera_id,
+                "device_type": self.device_type,
+                "position": self.camera_position,
+                "format_width": self.image_width_px,
+                "format_height": self.image_height_px,
+                "pixel_format": self.pixel_format,
+            },
+            "acceptance": {
+                "max_reprojection_rms_px": self.max_reprojection_rms_px,
+                "max_reprojection_max_px": self.max_reprojection_max_px,
+                "thresholds_frozen_before_review": True,
+                "passed": self.quality_passed,
+            },
             "software": {
                 "name": self.software_name,
                 "version": self.software_version,
@@ -568,20 +592,23 @@ def _source_evidence(
     base: Path,
 ) -> dict[str, str]:
     if not isinstance(raw, list) or not raw:
-        raise ValueError("camera calibration requires source_evidence")
+        raise ValueError("source_evidence must be a non-empty list")
     result: dict[str, str] = {}
     for index, item in enumerate(raw):
+        if not isinstance(item, dict):
+            raise TypeError(f"source_evidence[{index}] must be an object")
+        role = _text(
+            item.get("role", ""),
+            label=f"source_evidence[{index}].role",
+        )
+        if role in result:
+            raise ValueError(f"source evidence roles must be unique: {role}")
         artifact = _artifact_reference(
             item,
             base=base,
             label=f"source_evidence[{index}]",
         )
-        name = artifact.path.name
-        if name in result:
-            raise ValueError(
-                f"camera calibration source filenames must be unique: {name}"
-            )
-        result[name] = artifact.sha256
+        result[role] = artifact.sha256
     return result
 
 
@@ -674,6 +701,40 @@ def load_camera_calibration(path: str | Path) -> CameraCalibration:
     if not isinstance(software, dict):
         raise TypeError("camera calibration software must be an object")
 
+    identity = raw.get("camera_identity")
+    if not isinstance(identity, dict):
+        raise TypeError("camera calibration camera_identity must be an object")
+    camera_id = _text(
+        identity.get("camera_unique_id", ""),
+        label="camera_identity.camera_unique_id",
+    )
+    if camera_id != _text(raw.get("camera_id", ""), label="camera_id"):
+        raise ValueError("camera_identity.camera_unique_id must equal camera_id")
+    if int(identity.get("format_width", 0)) != int(image_size[0]) or int(
+        identity.get("format_height", 0)
+    ) != int(image_size[1]):
+        raise ValueError(
+            "camera_identity format dimensions must match image_size_px"
+        )
+
+    acceptance = raw.get("acceptance")
+    if not isinstance(acceptance, dict):
+        raise TypeError("camera calibration acceptance must be an object")
+    if acceptance.get("thresholds_frozen_before_review") is not True:
+        raise ValueError(
+            "camera calibration acceptance thresholds must be frozen "
+            "before review"
+        )
+    max_rms = _positive(
+        acceptance.get("max_reprojection_rms_px"),
+        label="acceptance.max_reprojection_rms_px",
+    )
+    max_max = _positive(
+        acceptance.get("max_reprojection_max_px"),
+        label="acceptance.max_reprojection_max_px",
+    )
+    quality_passed = rms <= max_rms and maximum <= max_max
+
     frame_convention = _text(
         raw.get("camera_frame_convention", ""),
         label="camera_frame_convention",
@@ -694,7 +755,7 @@ def load_camera_calibration(path: str | Path) -> CameraCalibration:
             raw.get("calibration_id", ""),
             label="calibration_id",
         ),
-        camera_id=_text(raw.get("camera_id", ""), label="camera_id"),
+        camera_id=camera_id,
         camera_frame_convention=frame_convention,
         image_width_px=int(image_size[0]),
         image_height_px=int(image_size[1]),
@@ -713,6 +774,29 @@ def load_camera_calibration(path: str | Path) -> CameraCalibration:
             raw.get("source_evidence"),
             base=source.parent,
         ),
+        source_timestamp_basis=_text(
+            raw.get("source_timestamp_basis", ""),
+            label="source_timestamp_basis",
+        ),
+        device_model=_text(
+            identity.get("device_model", ""),
+            label="camera_identity.device_model",
+        ),
+        device_type=_text(
+            identity.get("device_type", ""),
+            label="camera_identity.device_type",
+        ),
+        camera_position=_text(
+            identity.get("position", ""),
+            label="camera_identity.position",
+        ),
+        pixel_format=_text(
+            identity.get("pixel_format", ""),
+            label="camera_identity.pixel_format",
+        ),
+        max_reprojection_rms_px=max_rms,
+        max_reprojection_max_px=max_max,
+        quality_passed=quality_passed,
         software_name=_text(
             software.get("name", ""),
             label="software.name",
@@ -733,12 +817,13 @@ def write_camera_calibration_receipt(
     calibration = load_camera_calibration(calibration_path)
     receipt = {
         "schema_version": CAMERA_CALIBRATION_RECEIPT_SCHEMA_VERSION,
-        "passed": True,
+        "passed": calibration.quality_passed,
         "calibration_sha256": calibration.artifact_sha256,
         "calibration": calibration.to_dict(),
         "claim_boundary": (
             "A passing calibration receipt validates the declared metric "
-            "camera model, provenance, and coordinate contract. It does not "
+            "camera model, provenance, coordinate contract, and predeclared "
+            "reprojection thresholds. It does not "
             "prove the camera stayed fixed after calibration."
         ),
     }
@@ -875,6 +960,7 @@ def build_camera_rig_receipt(
         raise ValueError("camera rig requires at least two cameras")
 
     cameras: list[RigCamera] = []
+    calibration_quality_passed = True
     world_hash: str | None = None
     board_hash: str | None = None
     camera_ids: set[str] = set()
@@ -891,6 +977,10 @@ def build_camera_rig_receipt(
         calibration = load_camera_calibration(calibration_ref.path)
         if calibration.artifact_sha256 != calibration_ref.sha256:
             raise ValueError("camera calibration hash mismatch")
+        calibration_quality_passed = (
+            calibration_quality_passed
+            and calibration.quality_passed
+        )
 
         if calibration.camera_id in camera_ids:
             raise ValueError("camera rig camera IDs must be unique")
@@ -990,7 +1080,11 @@ def build_camera_rig_receipt(
         and camera.mount_rotation_drift_deg <= max_rotation_drift
         for camera in cameras
     )
-    passed = geometry_passed and mount_passed
+    passed = (
+        calibration_quality_passed
+        and geometry_passed
+        and mount_passed
+    )
 
     receipt = {
         "schema_version": CAMERA_RIG_RECEIPT_SCHEMA_VERSION,
@@ -1011,6 +1105,8 @@ def build_camera_rig_receipt(
             "frozen_before_review": True,
         },
         "gates": {
+            "camera_calibration_quality_passed":
+                calibration_quality_passed,
             "pairwise_geometry_passed": geometry_passed,
             "mount_stability_passed": mount_passed,
         },
@@ -1111,6 +1207,18 @@ def _camera_from_embedded(raw: dict[str, object]) -> CameraCalibration:
             str(key): str(value)
             for key, value in raw.get("source_evidence_sha256", {}).items()
         },
+        source_timestamp_basis=str(raw["source_timestamp_basis"]),
+        device_model=str(raw["camera_identity"]["device_model"]),
+        device_type=str(raw["camera_identity"]["device_type"]),
+        camera_position=str(raw["camera_identity"]["position"]),
+        pixel_format=str(raw["camera_identity"]["pixel_format"]),
+        max_reprojection_rms_px=float(
+            raw["acceptance"]["max_reprojection_rms_px"]
+        ),
+        max_reprojection_max_px=float(
+            raw["acceptance"]["max_reprojection_max_px"]
+        ),
+        quality_passed=bool(raw["acceptance"]["passed"]),
         software_name=str(software["name"]),
         software_version=str(software["version"]),
         frozen_before_rig_capture=bool(raw["frozen_before_rig_capture"]),
