@@ -463,7 +463,7 @@ def verify_experiment_manifest(
             weights_hash,
             str,
         ):
-            raise ValueError(
+            raise TypeError(
                 f"experiment model {index} weights path/hash must coexist"
             )
         resolved = _resolve(weights_path, base=manifest.parent)
