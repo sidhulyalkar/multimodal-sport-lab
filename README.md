@@ -27,12 +27,13 @@ Most fitness systems collapse very different sports into distance, heart rate, a
 - Independent deliberate-impulse synchronization check.
 - Watch, equipment, bilateral foot pressure/IMU, and camera-pose topics.
 - Calibration mode (camera teacher) and field mode (wearables only).
-- Personalized body-model loader.
+- Personalized body-model validation + auditable Vision-to-body registration.
 - Deterministic multimodal simulator with realistic clock offsets/drift.
 - Synchronized replay frames and per-stream QC.
 - M0 required-stream validation gate.
 - Optional MCAP export.
 - Swift package mirroring the cross-device event and clock contracts.
+- Strict final M0 closure receipt that rejects capture-only evidence.
 - CI tests and linting.
 
 See [`docs/m0-acceptance.md`](docs/m0-acceptance.md) for the explicit boundary between software validation and real-hardware qualification.
@@ -126,4 +127,12 @@ The simulator validates software invariants, not sensor accuracy. Real Watch, in
 
 ## Next hardware gate
 
-The next tranche is to connect one real Apple Watch + iPhone pair and one selected BLE IMU pod to this exact contract, then add a bilateral pressure-insole adapter. No downstream schema redesign should be necessary.
+The software integration path is now in place. The remaining M0-B gate is
+physical evidence: run the real Watch/iPhone, MetaMotionS, bilateral insole, and
+camera qualification protocols, collect start/middle/end cross-device
+landmarks, then execute the first combined longboard calibration ride.
+
+Use `scripts/process_calibration_run.sh` to inspect incomplete runs and
+`scripts/finalize_m0_run.sh` only when attempting strict physical closure.
+The finalizer produces `m0-closure-receipt.json` and fails until every
+physical qualification and provenance dependency is satisfied.
