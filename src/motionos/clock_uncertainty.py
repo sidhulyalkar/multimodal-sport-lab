@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import json
 import math
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
+from itertools import pairwise
 from pathlib import Path
 
 from .clock_sync import (
@@ -32,10 +33,10 @@ class WeightedAffineClockModel:
     support_start_ns: int
     support_end_ns: int
 
-    def map_float(self, device_time_ns: int | float) -> float:
+    def map_float(self, device_time_ns: float) -> float:
         return self.slope * float(device_time_ns) + self.intercept_ns
 
-    def map(self, device_time_ns: int | float) -> int:
+    def map(self, device_time_ns: float) -> int:
         return round(self.map_float(device_time_ns))
 
     @property
@@ -44,7 +45,7 @@ class WeightedAffineClockModel:
 
     def parameter_variance_ns2(
         self,
-        device_time_ns: int | float,
+        device_time_ns: float,
     ) -> float:
         delta = float(device_time_ns) - self.origin_device_time_ns
         value = (
@@ -54,14 +55,14 @@ class WeightedAffineClockModel:
         )
         return max(0.0, value)
 
-    def parameter_std_ns(self, device_time_ns: int | float) -> float:
+    def parameter_std_ns(self, device_time_ns: float) -> float:
         return math.sqrt(self.parameter_variance_ns2(device_time_ns))
 
-    def predictive_std_ns(self, device_time_ns: int | float) -> float:
+    def predictive_std_ns(self, device_time_ns: float) -> float:
         parameter = self.parameter_variance_ns2(device_time_ns)
         return math.sqrt(parameter + self.residual_rms_ns**2)
 
-    def outside_support_ns(self, device_time_ns: int | float) -> float:
+    def outside_support_ns(self, device_time_ns: float) -> float:
         value = float(device_time_ns)
         if value < self.support_start_ns:
             return self.support_start_ns - value
@@ -298,7 +299,7 @@ def _discontinuity_diagnostics(
         for item in observations
     ]
     local_slopes: list[float] = []
-    for left, right in zip(observations, observations[1:]):
+    for left, right in pairwise(observations):
         delta_x = right.device_time_ns - left.device_time_ns
         if delta_x <= 0:
             raise ValueError("clock observations must be strictly ordered")
@@ -311,11 +312,11 @@ def _discontinuity_diagnostics(
     ]
     slope_jumps = [
         abs(right - left) * 1e6
-        for left, right in zip(local_slopes, local_slopes[1:])
+        for left, right in pairwise(local_slopes)
     ]
     residual_jumps = [
         abs(right - left)
-        for left, right in zip(residuals, residuals[1:])
+        for left, right in pairwise(residuals)
     ]
     span_ns = (
         observations[-1].device_time_ns
