@@ -202,6 +202,65 @@ def validate_public_export_manifest(
     if len(set(paths)) != len(paths):
         raise ValueError("public export artifact paths must be unique")
 
+    external_license_ids = {
+        item.license_id
+        for item in artifacts
+        if item.release_basis == "external_dataset_license"
+        and item.license_id is not None
+    }
+    if external_license_ids:
+        registry_ref = raw.get("dataset_registry")
+        if not isinstance(registry_ref, dict):
+            raise TypeError(
+                "external-dataset public export requires dataset_registry"
+            )
+        registry_path_raw = _text(
+            registry_ref.get("path", ""),
+            label="dataset_registry.path",
+        )
+        registry_path = Path(registry_path_raw)
+        if not registry_path.is_absolute():
+            registry_path = (manifest.parent / registry_path).resolve()
+        expected_registry_hash = _text(
+            registry_ref.get("sha256", ""),
+            label="dataset_registry.sha256",
+        ).lower()
+        if sha256_file(registry_path) != expected_registry_hash:
+            raise ValueError("dataset registry hash mismatch")
+
+        registry_data = json.loads(
+            registry_path.read_text(encoding="utf-8")
+        )
+        if not isinstance(registry_data, dict):
+            raise TypeError("dataset registry must contain a JSON object")
+        if (
+            registry_data.get("schema_version")
+            != DATASET_REGISTRY_SCHEMA_VERSION
+        ):
+            raise ValueError("unsupported external dataset registry schema")
+        entries = registry_data.get("datasets")
+        if not isinstance(entries, list):
+            raise TypeError("dataset registry datasets must be a list")
+        by_id = {
+            str(item.get("dataset_id", "")): item
+            for item in entries
+            if isinstance(item, dict)
+        }
+        for license_id in sorted(external_license_ids):
+            entry = by_id.get(license_id)
+            if entry is None:
+                raise ValueError(
+                    f"public export references unknown dataset: {license_id}"
+                )
+            if entry.get("authorization_status") != "authorized_local_copy":
+                raise ValueError(
+                    f"dataset is not marked authorized: {license_id}"
+                )
+            if entry.get("redistribution_permitted") is not True:
+                raise ValueError(
+                    f"dataset redistribution is not permitted: {license_id}"
+                )
+
     return {
         "schema_version": PUBLIC_EXPORT_SCHEMA_VERSION,
         "export_id": export_id,
