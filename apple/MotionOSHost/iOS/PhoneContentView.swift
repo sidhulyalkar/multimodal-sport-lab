@@ -12,7 +12,7 @@ struct PhoneContentView: View {
                     readiness
                     FieldRunCard()
                     controls
-                    protocolCard
+                    GuidedP0Card()
                     journalCard
                     EquipmentPodCard()
                     CameraCaptureCard()
