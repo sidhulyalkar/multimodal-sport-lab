@@ -160,4 +160,96 @@ final class MotionOSAppleCaptureTests: XCTestCase {
             "813916c35345e2efead732487f339a103a320fb00fca8c2e0618e594783536af"
         )
     }
+
+    func testGuidedP0AEnforcesStationaryMinimum() {
+        let plan = GuidedProtocolPlan.p0A
+        var progress = GuidedProtocolProgress()
+        progress.start(plan: plan)
+
+        XCTAssertEqual(progress.currentStep(plan: plan)?.id, "stationary")
+        XCTAssertFalse(
+            progress.completeCurrentStep(
+                plan: plan,
+                stepElapsedSeconds: 59,
+                planElapsedSeconds: 59
+            )
+        )
+        XCTAssertTrue(
+            progress.completeCurrentStep(
+                plan: plan,
+                stepElapsedSeconds: 60,
+                planElapsedSeconds: 60
+            )
+        )
+        XCTAssertEqual(progress.currentStep(plan: plan)?.id, "roll")
+    }
+
+    func testGuidedP0ACannotSkipRequiredChallenge() {
+        let plan = GuidedProtocolPlan.p0A
+        var progress = GuidedProtocolProgress()
+        progress.start(plan: plan)
+
+        XCTAssertFalse(progress.skipCurrentStep(plan: plan))
+        XCTAssertEqual(progress.currentStep(plan: plan)?.id, "stationary")
+    }
+
+    func testGuidedPlanElapsedGateCannotBeSatisfiedByStepTimeAlone() {
+        let step = GuidedProtocolStep(
+            id: "duration",
+            title: "Duration",
+            instruction: "Reach total duration.",
+            minimumPlanElapsedSeconds: 600,
+            allowsSkip: false
+        )
+
+        XCTAssertFalse(
+            step.canComplete(
+                stepElapsedSeconds: 700,
+                planElapsedSeconds: 599
+            )
+        )
+        XCTAssertTrue(
+            step.canComplete(
+                stepElapsedSeconds: 1,
+                planElapsedSeconds: 600
+            )
+        )
+    }
+
+    func testGuidedProtocolTracksSkippedAndCompletedSteps() {
+        let plan = GuidedProtocolPlan(
+            id: "fixture",
+            version: "v1",
+            title: "Fixture",
+            targetDurationSeconds: 10,
+            steps: [
+                .init(
+                    id: "optional",
+                    title: "Optional",
+                    instruction: "Optional step."
+                ),
+                .init(
+                    id: "required",
+                    title: "Required",
+                    instruction: "Required step.",
+                    allowsSkip: false
+                ),
+            ]
+        )
+        var progress = GuidedProtocolProgress()
+        progress.start(plan: plan)
+
+        XCTAssertTrue(progress.skipCurrentStep(plan: plan))
+        XCTAssertEqual(progress.skippedStepIDs, ["optional"])
+
+        XCTAssertTrue(
+            progress.completeCurrentStep(
+                plan: plan,
+                stepElapsedSeconds: 0,
+                planElapsedSeconds: 0
+            )
+        )
+        XCTAssertEqual(progress.completedStepIDs, ["required"])
+        XCTAssertEqual(progress.state, .completed)
+    }
 }
