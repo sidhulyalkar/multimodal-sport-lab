@@ -126,7 +126,7 @@ def _session_ref(path: Path, base: Path) -> dict[str, str]:
 def _fixture(tmp_path: Path) -> tuple[Path, dict[str, Path]]:
     sessions = tmp_path / "sessions"
     artifacts = tmp_path / "artifacts"
-    artifacts.mkdir()
+    artifacts.mkdir(parents=True)
 
     camera = _write_session(
         sessions,
