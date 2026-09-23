@@ -345,7 +345,55 @@ struct FieldRunCard: View {
                     systemImage: "square.and.arrow.up"
                 )
             }
+
+            let completeItems = completeEvidenceURLs(
+                operatorBundle: bundle
+            )
+            if completeItems.count > 2 {
+                ShareLink(items: completeItems) {
+                    Label(
+                        "Share complete local run evidence",
+                        systemImage: "shippingbox.and.arrow.backward"
+                    )
+                }
+
+                Text(
+                    "\(completeItems.count) files · Watch, pod, camera, "
+                        + "and operator artifacts are shared as independent files."
+                )
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            }
         }
+    }
+
+    private func completeEvidenceURLs(
+        operatorBundle: OperatorEvidenceBundle
+    ) -> [URL] {
+        var urls = [
+            operatorBundle.journalURL,
+            operatorBundle.metadataURL,
+        ]
+
+        if let watchJournal = inbox.latestJournalURL {
+            urls.append(watchJournal)
+        }
+        if let watchMetadata = inbox.latestHostMetadataURL {
+            urls.append(watchMetadata)
+        }
+
+        if let podBundle = pod.evidenceBundle {
+            urls.append(podBundle.journalURL)
+            urls.append(podBundle.metadataURL)
+        }
+
+        if let cameraBundle = camera.evidenceBundle {
+            urls.append(cameraBundle.videoURL)
+            urls.append(cameraBundle.journalURL)
+            urls.append(cameraBundle.metadataURL)
+        }
+
+        return urls
     }
 
     private func syncButton(_ label: String) -> some View {
