@@ -194,6 +194,10 @@ def _fixture(tmp_path: Path) -> tuple[Path, dict[str, Path]]:
         json.dumps(
             {
                 "schema_version": "motionos.visual-contact-events.v1",
+                "review_protocol": {
+                    "pressure_trace_hidden": True,
+                    "events_frozen_before_comparison": True,
+                },
                 "events": [
                     {
                         "time_ns": 1_000_000_000,
@@ -218,6 +222,7 @@ def _fixture(tmp_path: Path) -> tuple[Path, dict[str, Path]]:
         json.dumps(
             {
                 "schema_version": "motionos.robustness-strata.v1",
+                "frozen_before_residual_review": True,
                 "intervals": [
                     {
                         "start_ns": 0,
@@ -343,6 +348,8 @@ def _fixture(tmp_path: Path) -> tuple[Path, dict[str, Path]]:
                             [0.0, 1.0, 0.0],
                             [0.0, 0.0, 1.0],
                         ],
+                        "rotation_provenance": "fixture predeclared identity",
+                        "rotation_frozen_before_residual_review": True,
                         "max_pairing_delta_ms": 20.0,
                         "max_pose_interval_ms": 1500.0,
                     }
@@ -362,6 +369,7 @@ def _fixture(tmp_path: Path) -> tuple[Path, dict[str, Path]]:
                         ),
                         "stream": "/body/left_foot/pressure",
                         "force_threshold_n": 50.0,
+                        "threshold_frozen_before_residual_review": True,
                         "max_match_delta_ms": 100.0,
                     }
                 ],
@@ -551,4 +559,51 @@ def test_pressure_threshold_must_be_positive(tmp_path):
         build_cross_modal_residual_report(
             spec,
             tmp_path / "report.json",
+        )
+
+
+def test_visual_events_must_be_reviewed_without_pressure_trace(tmp_path):
+    spec, paths = _fixture(tmp_path)
+    contacts = json.loads(paths["contacts"].read_text(encoding="utf-8"))
+    contacts["review_protocol"]["pressure_trace_hidden"] = False
+    paths["contacts"].write_text(json.dumps(contacts), encoding="utf-8")
+
+    spec_raw = json.loads(spec.read_text(encoding="utf-8"))
+    spec_raw["pressure_video"][0]["visual_events"]["sha256"] = sha256_file(
+        paths["contacts"]
+    )
+    spec.write_text(json.dumps(spec_raw), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="pressure_trace_hidden"):
+        build_cross_modal_residual_report(
+            spec,
+            tmp_path / "report.json",
+        )
+
+
+def test_transform_and_threshold_must_be_frozen_before_review(tmp_path):
+    spec, _paths = _fixture(tmp_path)
+    raw = json.loads(spec.read_text(encoding="utf-8"))
+    raw["imu_video"][0][
+        "rotation_frozen_before_residual_review"
+    ] = False
+    spec.write_text(json.dumps(raw), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="rotation must be frozen"):
+        build_cross_modal_residual_report(
+            spec,
+            tmp_path / "report.json",
+        )
+
+    spec, _paths = _fixture(tmp_path / "second")
+    raw = json.loads(spec.read_text(encoding="utf-8"))
+    raw["pressure_video"][0][
+        "threshold_frozen_before_residual_review"
+    ] = False
+    spec.write_text(json.dumps(raw), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="threshold must be frozen"):
+        build_cross_modal_residual_report(
+            spec,
+            tmp_path / "second" / "report.json",
         )
