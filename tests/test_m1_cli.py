@@ -133,3 +133,45 @@ def test_index_totalcapture_cli(monkeypatch, tmp_path, capsys):
     )
     assert calls == [("/data/totalcapture", str(output))]
     assert '"sample_count": 2' in capsys.readouterr().out
+
+
+def test_verify_experiment_manifest_cli(monkeypatch, capsys):
+    monkeypatch.setattr(
+        cli,
+        "verify_experiment_manifest",
+        lambda _path: {
+            "schema_version": "motionos.experiment-manifest.v1",
+            "experiment_id": "exp-1",
+            "passed": True,
+        },
+    )
+
+    assert cli.main(["verify-experiment-manifest", "experiment.json"]) == 0
+    assert '"passed": true' in capsys.readouterr().out
+
+
+def test_verify_grouped_split_cli(monkeypatch, capsys):
+    calls = []
+
+    def fake_verify(*args):
+        calls.append(args)
+        return {
+            "schema_version": "motionos.grouped-split.v1",
+            "passed": True,
+            "sample_count": 9,
+        }
+
+    monkeypatch.setattr(cli, "verify_grouped_split", fake_verify)
+
+    assert (
+        cli.main(
+            [
+                "verify-grouped-split",
+                "split.json",
+                "index.json",
+            ]
+        )
+        == 0
+    )
+    assert calls == [("split.json", "index.json")]
+    assert '"sample_count": 9' in capsys.readouterr().out
