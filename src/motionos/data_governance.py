@@ -132,12 +132,14 @@ def _artifact(
             "non-synthetic artifacts cannot use release_basis='synthetic'"
         )
 
-    if release_basis == "participant_consent":
-        if participant_id is None or consent_reference is None:
-            raise ValueError(
-                "participant_consent requires participant_id and "
-                "consent_reference"
-            )
+    if (
+        release_basis == "participant_consent"
+        and (participant_id is None or consent_reference is None)
+    ):
+        raise ValueError(
+            "participant_consent requires participant_id and "
+            "consent_reference"
+        )
     if release_basis == "external_dataset_license" and license_id is None:
         raise ValueError(
             "external_dataset_license requires license_id"
