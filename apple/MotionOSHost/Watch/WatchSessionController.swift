@@ -33,6 +33,7 @@ final class WatchSessionController: ObservableObject {
     @Published private(set) var maxIMUGapMS: Double = 0
     @Published private(set) var nonMonotonicIMUCount: UInt64 = 0
     @Published private(set) var watchBatteryLevel: Double?
+    @Published private(set) var guidedCueTitle: String?
     @Published private(set) var lastIMUSampleReceivedAt: Date?
     @Published private(set) var startedAt: Date?
     @Published private(set) var lastTransferredURL: URL?
@@ -93,6 +94,13 @@ final class WatchSessionController: ObservableObject {
                 self.handleUserInfo(userInfo)
             }
         }
+
+        transport.onMessageReceived = { [weak self] message in
+            guard let self else { return }
+            Task { @MainActor in
+                self.handleMessage(message)
+            }
+        }
     }
 
     func requestAuthorization() async {
@@ -128,6 +136,7 @@ final class WatchSessionController: ObservableObject {
         maxIMUGapMS = 0
         nonMonotonicIMUCount = 0
         watchBatteryLevel = nil
+        guidedCueTitle = nil
         lastIMUSampleReceivedAt = nil
         heartRateSequence = 0
         finalized = false
@@ -398,6 +407,20 @@ final class WatchSessionController: ObservableObject {
         if state != .transferred {
             state = .transportComplete
         }
+    }
+
+    private func handleMessage(
+        _ message: [String: Any]
+    ) {
+        guard message["motionos_message"] as? String
+                == "guided_protocol_cue_v1",
+              let title = message["step_title"] as? String
+        else {
+            return
+        }
+
+        guidedCueTitle = title
+        WKInterfaceDevice.current().play(.notification)
     }
 
     private func handleUserInfo(
