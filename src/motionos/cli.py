@@ -27,6 +27,10 @@ from .camera import (
 )
 from .clock_sync import write_clock_sync
 from .closure import write_m0_closure_receipt
+from .data_governance import (
+    validate_external_dataset_registry,
+    validate_public_export_manifest,
+)
 from .equipment_cli import calibrate_equipment_mount_file
 from .insole import (
     import_opengo_text_export,
@@ -323,6 +327,18 @@ def _parser() -> argparse.ArgumentParser:
         "--receipt",
         default="p2-physical-receipt.json",
     )
+
+    public_export = sub.add_parser(
+        "validate-public-export",
+        help="validate a conservative public-release manifest and artifact hashes",
+    )
+    public_export.add_argument("manifest")
+
+    dataset_registry = sub.add_parser(
+        "validate-dataset-registry",
+        help="validate external-dataset authorization and redistribution metadata",
+    )
+    dataset_registry.add_argument("registry")
     return parser
 
 
@@ -637,6 +653,16 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(json.dumps(receipt.to_dict(), indent=2, sort_keys=True))
         return 0 if receipt.passed else 2
+
+    if args.command == "validate-public-export":
+        result = validate_public_export_manifest(args.manifest)
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+
+    if args.command == "validate-dataset-registry":
+        result = validate_external_dataset_registry(args.registry)
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
 
     if args.command == "validate-p1":
         if not args.capture_only:
