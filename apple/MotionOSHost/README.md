@@ -111,6 +111,31 @@ and may be removed the next time XcodeGen runs.
 
 Simulator builds verify compile-time contracts, but workout mirroring and real motion qualification require physical paired devices.
 
+### Xcode versus Command Line Tools
+
+If Terminal reports:
+
+```text
+xcode-select: error: tool 'xcodebuild' requires Xcode, but active developer
+directory '/Library/Developer/CommandLineTools' is a command line tools instance
+```
+
+the full Xcode app is installed but Terminal is still pointed at the smaller
+Command Line Tools bundle. The bootstrap script now detects the standard
+`/Applications/Xcode.app` installation and uses it for the current run without
+changing global system configuration.
+
+You can also make the full Xcode toolchain the global default:
+
+```bash
+sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer
+xcodebuild -version
+```
+
+If Xcode is installed elsewhere, set
+`MOTIONOS_DEVELOPER_DIR=/path/to/Xcode.app/Contents/Developer` before running
+the bootstrap script.
+
 ### Signing versus package resolution
 
 These are independent failure classes:
