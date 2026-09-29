@@ -39,23 +39,90 @@ Install XcodeGen 2.46+:
 ```bash
 brew install xcodegen
 cd apple/MotionOSHost
+./bootstrap.sh
+```
+
+`bootstrap.sh` is the preferred entry point. It:
+
+1. verifies the installed Xcode, Swift, and XcodeGen toolchains;
+2. validates the local `MotionOSAppleCapture` Swift package;
+3. regenerates `MotionOSHost.xcodeproj`;
+4. resolves the local and remote Swift packages into the repo-local
+   `.build/apple-source-packages` cache;
+5. verifies that the generated schemes are readable before opening Xcode.
+
+This keeps package resolution deterministic and makes the first SwiftPM error
+visible instead of leaving Xcode with only downstream “Missing package
+product” diagnostics.
+
+If package resolution is stale:
+
+```bash
+cd apple/MotionOSHost
+./bootstrap.sh --reset-packages
+```
+
+The reset removes only the generated MotionOS Xcode project and the repo-local
+Swift package cache. It does not touch global Xcode caches or user signing
+configuration.
+
+For manual generation:
+
+```bash
+cd apple/MotionOSHost
 xcodegen generate
+xcodebuild -resolvePackageDependencies \
+  -project MotionOSHost.xcodeproj \
+  -scheme MotionOS-iOS \
+  -clonedSourcePackagesDirPath ../../.build/apple-source-packages
 open MotionOSHost.xcodeproj
 ```
 
 XcodeGen has a currently open Xcode 26 issue that embeds modern single-target watch apps in the legacy `Watch/` location. The project spec contains a guarded post-generation patch to place Watch content in `PlugIns/` instead. Remove this workaround when upstream fixes the issue.
 
+## HealthKit capability policy
+
+The generated project intentionally enables the base HealthKit entitlement on
+the iPhone and Watch targets. Do **not** enable Clinical Health Records for
+P0. MotionOS does not read clinical/FHIR records, and that entitlement is
+outside the capture contract.
+
+HealthKit Background Delivery is also not required for the P0 workout path.
+P0 uses an active Watch workout session for workout lifecycle and live
+collection. Add background-delivery entitlement only when MotionOS introduces
+a concrete observer-query feature that requires it.
+
+Treat `project.yml` and the checked-in entitlement files as the source of
+truth. Manual capability toggles in the generated Xcode project are disposable
+and may be removed the next time XcodeGen runs.
+
 ## Before running on real devices
 
-1. Select your Apple Developer Team for **both** targets.
-2. Confirm bundle identifiers are unique for your developer account.
-3. Confirm the HealthKit capability is present on both targets.
-4. Pair the iPhone and Apple Watch.
-5. Install the iPhone app; the paired Watch app should also become available.
-6. Open the Watch app once and grant HealthKit authorization.
-7. Start P0 from the iPhone.
+1. Connect the physical iPhone and let Xcode finish preparing the device.
+2. Select your Apple Developer Team for **both** targets.
+3. Confirm bundle identifiers are unique for your developer account.
+4. Confirm the base HealthKit capability is present on both targets.
+5. Keep Clinical Health Records disabled.
+6. Pair the iPhone and Apple Watch.
+7. Select **MotionOS-iOS + the physical iPhone** as the run destination.
+8. Install the iPhone app; the paired Watch app should also become available.
+9. Open the Watch app once and grant HealthKit authorization.
+10. Start P0 from the iPhone.
 
 Simulator builds verify compile-time contracts, but workout mirroring and real motion qualification require physical paired devices.
+
+### Signing versus package resolution
+
+These are independent failure classes:
+
+- **“Missing package product”** means SwiftPM resolution failed. Run
+  `./bootstrap.sh --reset-packages` and use the first resolver error.
+- **“Communication with Apple failed” / “team has no devices”** is signing and
+  provisioning. Confirm the physical iPhone appears in
+  **Window → Devices and Simulators**, refresh the Apple ID in
+  **Xcode → Settings → Accounts**, then retry automatic signing.
+- Do not delete package dependencies to work around a signing error, and do
+  not change bundle identifiers to work around a SwiftPM resolver error.
 
 ## P0 expected flow
 
