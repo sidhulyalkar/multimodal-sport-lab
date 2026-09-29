@@ -32,6 +32,30 @@ These values are **operator feedback only**. They do not replace the sealed
 journals, native timestamps, file hashes, or repository-side qualification
 receipts.
 
+## Apple toolchain baseline
+
+The current package graph pins MetaWear at a revision that declares
+`swift-tools-version: 6.1`. Xcode 16.2 ships an older SwiftPM toolchain and
+cannot resolve it.
+
+- **Absolute package-resolution minimum:** Xcode 16.3.
+- **Recommended physical MotionOS toolchain in 2026:** Xcode 26 or newer.
+- For current iOS/watchOS 26 devices, use the Xcode 26 family rather than
+  upgrading only far enough to satisfy SwiftPM.
+
+The bootstrap script checks this before touching the package graph and reports
+the detected Xcode version explicitly.
+
+If multiple Xcode installations coexist, select one per-run without changing
+global system state:
+
+```bash
+export MOTIONOS_DEVELOPER_DIR="/Applications/Xcode-26.app/Contents/Developer"
+bash bootstrap.sh --reset-packages
+```
+
+Or point the system default at the desired installation with `xcode-select`.
+
 ## Generate the Xcode project
 
 Install XcodeGen 2.46+:
