@@ -99,6 +99,52 @@ If Xcode lives somewhere else, set:
 EOF
   exit 1
 fi
+XCODE_VERSION="$(xcodebuild -version | awk 'NR == 1 { print $2 }')"
+XCODE_MAJOR="${XCODE_VERSION%%.*}"
+XCODE_REMAINDER="${XCODE_VERSION#*.}"
+XCODE_MINOR="${XCODE_REMAINDER%%.*}"
+
+if [[ ! "$XCODE_MAJOR" =~ ^[0-9]+$ ]] || [[ ! "$XCODE_MINOR" =~ ^[0-9]+$ ]]; then
+  echo "Unable to parse Xcode version: $XCODE_VERSION" >&2
+  exit 1
+fi
+
+# The pinned MetaWear revision declares swift-tools-version 6.1. Xcode 16.2
+# ships SwiftPM 6.0 and cannot even resolve the package graph. Keep this
+# check ahead of package resolution so the operator gets the root cause
+# rather than downstream "Missing package product" noise.
+if (( XCODE_MAJOR < 16 || (XCODE_MAJOR == 16 && XCODE_MINOR < 3) )); then
+  cat >&2 <<EOF
+
+MotionOS package resolution requires Xcode 16.3 or newer.
+Detected: Xcode $XCODE_VERSION
+
+The pinned MetaWear package uses Swift tools 6.1, while Xcode $XCODE_VERSION
+ships an older SwiftPM toolchain.
+
+For current physical MotionOS qualification on iOS/watchOS 26 devices,
+install Xcode 26 or newer rather than stopping at Xcode 16.3.
+
+After installing a newer Xcode:
+  export MOTIONOS_DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer"
+  bash bootstrap.sh --reset-packages
+
+If the new Xcode has a different app name:
+  export MOTIONOS_DEVELOPER_DIR="/Applications/Xcode-26.app/Contents/Developer"
+  bash bootstrap.sh --reset-packages
+EOF
+  exit 1
+fi
+
+if (( XCODE_MAJOR < 26 )); then
+  cat >&2 <<EOF
+
+WARNING: Xcode $XCODE_VERSION can resolve the current package graph, but
+MotionOS physical qualification on current iOS/watchOS 26 hardware should use
+Xcode 26 or newer. Continue only for simulator/compile-only work.
+EOF
+fi
+
 xcodegen --version
 swift --version
 echo
