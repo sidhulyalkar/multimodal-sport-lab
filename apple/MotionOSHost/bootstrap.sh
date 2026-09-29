@@ -12,7 +12,7 @@ OPEN_PROJECT=1
 
 usage() {
   cat <<'EOF'
-Usage: ./bootstrap.sh [--reset-packages] [--no-open]
+Usage: bash bootstrap.sh [--reset-packages] [--no-open]
 
 Generates the MotionOS Xcode project, validates the local Swift package,
 and resolves all Swift Package Manager dependencies into a repo-local cache.
@@ -98,7 +98,7 @@ then
 MotionOS package resolution failed.
 
 The generated project is intact. Re-run with:
-  ./bootstrap.sh --reset-packages
+  bash bootstrap.sh --reset-packages
 
 If it still fails, copy the FIRST SwiftPM/Xcode resolver error above.
 Do not fix "Missing package product" by manually deleting target dependencies;
