@@ -39,7 +39,7 @@ Install XcodeGen 2.46+:
 ```bash
 brew install xcodegen
 cd apple/MotionOSHost
-./bootstrap.sh
+bash bootstrap.sh
 ```
 
 `bootstrap.sh` is the preferred entry point. It:
@@ -59,7 +59,7 @@ If package resolution is stale:
 
 ```bash
 cd apple/MotionOSHost
-./bootstrap.sh --reset-packages
+bash bootstrap.sh --reset-packages
 ```
 
 The reset removes only the generated MotionOS Xcode project and the repo-local
@@ -116,7 +116,7 @@ Simulator builds verify compile-time contracts, but workout mirroring and real m
 These are independent failure classes:
 
 - **“Missing package product”** means SwiftPM resolution failed. Run
-  `./bootstrap.sh --reset-packages` and use the first resolver error.
+  `bash bootstrap.sh --reset-packages` and use the first resolver error.
 - **“Communication with Apple failed” / “team has no devices”** is signing and
   provisioning. Confirm the physical iPhone appears in
   **Window → Devices and Simulators**, refresh the Apple ID in
