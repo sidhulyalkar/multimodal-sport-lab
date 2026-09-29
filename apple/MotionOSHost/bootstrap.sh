@@ -57,6 +57,22 @@ require xcodegen
 require xcodebuild
 require swift
 
+# Xcode's GUI can be installed while xcode-select still points at the smaller
+# CommandLineTools bundle. In that state, xcodebuild exists but refuses to run.
+# Prefer an explicit MotionOS override, otherwise use the selected developer
+# directory, and finally fall back to the standard Xcode.app installation for
+# this script only. We intentionally do not mutate the user's global
+# xcode-select configuration.
+SELECTED_DEVELOPER_DIR="$(xcode-select -p 2>/dev/null || true)"
+if [[ -n "${MOTIONOS_DEVELOPER_DIR:-}" ]]; then
+  export DEVELOPER_DIR="$MOTIONOS_DEVELOPER_DIR"
+elif [[ "$SELECTED_DEVELOPER_DIR" == *"/CommandLineTools" ]] \
+  && [[ -d "/Applications/Xcode.app/Contents/Developer" ]]; then
+  export DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer"
+elif [[ -n "$SELECTED_DEVELOPER_DIR" ]]; then
+  export DEVELOPER_DIR="$SELECTED_DEVELOPER_DIR"
+fi
+
 echo "== MotionOS Apple bootstrap =="
 echo "Repo:    $REPO_ROOT"
 echo "Scheme:  $SCHEME"
@@ -64,7 +80,25 @@ echo "Packages:$SOURCE_PACKAGES"
 echo
 
 echo "-- Toolchain"
-xcodebuild -version
+echo "xcode-select: ${SELECTED_DEVELOPER_DIR:-unavailable}"
+echo "DEVELOPER_DIR: ${DEVELOPER_DIR:-not set}"
+if ! xcodebuild -version; then
+  cat >&2 <<'EOF'
+
+MotionOS requires the full Xcode developer toolchain.
+
+If Xcode is installed in /Applications/Xcode.app, either:
+  export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
+  bash bootstrap.sh --reset-packages
+
+or switch the system-wide selection once:
+  sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer
+
+If Xcode lives somewhere else, set:
+  export MOTIONOS_DEVELOPER_DIR="/path/to/Xcode.app/Contents/Developer"
+EOF
+  exit 1
+fi
 xcodegen --version
 swift --version
 echo
