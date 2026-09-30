@@ -140,6 +140,18 @@ class CapturedMediaArtifact:
 
 
 @dataclass(frozen=True)
+class DerivedEvidenceArtifact:
+    artifact_id: str
+    source_id: str
+    kind: str
+    relative_path: str
+    sha256: str
+    byte_count: int
+    generated_at_utc: str
+    source_media_sha256: str | None = None
+
+
+@dataclass(frozen=True)
 class VisionSessionManifest:
     session_id: str
     sport: str
@@ -148,6 +160,7 @@ class VisionSessionManifest:
     camera_sources: tuple[CameraSource, ...]
     sync_landmarks: tuple[SyncLandmark, ...] = ()
     media_artifacts: tuple[CapturedMediaArtifact, ...] = ()
+    derived_artifacts: tuple[DerivedEvidenceArtifact, ...] = ()
     coaching_condition: str = "feedback_disabled"
     schema_version: str = VISION_SESSION_SCHEMA_VERSION
     claim_boundary: str = (
@@ -178,6 +191,9 @@ class VisionSessionManifest:
             "media_artifacts": [
                 asdict(artifact) for artifact in self.media_artifacts
             ],
+            "derived_artifacts": [
+                asdict(artifact) for artifact in self.derived_artifacts
+            ],
             "coaching_condition": self.coaching_condition,
             "claim_boundary": self.claim_boundary,
         }
@@ -200,6 +216,10 @@ class VisionSessionManifest:
             media_artifacts=tuple(
                 CapturedMediaArtifact(**item)
                 for item in data.get("media_artifacts", [])
+            ),
+            derived_artifacts=tuple(
+                DerivedEvidenceArtifact(**item)
+                for item in data.get("derived_artifacts", [])
             ),
             coaching_condition=str(
                 data.get("coaching_condition", "feedback_disabled")
