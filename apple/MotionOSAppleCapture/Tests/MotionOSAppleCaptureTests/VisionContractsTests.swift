@@ -2,6 +2,27 @@ import XCTest
 @testable import MotionOSAppleCapture
 
 final class VisionContractsTests: XCTestCase {
+    func testClockModelCodableUsesEvidenceKeys() throws {
+        let model = ClockModel(
+            slope: 1.00001,
+            interceptNS: 250,
+            residualRMSNS: 500_000
+        )
+        let data = try JSONEncoder().encode(model)
+        let object = try XCTUnwrap(
+            try JSONSerialization.jsonObject(with: data)
+                as? [String: Any]
+        )
+
+        XCTAssertEqual(object["intercept_ns"] as? Double, 250)
+        XCTAssertEqual(object["residual_rms_ns"] as? Double, 500_000)
+        XCTAssertNil(object["interceptNS"])
+        XCTAssertEqual(
+            try JSONDecoder().decode(ClockModel.self, from: data),
+            model
+        )
+    }
+
     func testVisionSessionManifestRoundTrip() throws {
         let source = CameraSource(
             sourceID: "dji-action4",
