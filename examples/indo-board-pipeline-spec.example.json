@@ -34,5 +34,6 @@
     "vision_acceleration_std_m_s2": "REPLACE_WITH_EMPIRICAL_VISION_STD",
     "maximum_acceleration_rate_m_s3": "REPLACE_WITH_PREDECLARED_JERK_BOUND",
     "maximum_time_delta_ms": 20
-  }
+  },
+  "board_marker_asset_receipt": "REPLACE/indo-board-four-marker-v1-build-receipt.json"
 }
