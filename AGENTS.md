@@ -39,6 +39,14 @@ Agents may cross lanes when a task genuinely requires it, but each PR should hav
 
 One writable worktree per agent. Do not have multiple agents edit the same checkout.
 
+Before starting any new assignment or baseline audit, prove that the worktree is on the intended integration commit:
+
+```bash
+bash scripts/agent_baseline_check.sh origin/fix/apple-bootstrap-package-resolution
+```
+
+If the check reports a stale snapshot, fast-forward before auditing. Every audit or PR handoff must include the exact audited `git rev-parse HEAD`. Do not present findings from an older worktree snapshot as findings against the current integration baseline.
+
 Create the standard fleet with:
 
 ```bash
