@@ -56,6 +56,10 @@ struct WatchContentView: View {
                     .lineLimit(2)
             }
 
+            if controller.captureRejections.total > 0 {
+                rejectionDiagnostics
+            }
+
             if let error = controller.errorMessage {
                 Text(error)
                     .font(.caption2)
@@ -75,6 +79,20 @@ struct WatchContentView: View {
             Text(controller.state.rawValue.uppercased())
                 .font(.caption2.weight(.semibold))
         }
+    }
+
+    /// Operator diagnostics only: events that were not journaled because they
+    /// arrived after shutdown, for another session, or from a stale motion
+    /// generation.
+    private var rejectionDiagnostics: some View {
+        let rejections = controller.captureRejections
+        let late = rejections.afterShutdown
+        let foreign = rejections.sessionMismatch &+ rejections.noActiveSession
+        let stale = rejections.staleMotionGeneration
+        return Text("not journaled: \(late) late · \(foreign) foreign · \(stale) stale")
+        .font(.system(.caption2, design: .monospaced))
+        .foregroundStyle(.secondary)
+        .multilineTextAlignment(.center)
     }
 
     private var metrics: some View {

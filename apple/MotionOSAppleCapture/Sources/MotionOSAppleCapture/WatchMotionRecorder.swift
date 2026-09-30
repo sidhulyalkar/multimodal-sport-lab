@@ -77,6 +77,12 @@ public final class WatchMotionRecorder: @unchecked Sendable {
         }
     }
 
+    /// Core Motion callbacks dropped because they belonged to a stopped or
+    /// superseded capture generation, over this recorder's lifetime.
+    public var staleCallbackRejectionCount: UInt64 {
+        sequenceFence.rejectedCallbackCount
+    }
+
     public func stop() {
         // Invalidate first so callbacks already queued by Core Motion are
         // rejected even if they execute after stop() returns.
