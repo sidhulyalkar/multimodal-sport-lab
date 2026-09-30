@@ -16,6 +16,7 @@ class BoardMarkerLayout:
     layout_id: str
     frame_convention: str
     markers_m: dict[str, Vector3]
+    marker_dictionary: str | None = None
 
     def __post_init__(self) -> None:
         if len(self.markers_m) < 3:
@@ -43,6 +44,11 @@ class BoardMarkerLayout:
             layout_id=str(data["layout_id"]),
             frame_convention=str(data["frame_convention"]),
             markers_m=markers,
+            marker_dictionary=(
+                str(data["marker_dictionary"])
+                if data.get("marker_dictionary") is not None
+                else None
+            ),
         )
 
 
