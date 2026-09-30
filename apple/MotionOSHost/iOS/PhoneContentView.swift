@@ -235,6 +235,44 @@ struct PhoneContentView: View {
                     .textSelection(.enabled)
                 }
 
+                if let origin = inbox.latestCaptureOrigin {
+                    Label(
+                        "Capture origin: \(origin)",
+                        systemImage: "applewatch.side.right"
+                    )
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                }
+
+                if let diagnostics = inbox.latestTransferDiagnostics {
+                    if diagnostics.total == 0 {
+                        Label(
+                            "Shutdown boundary clean",
+                            systemImage: "checkmark.shield.fill"
+                        )
+                        .font(.caption2)
+                        .foregroundStyle(.green)
+                    } else {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Label(
+                                "\(diagnostics.total) callbacks rejected at boundary",
+                                systemImage: "waveform.badge.exclamationmark"
+                            )
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.yellow)
+
+                            Text(
+                                "\(diagnostics.afterShutdown) late · "
+                                    + "\(diagnostics.sessionMismatch "
+                                    + diagnostics.noActiveSession) foreign · "
+                                    + "\(diagnostics.staleMotionGeneration) stale"
+                            )
+                            .font(.system(.caption2, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+
                 if inbox.latestDuplicateRetransfer {
                     Label(
                         "Identical retry received; original evidence preserved",
