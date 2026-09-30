@@ -247,6 +247,40 @@ public struct SyncLandmark: Codable, Sendable, Equatable, Identifiable {
     }
 }
 
+public struct CapturedMediaArtifact: Codable, Sendable, Equatable {
+    public let sourceID: String
+    public let relativePath: String
+    public let originalFilename: String
+    public let sha256: String
+    public let byteCount: UInt64
+    public let importedAtUTC: String
+
+    enum CodingKeys: String, CodingKey {
+        case sourceID = "source_id"
+        case relativePath = "relative_path"
+        case originalFilename = "original_filename"
+        case sha256
+        case byteCount = "byte_count"
+        case importedAtUTC = "imported_at_utc"
+    }
+
+    public init(
+        sourceID: String,
+        relativePath: String,
+        originalFilename: String,
+        sha256: String,
+        byteCount: UInt64,
+        importedAtUTC: String
+    ) {
+        self.sourceID = sourceID
+        self.relativePath = relativePath
+        self.originalFilename = originalFilename
+        self.sha256 = sha256
+        self.byteCount = byteCount
+        self.importedAtUTC = importedAtUTC
+    }
+}
+
 public struct VisionSessionManifest: Codable, Sendable, Equatable {
     public let schemaVersion: String
     public let sessionID: String
@@ -255,6 +289,7 @@ public struct VisionSessionManifest: Codable, Sendable, Equatable {
     public let createdAtUTC: String
     public let cameraSources: [CameraSource]
     public let syncLandmarks: [SyncLandmark]
+    public let mediaArtifacts: [CapturedMediaArtifact]
     public let coachingCondition: CoachingCondition
     public let claimBoundary: String
 
@@ -266,6 +301,7 @@ public struct VisionSessionManifest: Codable, Sendable, Equatable {
         case createdAtUTC = "created_at_utc"
         case cameraSources = "camera_sources"
         case syncLandmarks = "sync_landmarks"
+        case mediaArtifacts = "media_artifacts"
         case coachingCondition = "coaching_condition"
         case claimBoundary = "claim_boundary"
     }
@@ -278,6 +314,7 @@ public struct VisionSessionManifest: Codable, Sendable, Equatable {
         createdAtUTC: String,
         cameraSources: [CameraSource],
         syncLandmarks: [SyncLandmark],
+        mediaArtifacts: [CapturedMediaArtifact] = [],
         coachingCondition: CoachingCondition = .feedbackDisabled,
         claimBoundary: String = "Camera and wearable streams retain native timing until explicit calibration; derived biomechanics carry uncertainty."
     ) {
@@ -288,6 +325,7 @@ public struct VisionSessionManifest: Codable, Sendable, Equatable {
         self.createdAtUTC = createdAtUTC
         self.cameraSources = cameraSources
         self.syncLandmarks = syncLandmarks
+        self.mediaArtifacts = mediaArtifacts
         self.coachingCondition = coachingCondition
         self.claimBoundary = claimBoundary
     }
