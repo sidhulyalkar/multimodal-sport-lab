@@ -262,7 +262,11 @@ final class WatchSessionController: ObservableObject {
     }
 
     private func record(_ event: SensorEnvelope) async {
-        guard let pipeline else { return }
+        guard let pipeline,
+              event.sessionID == pipeline.sessionID
+        else {
+            return
+        }
 
         do {
             let count = try await pipeline.append(event)
