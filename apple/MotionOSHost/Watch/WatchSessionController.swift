@@ -353,12 +353,39 @@ final class WatchSessionController: ObservableObject {
         let session = transport.session
         connectivityActivated = session.activationState == .activated
         phoneReachable = connectivityActivated && session.isReachable
+
+        if connectivityActivated {
+            _ = ingestPhonePresence(session.receivedApplicationContext)
+        }
+
         #if os(watchOS)
         companionAppInstalled = connectivityActivated
-            && session.isCompanionAppInstalled
+            && (session.isCompanionAppInstalled || phonePresenceConfirmed)
         #endif
+
         healthAuthorizationStatus = workout.workoutAuthorizationStatus
         publishPresence()
+    }
+
+    @discardableResult
+    private func ingestPhonePresence(
+        _ message: [String: Any]
+    ) -> Bool {
+        guard message["motionos_message"] as? String == "phone_presence_v1",
+              message["bundle_id"] as? String == "com.sidhulyalkar.motionos"
+        else {
+            return false
+        }
+
+        phonePresenceConfirmed = true
+        if transport.session.activationState == .activated {
+            #if os(watchOS)
+            companionAppInstalled =
+                transport.session.isCompanionAppInstalled
+                    || phonePresenceConfirmed
+            #endif
+        }
+        return true
     }
 
     func retryTransfer() {
