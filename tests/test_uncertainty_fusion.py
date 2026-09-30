@@ -1,8 +1,10 @@
 import pytest
 
 from motionos.uncertainty_fusion import (
+    ScalarObservation,
     VectorObservation,
     inverse_variance_fuse,
+    inverse_variance_fuse_scalar,
 )
 
 
@@ -82,3 +84,31 @@ def test_fusion_refuses_coordinate_frame_mismatch():
                 ),
             ]
         )
+
+
+
+def test_scalar_fusion_prefers_precise_measurement_and_inflates_timing():
+    fused = inverse_variance_fuse_scalar(
+        [
+            ScalarObservation(
+                source_id="watch",
+                quantity_id="wrist_acceleration",
+                value=2.0,
+                variance=0.04,
+                session_time_ns=1_000_000_000,
+            ),
+            ScalarObservation(
+                source_id="vision",
+                quantity_id="wrist_acceleration",
+                value=4.0,
+                variance=1.0,
+                session_time_ns=1_002_000_000,
+                timing_uncertainty_ns=20_000_000,
+                maximum_rate_per_s=10.0,
+            ),
+        ]
+    )
+
+    assert fused.value < 2.2
+    assert fused.variance < 0.04
+    assert fused.standard_deviation > 0
