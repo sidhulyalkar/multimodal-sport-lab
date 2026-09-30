@@ -96,6 +96,17 @@ struct WatchContentView: View {
                 ready: controller.healthAccessReady
             )
 
+            if let battery = controller.watchBatteryLevel {
+                readinessRow(
+                    title: "Battery",
+                    value: String(format: "%.0f%%", battery * 100),
+                    symbol: battery >= 0.20
+                        ? "battery.100percent"
+                        : "battery.25percent",
+                    ready: battery >= 0.20
+                )
+            }
+
             if !controller.healthAccessReady {
                 Button {
                     Task { await controller.requestAuthorization() }
