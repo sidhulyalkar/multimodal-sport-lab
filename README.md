@@ -48,6 +48,7 @@ Participant/video/body-scan handling and public-export rules are in [`docs/priva
 M1 weighted timing uncertainty and extrapolation diagnostics are documented in [`docs/m1-clock-uncertainty.md`](docs/m1-clock-uncertainty.md).
 Deterministic IMU/video, pressure/video, and geometry residual benchmarking is documented in [`docs/m1-cross-modal-residuals.md`](docs/m1-cross-modal-residuals.md).
 Metric world-frame, multi-camera rig qualification, and triangulation are documented in [`docs/m1-world-geometry.md`](docs/m1-world-geometry.md).
+The first Watch + iPhone + DJI Action 4 Indo Board vertical slice is documented in [`docs/m0-vision-indo-board.md`](docs/m0-vision-indo-board.md).
 
 ## Quick start
 
@@ -123,6 +124,11 @@ src/motionos/                 Python reference core
   pose.py                     body model + pose alignment
   body_model.py               personalized geometry + similarity registration
   body_authoring.py           scan-profile builder + repeatability reports
+  multiview_pose.py           2D skeleton → calibrated correspondence bridge
+  uncertainty_fusion.py       fail-closed inverse-variance sensor fusion
+  board_pose.py               marker-derived equipment 6-DoF
+  indo_board.py               first five balance/technique metrics
+  longitudinal.py             durable confidence-gated progress baselines
   replay.py                   synchronized timeline replay
   qc.py                       rate/gap/drop/sync diagnostics
   validate.py                 M0 evidence gate
