@@ -28,11 +28,15 @@ from .world_geometry import triangulate_multiview
 from .wrist_fusion import build_wrist_acceleration_fusion
 
 PIPELINE_SPEC_SCHEMA_VERSION = "motionos.indo-board-pipeline-spec.v1"
+PIPELINE_STATE_SCHEMA_VERSION = "motionos.indo-board-pipeline-state.v1"
+PIPELINE_IMPLEMENTATION_VERSION = "motionos.indo-board-pipeline.impl.v1"
 
 
 def process_indo_board_pipeline(
     spec_path: str | Path,
     output_directory: str | Path,
+    *,
+    resume: bool = False,
 ) -> dict[str, object]:
     spec_source = Path(spec_path).resolve()
     spec = validate_indo_board_pipeline_spec(spec_source)
@@ -40,6 +44,14 @@ def process_indo_board_pipeline(
     output = Path(output_directory).resolve()
     output.mkdir(parents=True, exist_ok=True)
     base = spec_source.parent
+    state_path = output / "pipeline-state.json"
+    state = _initialize_pipeline_state(
+        state_path,
+        spec_source=spec_source,
+        spec=spec,
+        resume=resume,
+    )
+    reused_stages: list[str] = []
 
     vision_session = _resolve(base, spec["vision_session"])
     watch_journal = _resolve(base, spec["watch_journal"])
@@ -79,23 +91,51 @@ def process_indo_board_pipeline(
     if rig.get("passed") is not True:
         raise ValueError("pipeline requires a passing camera-rig receipt")
     rig_id = str(rig["rig_id"])
+    iphone_source_id = infer_pose2d_source_id(iphone_journal)
+    action4_source_id = infer_pose2d_source_id(action4_journal)
 
     external_sync_path = output / "action4-clock-sync.json"
-    write_external_camera_sync(
-        vision_session,
-        iphone_journal,
-        action4_journal,
+    if resume and _stage_reusable(
+        state,
+        "external_clock_sync",
         external_sync_path,
-    )
+    ):
+        reused_stages.append("external_clock_sync")
+    else:
+        write_external_camera_sync(
+            vision_session,
+            iphone_journal,
+            action4_journal,
+            external_sync_path,
+        )
+        _record_stage(
+            state,
+            state_path,
+            "external_clock_sync",
+            external_sync_path,
+        )
 
     clock_bundle_path = output / "vision-clock-bundle.json"
-    build_vision_clock_bundle(
-        vision_session,
-        watch_journal,
-        iphone_journal,
-        external_sync_path,
+    if resume and _stage_reusable(
+        state,
+        "vision_clock_bundle",
         clock_bundle_path,
-    )
+    ):
+        reused_stages.append("vision_clock_bundle")
+    else:
+        build_vision_clock_bundle(
+            vision_session,
+            watch_journal,
+            iphone_journal,
+            external_sync_path,
+            clock_bundle_path,
+        )
+        _record_stage(
+            state,
+            state_path,
+            "vision_clock_bundle",
+            clock_bundle_path,
+        )
     iphone_clock = load_clock_from_bundle(
         clock_bundle_path,
         "iphone_camera_to_watch",
@@ -105,59 +145,120 @@ def process_indo_board_pipeline(
         "action4_to_watch",
     )
 
-    iphone_pose = load_pose2d_journal(
-        iphone_journal,
-        clock_model=iphone_clock,
-    )
-    action4_pose = load_pose2d_journal(
-        action4_journal,
-        source_id="dji-action4",
-        clock_model=action4_clock,
-    )
-    pose_pairs = pair_pose_observations(
-        iphone_pose.observations,
-        action4_pose.observations,
-        maximum_time_delta_ms=maximum_pose_pair_ms,
-    )
-    if not pose_pairs:
-        raise ValueError(
-            "no synchronized iPhone/Action4 pose frames survived"
+    skeleton_correspondences = output / "skeleton-correspondences.json"
+    if resume and _stage_reusable(
+        state,
+        "skeleton_correspondences",
+        skeleton_correspondences,
+    ):
+        reused_stages.append("skeleton_correspondences")
+        skeleton_document = _json_object(skeleton_correspondences)
+        pose_pair_count = int(skeleton_document.get("pair_count", 0))
+        if pose_pair_count <= 0:
+            raise ValueError(
+                "reused skeleton correspondences lack a positive pair_count"
+            )
+    else:
+        iphone_pose = load_pose2d_journal(
+            iphone_journal,
+            source_id=iphone_source_id,
+            clock_model=iphone_clock,
+        )
+        action4_pose = load_pose2d_journal(
+            action4_journal,
+            source_id=action4_source_id,
+            clock_model=action4_clock,
+        )
+        pose_pairs = pair_pose_observations(
+            iphone_pose.observations,
+            action4_pose.observations,
+            maximum_time_delta_ms=maximum_pose_pair_ms,
+        )
+        if not pose_pairs:
+            raise ValueError(
+                "no synchronized iPhone/Action4 pose frames survived"
+            )
+        write_skeleton_sequence_correspondences(
+            pose_pairs,
+            skeleton_correspondences,
+            rig_id=rig_id,
+            rig_receipt_path=rig_receipt,
+            minimum_joint_confidence=minimum_joint_confidence,
+            maximum_frame_time_delta_ms=maximum_pose_pair_ms,
+        )
+        pose_pair_count = len(pose_pairs)
+        _record_stage(
+            state,
+            state_path,
+            "skeleton_correspondences",
+            skeleton_correspondences,
         )
 
-    skeleton_correspondences = output / "skeleton-correspondences.json"
-    write_skeleton_sequence_correspondences(
-        pose_pairs,
-        skeleton_correspondences,
-        rig_id=rig_id,
-        rig_receipt_path=rig_receipt,
-        minimum_joint_confidence=minimum_joint_confidence,
-        maximum_frame_time_delta_ms=maximum_pose_pair_ms,
-    )
     skeleton_geometry = output / "skeleton-geometry.json"
-    triangulate_multiview(
-        rig_receipt,
-        skeleton_correspondences,
+    if resume and _stage_reusable(
+        state,
+        "skeleton_geometry",
         skeleton_geometry,
-    )
+    ):
+        reused_stages.append("skeleton_geometry")
+    else:
+        triangulate_multiview(
+            rig_receipt,
+            skeleton_correspondences,
+            skeleton_geometry,
+        )
+        _record_stage(
+            state,
+            state_path,
+            "skeleton_geometry",
+            skeleton_geometry,
+        )
 
     iphone_markers_path = output / "iphone-board-markers.json"
     action4_markers_path = output / "action4-board-markers.json"
-    track_board_markers(
-        iphone_video,
-        iphone_journal,
-        marker_layout,
+    if resume and _stage_reusable(
+        state,
+        "iphone_board_markers",
         iphone_markers_path,
-        source_id=iphone_pose.source_id,
-        frame_stride=marker_frame_stride,
-    )
-    track_board_markers(
-        action4_video,
-        action4_journal,
-        marker_layout,
+    ):
+        reused_stages.append("iphone_board_markers")
+    else:
+        track_board_markers(
+            iphone_video,
+            iphone_journal,
+            marker_layout,
+            iphone_markers_path,
+            source_id=iphone_source_id,
+            frame_stride=marker_frame_stride,
+        )
+        _record_stage(
+            state,
+            state_path,
+            "iphone_board_markers",
+            iphone_markers_path,
+        )
+
+    if resume and _stage_reusable(
+        state,
+        "action4_board_markers",
         action4_markers_path,
-        source_id="dji-action4",
-        frame_stride=marker_frame_stride,
-    )
+    ):
+        reused_stages.append("action4_board_markers")
+    else:
+        track_board_markers(
+            action4_video,
+            action4_journal,
+            marker_layout,
+            action4_markers_path,
+            source_id=action4_source_id,
+            frame_stride=marker_frame_stride,
+        )
+        _record_stage(
+            state,
+            state_path,
+            "action4_board_markers",
+            action4_markers_path,
+        )
 
     iphone_marker_frames = load_marker_frames(
         iphone_markers_path,
@@ -167,41 +268,88 @@ def process_indo_board_pipeline(
         action4_markers_path,
         clock_model=action4_clock,
     )
-    marker_pairs = pair_marker_frames(
-        iphone_marker_frames,
-        action4_marker_frames,
-        maximum_time_delta_ms=maximum_marker_pair_ms,
-    )
-    if not marker_pairs:
-        raise ValueError(
-            "no synchronized board-marker frames survived timing gate"
+    board_correspondences = output / "board-correspondences.json"
+    if resume and _stage_reusable(
+        state,
+        "board_correspondences",
+        board_correspondences,
+    ):
+        reused_stages.append("board_correspondences")
+        board_document = _json_object(board_correspondences)
+        marker_pair_count = int(board_document.get("pair_count", 0))
+        if marker_pair_count <= 0:
+            raise ValueError(
+                "reused board correspondences lack a positive pair_count"
+            )
+    else:
+        marker_pairs = pair_marker_frames(
+            iphone_marker_frames,
+            action4_marker_frames,
+            maximum_time_delta_ms=maximum_marker_pair_ms,
+        )
+        if not marker_pairs:
+            raise ValueError(
+                "no synchronized board-marker frames survived timing gate"
+            )
+        write_board_marker_correspondences(
+            marker_pairs,
+            board_correspondences,
+            rig_id=rig_id,
+            rig_receipt_path=rig_receipt,
+        )
+        marker_pair_count = len(marker_pairs)
+        _record_stage(
+            state,
+            state_path,
+            "board_correspondences",
+            board_correspondences,
         )
 
-    board_correspondences = output / "board-correspondences.json"
-    write_board_marker_correspondences(
-        marker_pairs,
-        board_correspondences,
-        rig_id=rig_id,
-        rig_receipt_path=rig_receipt,
-    )
     board_geometry = output / "board-geometry.json"
-    triangulate_multiview(
-        rig_receipt,
-        board_correspondences,
+    if resume and _stage_reusable(
+        state,
+        "board_geometry",
         board_geometry,
-    )
+    ):
+        reused_stages.append("board_geometry")
+    else:
+        triangulate_multiview(
+            rig_receipt,
+            board_correspondences,
+            board_geometry,
+        )
+        _record_stage(
+            state,
+            state_path,
+            "board_geometry",
+            board_geometry,
+        )
+
     board_pose_series = output / "board-pose-series.json"
-    build_board_pose_series(
-        board_geometry,
-        marker_layout,
+    if resume and _stage_reusable(
+        state,
+        "board_pose_series",
         board_pose_series,
-        maximum_scale_error_fraction=float(
-            thresholds.get(
-                "maximum_board_scale_error_fraction",
-                0.03,
-            )
-        ),
-    )
+    ):
+        reused_stages.append("board_pose_series")
+    else:
+        build_board_pose_series(
+            board_geometry,
+            marker_layout,
+            board_pose_series,
+            maximum_scale_error_fraction=float(
+                thresholds.get(
+                    "maximum_board_scale_error_fraction",
+                    0.03,
+                )
+            ),
+        )
+        _record_stage(
+            state,
+            state_path,
+            "board_pose_series",
+            board_pose_series,
+        )
 
     samples, reconstruction = build_indo_board_samples(
         skeleton_geometry,
@@ -231,6 +379,12 @@ def process_indo_board_pipeline(
         json.dumps(reconstruction, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
+    _record_stage(
+        state,
+        state_path,
+        "indo_board_reconstruction",
+        reconstruction_path,
+    )
 
     metrics = analyze_indo_board(
         samples,
@@ -255,6 +409,12 @@ def process_indo_board_pipeline(
     metrics_path.write_text(
         json.dumps(metrics.to_dict(), indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
+    )
+    _record_stage(
+        state,
+        state_path,
+        "indo_board_metrics",
+        metrics_path,
     )
     profile = update_longitudinal_profile(
         profile_path,
@@ -286,6 +446,19 @@ def process_indo_board_pipeline(
             fusion.get("maximum_time_delta_ms", 20.0)
         ),
     )
+    _record_stage(
+        state,
+        state_path,
+        "wrist_acceleration_fusion",
+        wrist_path,
+    )
+    if profile_path.is_file():
+        _record_stage(
+            state,
+            state_path,
+            "longitudinal_profile",
+            profile_path,
+        )
 
     artifacts = [
         external_sync_path,
@@ -301,17 +474,24 @@ def process_indo_board_pipeline(
         metrics_path,
         wrist_path,
         profile_path,
+        state_path,
     ]
     receipt: dict[str, object] = {
         "schema_version": "motionos.indo-board-pipeline-receipt.v1",
         "session_id": manifest.session_id,
         "spec_sha256": sha256_file(spec_source),
         "rig_receipt_sha256": sha256_file(rig_receipt),
-        "pose_pair_count": len(pose_pairs),
-        "marker_pair_count": len(marker_pairs),
+        "pose_pair_count": pose_pair_count,
+        "marker_pair_count": marker_pair_count,
         "metric_count": len(metrics.metrics),
         "longitudinal_metric_count": len(profile.metric_baselines),
         "wrist_fusion_sample_count": wrist_report["sample_count"],
+        "execution": {
+            "resume_requested": resume,
+            "reused_stages": sorted(reused_stages),
+            "pipeline_implementation_version":
+                PIPELINE_IMPLEMENTATION_VERSION,
+        },
         "artifacts": {
             path.name: {
                 "path": str(path),
@@ -532,6 +712,125 @@ def validate_indo_board_pipeline_spec(
             "longitudinal_profile must be a file path"
         )
     return spec
+
+
+def _initialize_pipeline_state(
+    state_path: Path,
+    *,
+    spec_source: Path,
+    spec: dict[str, object],
+    resume: bool,
+) -> dict[str, object]:
+    expected = {
+        "schema_version": PIPELINE_STATE_SCHEMA_VERSION,
+        "pipeline_implementation_version":
+            PIPELINE_IMPLEMENTATION_VERSION,
+        "spec_sha256": sha256_file(spec_source),
+        "input_sha256": _pipeline_state_input_hashes(
+            spec_source.parent,
+            spec,
+        ),
+        "stages": {},
+    }
+    if resume and state_path.is_file():
+        raw = _json_object(state_path)
+        if (
+            raw.get("schema_version")
+            == expected["schema_version"]
+            and raw.get("pipeline_implementation_version")
+            == expected["pipeline_implementation_version"]
+            and raw.get("spec_sha256") == expected["spec_sha256"]
+            and raw.get("input_sha256") == expected["input_sha256"]
+            and isinstance(raw.get("stages"), dict)
+        ):
+            return raw
+
+    _write_pipeline_state(state_path, expected)
+    return expected
+
+
+def _pipeline_state_input_hashes(
+    base: Path,
+    spec: dict[str, object],
+) -> dict[str, str]:
+    iphone = _mapping(spec, "iphone")
+    action4 = _mapping(spec, "action4")
+    paths = {
+        "vision_session": _resolve(base, spec["vision_session"]),
+        "watch_journal": _resolve(base, spec["watch_journal"]),
+        "rig_receipt": _resolve(base, spec["rig_receipt"]),
+        "board_marker_layout": _resolve(
+            base,
+            spec["board_marker_layout"],
+        ),
+        "iphone_metadata": _resolve(base, iphone["metadata"]),
+        "action4_metadata": _resolve(base, action4["metadata"]),
+    }
+    return {
+        label: sha256_file(path)
+        for label, path in sorted(paths.items())
+    }
+
+
+def _stage_reusable(
+    state: dict[str, object],
+    stage_name: str,
+    *artifacts: Path,
+) -> bool:
+    stages = state.get("stages")
+    if not isinstance(stages, dict):
+        return False
+    stage = stages.get(stage_name)
+    if not isinstance(stage, dict):
+        return False
+    recorded = stage.get("artifacts")
+    if not isinstance(recorded, dict):
+        return False
+
+    for path in artifacts:
+        expected = recorded.get(path.name)
+        if not isinstance(expected, dict):
+            return False
+        if not path.is_file():
+            return False
+        if expected.get("sha256") != sha256_file(path):
+            return False
+    return True
+
+
+def _record_stage(
+    state: dict[str, object],
+    state_path: Path,
+    stage_name: str,
+    *artifacts: Path,
+) -> None:
+    stages = state.setdefault("stages", {})
+    if not isinstance(stages, dict):
+        raise TypeError("pipeline state stages must be an object")
+    stages[stage_name] = {
+        "artifacts": {
+            path.name: {
+                "path": str(path),
+                "sha256": sha256_file(path),
+            }
+            for path in artifacts
+            if path.is_file()
+        }
+    }
+    _write_pipeline_state(state_path, state)
+
+
+def _write_pipeline_state(
+    state_path: Path,
+    state: dict[str, object],
+) -> None:
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = state_path.with_suffix(state_path.suffix + ".tmp")
+    temporary.write_text(
+        json.dumps(state, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    temporary.replace(state_path)
 
 
 def _validate_iphone_evidence_chain(
