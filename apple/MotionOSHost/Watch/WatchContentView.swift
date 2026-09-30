@@ -4,66 +4,83 @@ struct WatchContentView: View {
     @EnvironmentObject private var controller: WatchSessionController
 
     var body: some View {
-        VStack(spacing: 10) {
-            Text("MotionOS")
-                .font(.headline)
+        ScrollView {
+            VStack(spacing: 10) {
+                Text("MotionOS")
+                    .font(.headline)
 
-            statusView
+                statusView
 
-            if controller.state == .running || controller.state == .paused {
-                metrics
-                controls
-            } else if controller.state == .idle {
-                Button("Enable Health") {
-                    Task { await controller.requestAuthorization() }
-                }
-                .buttonStyle(.borderedProminent)
+                if controller.state == .running
+                    || controller.state == .paused {
+                    metrics
+                    controls
+                } else if controller.state == .idle {
+                    Button("Enable Health") {
+                        Task { await controller.requestAuthorization() }
+                    }
+                    .buttonStyle(.borderedProminent)
 
-                Text("Start P0 from the paired iPhone.")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            } else if controller.state == .journalReady {
-                Label("Journal safe on Watch", systemImage: "internaldrive.fill")
+                    Text("Start P0 from the paired iPhone.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                } else if controller.state == .journalReady {
+                    Label(
+                        "Journal safe on Watch",
+                        systemImage: "internaldrive.fill"
+                    )
                     .foregroundStyle(.yellow)
-                Button("Retry Transfer") {
-                    controller.retryTransfer()
-                }
-                .buttonStyle(.borderedProminent)
-            } else if controller.state == .transferQueued {
-                Label("Transfer queued", systemImage: "arrow.up.doc.fill")
+                    Button("Retry Transfer") {
+                        controller.retryTransfer()
+                    }
+                    .buttonStyle(.borderedProminent)
+                } else if controller.state == .transferQueued {
+                    Label(
+                        "Transfer queued",
+                        systemImage: "arrow.up.doc.fill"
+                    )
                     .foregroundStyle(.yellow)
-                Text("Journal remains safe locally.")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            } else if controller.state == .transportComplete {
-                Label("Sent to iPhone", systemImage: "iphone.and.arrow.forward")
+                    Text("Journal remains safe locally.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                } else if controller.state == .transportComplete {
+                    Label(
+                        "Sent to iPhone",
+                        systemImage: "iphone.and.arrow.forward"
+                    )
                     .foregroundStyle(.yellow)
-                Text("Waiting for hash-verified receipt.")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                Button("Retry if needed") {
-                    controller.retryTransfer()
-                }
-                .buttonStyle(.bordered)
-            } else if controller.state == .transferred {
-                Label("Verified on iPhone", systemImage: "checkmark.seal.fill")
+                    Text("Waiting for hash-verified receipt.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                    Button("Retry if needed") {
+                        controller.retryTransfer()
+                    }
+                    .buttonStyle(.bordered)
+                } else if controller.state == .transferred {
+                    Label(
+                        "Verified on iPhone",
+                        systemImage: "checkmark.seal.fill"
+                    )
                     .foregroundStyle(.green)
-                Text(controller.sessionID ?? "")
-                    .font(.system(size: 8, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-            }
+                    Text(controller.sessionID ?? "")
+                        .font(.system(size: 8, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
 
-            if let error = controller.errorMessage {
-                Text(error)
-                    .font(.caption2)
-                    .foregroundStyle(.red)
-                    .lineLimit(3)
+                if let error = controller.errorMessage {
+                    Text(error)
+                        .font(.caption2)
+                        .foregroundStyle(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 4)
         }
-        .padding(.horizontal, 6)
     }
 
     @ViewBuilder
