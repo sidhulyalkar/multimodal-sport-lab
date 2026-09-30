@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import math
 from dataclasses import asdict, dataclass
+from itertools import pairwise
 from statistics import median
-from typing import Iterable
+from collections.abc import Iterable
 
 
 @dataclass(frozen=True)
@@ -110,7 +111,7 @@ def analyze_indo_board(
         raise ValueError("Indo Board analysis requires at least three samples")
     if any(
         later.time_s <= earlier.time_s
-        for earlier, later in zip(all_samples, all_samples[1:])
+        for earlier, later in pairwise(all_samples)
     ):
         raise ValueError("Indo Board sample times must be strictly increasing")
 
@@ -270,7 +271,7 @@ def _board_jerk_rms(samples: tuple[IndoBoardSample, ...]) -> float:
         return 0.0
 
     velocities: list[tuple[float, float, float]] = []
-    for first, second in zip(samples, samples[1:]):
+    for first, second in pairwise(samples):
         dt = second.time_s - first.time_s
         velocities.append(
             (
@@ -281,7 +282,7 @@ def _board_jerk_rms(samples: tuple[IndoBoardSample, ...]) -> float:
         )
 
     accelerations: list[tuple[float, float, float]] = []
-    for first, second in zip(velocities, velocities[1:]):
+    for first, second in pairwise(velocities):
         dt = second[0] - first[0]
         accelerations.append(
             (
@@ -292,7 +293,7 @@ def _board_jerk_rms(samples: tuple[IndoBoardSample, ...]) -> float:
         )
 
     jerks: list[float] = []
-    for first, second in zip(accelerations, accelerations[1:]):
+    for first, second in pairwise(accelerations):
         dt = second[0] - first[0]
         roll_jerk = (second[1] - first[1]) / dt
         pitch_jerk = (second[2] - first[2]) / dt
