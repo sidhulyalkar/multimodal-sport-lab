@@ -319,6 +319,9 @@ struct VisionLabCard: View {
             || camera.phase == .denied {
             await camera.prepare()
         }
+        if let configuration = camera.configuration {
+            vision.bindIPhoneCamera(configuration)
+        }
     }
 
     private var captureReady: Bool {
@@ -349,6 +352,9 @@ struct VisionLabCard: View {
                             || camera.phase == .failed
                             || camera.phase == .denied {
                             await camera.prepare()
+                        }
+                        if let configuration = camera.configuration {
+                            vision.bindIPhoneCamera(configuration)
                         }
                     }
                 } label: {
@@ -488,6 +494,9 @@ struct VisionLabCard: View {
 
         await camera.startRecording(sessionID: id)
         guard camera.phase == .recording else { return }
+        if let configuration = camera.configuration {
+            vision.bindIPhoneCamera(configuration)
+        }
         vision.markCapturing()
     }
 
