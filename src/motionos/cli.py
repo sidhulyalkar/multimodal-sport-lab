@@ -63,6 +63,7 @@ from .replay import replay_frames
 from .session import SessionReader
 from .simulate import simulate_session
 from .validate import validate_m0_session
+from .watch_smoke import write_watch_smoke_report
 from .world_geometry import (
     build_camera_rig_receipt,
     triangulate_multiview,
@@ -129,6 +130,19 @@ def _parser() -> argparse.ArgumentParser:
     p0.add_argument("session")
     p0.add_argument("--min-duration", type=float, default=60.0)
     p0.add_argument("--receipt", default="p0-receipt.json")
+
+    watch_smoke = sub.add_parser(
+        "validate-watch-smoke",
+        help="write a non-qualifying Apple Watch first-light smoke report",
+    )
+    watch_smoke.add_argument("session")
+    watch_smoke.add_argument("--min-duration", type=float, default=30.0)
+    watch_smoke.add_argument("--rate-tolerance", type=float, default=0.25)
+    watch_smoke.add_argument("--require-hr", action="store_true")
+    watch_smoke.add_argument(
+        "--report",
+        default="watch-smoke-report.json",
+    )
 
     mount = sub.add_parser(
         "calibrate-equipment-mount",
@@ -549,6 +563,17 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(json.dumps(receipt.to_dict(), indent=2, sort_keys=True))
         return 0 if receipt.passed else 2
+
+    if args.command == "validate-watch-smoke":
+        report = write_watch_smoke_report(
+            args.session,
+            args.report,
+            min_duration_s=args.min_duration,
+            rate_tolerance_fraction=args.rate_tolerance,
+            require_hr=args.require_hr,
+        )
+        print(json.dumps(report.to_dict(), indent=2, sort_keys=True))
+        return 0 if report.smoke_ok else 2
 
     if args.command == "calibrate-equipment-mount":
         print(calibrate_equipment_mount_file(args.input, args.output))
