@@ -68,6 +68,15 @@ public final class WatchConnectivityTransport: NSObject, WCSessionDelegate {
         onStateChanged?()
     }
 
+    #if os(iOS)
+    public func sessionWatchStateDidChange(_ session: WCSession) {
+        // Apple calls this when pairing, Watch-app installation, complication,
+        // or active-Watch directory state changes. Propagate it so the
+        // readiness UI does not retain a stale installation result.
+        onStateChanged?()
+    }
+    #endif
+
     public func session(_ session: WCSession, didReceive file: WCSessionFile) {
         do {
             let manager = FileManager.default

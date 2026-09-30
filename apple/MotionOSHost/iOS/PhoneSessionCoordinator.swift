@@ -93,9 +93,16 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
 
     func refreshWatchState() {
         let session = transport.session
-        watchPaired = session.isPaired
-        watchAppInstalled = session.isWatchAppInstalled
-        watchReachable = session.isReachable
+        let activated = session.activationState == .activated
+
+        // WCSession pairing/install properties are only defined after
+        // activation. A reachable counterpart is also direct evidence that
+        // the Watch app is installed and running, even if installation-state
+        // propagation is briefly stale after a development install.
+        watchPaired = activated && session.isPaired
+        watchReachable = activated && session.isReachable
+        watchAppInstalled = activated
+            && (session.isWatchAppInstalled || session.isReachable)
         refreshHostReadiness()
     }
 
