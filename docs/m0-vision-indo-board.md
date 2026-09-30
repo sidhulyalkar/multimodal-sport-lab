@@ -196,3 +196,147 @@ duplicate-safe longitudinal baseline
     ↓
 future session comparison / personalized wearable teacher
 ```
+
+
+## End-to-end operator path
+
+The post-session path is now available as a deterministic CLI workflow. Install
+the core development tools normally, and add the optional OpenCV contribution
+package only on the workstation used for ChArUco/ArUco processing:
+
+```bash
+pip install -e '.[dev,vision]'
+```
+
+### 1. Freeze camera geometry before the scored run
+
+Use the same pixel orientation/decoding convention for calibration images and
+later marker tracking. Fill a copy of
+`examples/charuco-calibration-spec.example.json`, including an explicit
+`world_from_board` transform. MotionOS does not infer world axes from a camera
+image.
+
+```bash
+motionos calibrate-charuco iphone-charuco-spec.json iphone-calibration.json
+motionos validate-camera-calibration iphone-calibration.json \
+  --receipt iphone-calibration-receipt.json
+
+motionos calibrate-charuco action4-charuco-spec.json action4-calibration.json
+motionos validate-camera-calibration action4-calibration.json \
+  --receipt action4-calibration-receipt.json
+```
+
+The rig receipt used by the final pipeline must refer to the exact current-run
+camera sessions and clock-uncertainty artifacts. A passing calibration alone is
+not permission to reuse an old session clock.
+
+### 2. Capture the Indo Board trial
+
+In the iPhone app:
+
+1. arm **Indo Board · M0-Vision**;
+2. freeze the feedback condition;
+3. start the Action 4 and confirm it is recording;
+4. start Watch + iPhone capture;
+5. trigger at least three SYNC cues spread through the run and immediately
+   perform a sharp whole-body/board impulse after each cue;
+6. stop the iPhone capture and Watch workout;
+7. import the untouched Action 4 movie;
+8. run **Extract Action 4 2D Pose**.
+
+The iPhone camera now journals both 2D and 3D Vision observations. Every iPhone
+frame also records a host-monotonic timestamp anchor. The Action 4 processor
+preserves source video PTS and writes a hash-bound 2D-pose/frame journal.
+
+### 3. Normalize clocks
+
+MotionOS uses Watch Core Motion time as the canonical analysis clock.
+
+```bash
+motionos sync-external-camera \
+  vision_session.json \
+  iphone/camera-frames.jsonl \
+  action4/action4-frames.jsonl \
+  action4-clock-sync.json
+
+motionos build-vision-clock-bundle \
+  vision_session.json \
+  watch.jsonl \
+  iphone/camera-frames.jsonl \
+  action4-clock-sync.json \
+  vision-clock-bundle.json
+```
+
+The mappings are:
+
+```text
+iPhone camera PTS ── frame anchors ──> iPhone host monotonic
+Action 4 PTS     ── physical pose impulses ──> iPhone host monotonic
+Watch time       ── journaled SYNC receipts ──> iPhone host monotonic
+                                      │
+                                      └── compose/invert → canonical Watch time
+```
+
+The cue itself only defines the search window for the iPhone physical-motion
+peak. The cross-camera landmark is the actual whole-body impulse detected in
+both pose streams, avoiding human response latency as the camera offset.
+
+### 4. Run the complete reconstruction
+
+Copy and fill `examples/indo-board-pipeline-spec.example.json`. The
+`rig_receipt` must be a passing, current-session rig receipt. The
+`wrist_fusion` standard deviations and acceleration-rate bound are mandatory
+empirical/predeclared inputs; do not copy arbitrary uncertainty values.
+
+```bash
+motionos process-indo-board-vision \
+  indo-board-pipeline.json \
+  results/indo-board-session-001
+```
+
+The command produces, in order:
+
+```text
+Action 4 physical-landmark clock fit
+        ↓
+iPhone + Action 4 → canonical Watch clocks
+        ↓
+2D pose pairing → calibrated 3D skeleton
+        ↓
+ArUco marker tracking → calibrated marker triangulation
+        ↓
+rigid Indo Board 6-DoF pose series
+        ↓
+anthropometric COM + bilateral knee geometry
+        ↓
+five quality-gated Indo Board metrics
+        ↓
+duplicate-safe longitudinal profile update
+        ↓
+secondary Watch ↔ vision wrist-acceleration fusion
+        ↓
+hash-linked pipeline receipt
+```
+
+The secondary Watch fusion does not overwrite the five camera/board technique
+metrics. It is a cross-modal consistency estimate for the wrist linear
+acceleration magnitude, using gravity-subtracted Watch acceleration and the
+second derivative of triangulated wrist position.
+
+### 5. External Action 4 session provenance
+
+For strict rig/clock evidence, the derived Action 4 journal can be imported as
+its own MotionOS calibration session without pretending it came from
+AVFoundation:
+
+```bash
+motionos import-external-camera \
+  action4/action4-frames.jsonl \
+  action4/original.mov \
+  action4/action4-derived-metadata.json \
+  --out data
+```
+
+The imported bundle receives a unique normalized session ID while retaining the
+original vision-session ID, container PTS, source-video hash, journal hash and
+metadata hash.
