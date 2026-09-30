@@ -15,6 +15,7 @@ final class VisionLabController: ObservableObject {
 
     @Published private(set) var phase: Phase = .idle
     @Published private(set) var sessionID: String?
+    @Published private(set) var createdAtUTC: String?
     @Published var action4RecordingConfirmed = false
     @Published var coachingCondition: CoachingCondition = .feedbackDisabled
     @Published private(set) var syncLandmarks: [SyncLandmark] = []
@@ -61,6 +62,7 @@ final class VisionLabController: ObservableObject {
     func armSession() -> String {
         let id = Self.makeSessionID()
         sessionID = id
+        createdAtUTC = ISO8601DateFormatter().string(from: Date())
         phase = .armed
         action4RecordingConfirmed = false
         syncLandmarks = []
@@ -133,6 +135,15 @@ final class VisionLabController: ObservableObject {
             withIntermediateDirectories: true
         )
 
+        if let previous = mediaArtifacts.first(
+            where: { $0.sourceID == "dji-action4" }
+        ) {
+            let previousURL = sessionDirectory.appendingPathComponent(
+                previous.relativePath
+            )
+            try? FileManager.default.removeItem(at: previousURL)
+        }
+
         let originalName = sourceURL.lastPathComponent
         let destination = externalDirectory.appendingPathComponent(
             "\(UUID().uuidString.prefix(8).lowercased())-\(originalName)"
@@ -163,11 +174,15 @@ final class VisionLabController: ObservableObject {
             throw VisionLabError.sessionNotArmed
         }
 
+        guard let createdAtUTC else {
+            throw VisionLabError.sessionNotArmed
+        }
+
         let manifest = VisionSessionManifest(
             sessionID: sessionID,
             sport: "indo_board",
             captureMode: "multiview_calibration",
-            createdAtUTC: Self.createdAtUTC(from: sessionID),
+            createdAtUTC: createdAtUTC,
             cameraSources: cameraSources,
             syncLandmarks: syncLandmarks,
             mediaArtifacts: mediaArtifacts,
@@ -215,12 +230,6 @@ final class VisionLabController: ObservableObject {
             .string(from: Date())
             .replacingOccurrences(of: ":", with: "")
         return "indo-board-\(stamp)-\(UUID().uuidString.prefix(8).lowercased())"
-    }
-
-    private static func createdAtUTC(from sessionID: String) -> String {
-        // The identifier keeps human-readable capture provenance, while this
-        // field remains a standards-compliant timestamp.
-        ISO8601DateFormatter().string(from: Date())
     }
 
     private static func nowUnixMS() -> UInt64 {
