@@ -219,3 +219,14 @@ def test_failed_preflight_creates_no_output_directory(tmp_path):
         process_indo_board_pipeline(spec, output)
 
     assert not output.exists()
+
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), -float("inf")])
+def test_pipeline_preflight_rejects_non_finite_threshold(tmp_path, value):
+    spec, document, _rig = _fixture(tmp_path)
+    document["thresholds"]["maximum_pose_pair_ms"] = value
+    spec.write_text(json.dumps(document), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="must be finite"):
+        validate_indo_board_pipeline_spec(spec)
