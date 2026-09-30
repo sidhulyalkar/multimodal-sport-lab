@@ -62,7 +62,7 @@ class LongitudinalProfile:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "LongitudinalProfile":
+    def from_dict(cls, data: dict[str, Any]) -> LongitudinalProfile:
         raw_baselines = data.get("metric_baselines", {})
         if not isinstance(raw_baselines, dict):
             raise TypeError("metric_baselines must be an object")
