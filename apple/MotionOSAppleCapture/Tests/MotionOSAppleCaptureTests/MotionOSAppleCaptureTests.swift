@@ -381,12 +381,15 @@ final class MotionOSAppleCaptureTests: XCTestCase {
             writer: writer
         )
 
-        let admitted = Task {
-            try await journal.append(Self.shutdownEvent(sequence: 0))
+        let admittedEvent = Self.shutdownEvent(sequence: 0)
+        let admitted = Task.detached {
+            try await journal.append(admittedEvent)
         }
         await writer.waitUntilAppendEntered()
 
-        let closing = Task { try await journal.close() }
+        let closing = Task.detached {
+            try await journal.close()
+        }
         while !(await journal.isClosing) {
             await Task.yield()
         }
