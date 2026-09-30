@@ -5,6 +5,7 @@ import MotionOSAppleCapture
 
 @MainActor
 final class VisionLabController: ObservableObject {
+    static let minimumSyncLandmarkCount = 3
     enum Phase: String {
         case idle
         case armed
@@ -315,6 +316,44 @@ final class VisionLabController: ObservableObject {
         phase = .sealed
         errorMessage = nil
         return url
+    }
+
+    var hasMinimumSyncLandmarks: Bool {
+        syncLandmarks.count >= Self.minimumSyncLandmarkCount
+    }
+
+    func mediaArtifactURL(
+        sourceID: String
+    ) -> URL? {
+        guard let manifestURL,
+              let artifact = mediaArtifacts.first(
+                where: { $0.sourceID == sourceID }
+              )
+        else {
+            return nil
+        }
+        return manifestURL
+            .deletingLastPathComponent()
+            .appendingPathComponent(artifact.relativePath)
+    }
+
+    func derivedArtifactURL(
+        sourceID: String,
+        kind: String
+    ) -> URL? {
+        guard let manifestURL,
+              let artifact = derivedArtifacts.first(
+                where: {
+                    $0.sourceID == sourceID
+                        && $0.kind == kind
+                }
+              )
+        else {
+            return nil
+        }
+        return manifestURL
+            .deletingLastPathComponent()
+            .appendingPathComponent(artifact.relativePath)
     }
 
     func fail(_ error: Error) {
