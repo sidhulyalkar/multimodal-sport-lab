@@ -283,11 +283,12 @@ final class WatchSessionController: ObservableObject {
         )
     }
 
-    private func record(_ event: SensorEnvelope) async {
+    @discardableResult
+    private func record(_ event: SensorEnvelope) async -> Bool {
         guard let journal = admittedJournal(sessionID: event.sessionID) else {
-            return
+            return false
         }
-        await append(event, to: journal)
+        return await append(event, to: journal)
     }
 
     /// The shutdown and cross-session boundary. Runs synchronously on the main
@@ -308,10 +309,11 @@ final class WatchSessionController: ObservableObject {
         return journal
     }
 
+    @discardableResult
     private func append(
         _ event: SensorEnvelope,
         to journal: CaptureSessionJournal
-    ) async {
+    ) async -> Bool {
         do {
             let outcome = try await journal.append(event)
             guard case .appended(let count) = outcome else {
@@ -319,7 +321,7 @@ final class WatchSessionController: ObservableObject {
                     admission.recordRejection(rejection)
                     refreshCaptureRejections()
                 }
-                return
+                return false
             }
 
             if event.stream == "/body/watch/imu" {
@@ -341,8 +343,10 @@ final class WatchSessionController: ObservableObject {
             if admission.isCapturing, count.isMultiple(of: 25) {
                 eventCount = count
             }
+            return true
         } catch {
             fail(error)
+            return false
         }
     }
 
@@ -533,22 +537,35 @@ final class WatchSessionController: ObservableObject {
                 ]
             )
             syncCueSequence += 1
+
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                await self.record(syncEvent)
-            }
+                let journaled = await self.record(syncEvent)
+                guard journaled else { return }
 
-            lastVisionSyncLandmarkID = landmarkID
-            visionSyncCueTitle = "SYNC · MOVE NOW"
-            WKInterfaceDevice.current().play(.notification)
-            Task { @MainActor [weak self] in
-                try? await Task.sleep(for: .milliseconds(1_500))
-                guard let self,
-                      self.lastVisionSyncLandmarkID == landmarkID
-                else {
-                    return
+                self.lastVisionSyncLandmarkID = landmarkID
+                self.visionSyncCueTitle = "SYNC · MOVE NOW"
+                WKInterfaceDevice.current().play(.notification)
+
+                _ = self.transport.sendMessage(
+                    [
+                        "motionos_message": "vision_sync_cue_ack_v1",
+                        "vision_session_id": visionSessionID,
+                        "landmark_id": landmarkID,
+                        "watch_session_id": watchSessionID,
+                        "watch_device_time_ns": receivedAtNS,
+                    ]
+                )
+
+                Task { @MainActor [weak self] in
+                    try? await Task.sleep(for: .milliseconds(1_500))
+                    guard let self,
+                          self.lastVisionSyncLandmarkID == landmarkID
+                    else {
+                        return
+                    }
+                    self.visionSyncCueTitle = nil
                 }
-                self.visionSyncCueTitle = nil
             }
 
         case "coaching_cue_v1":
