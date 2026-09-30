@@ -48,6 +48,17 @@ def fit_embedded_host_clock(
     )
 
 
+def load_unmapped_pose2d_journal(
+    path: str | Path,
+    *,
+    source_id: str,
+) -> tuple[VisionObservation, ...]:
+    return _parse_pose2d_events(
+        _load_events(path),
+        source_id=source_id,
+    )
+
+
 def load_pose2d_journal(
     path: str | Path,
     *,
@@ -58,6 +69,41 @@ def load_pose2d_journal(
     if clock_model is None:
         clock_model = fit_embedded_host_clock(events)
 
+    raw_observations = _parse_pose2d_events(
+        events,
+        source_id=source_id,
+    )
+    observations = tuple(
+        VisionObservation(
+            source_id=item.source_id,
+            frame_sequence=item.frame_sequence,
+            frame_source_time_ns=item.frame_source_time_ns,
+            mapped_session_time_ns=clock_model.map(
+                item.frame_source_time_ns
+            ),
+            timing_uncertainty_ns=max(
+                0,
+                round(clock_model.residual_rms_ns),
+            ),
+            coordinate_frame=item.coordinate_frame,
+            model_identifier=item.model_identifier,
+            joints=item.joints,
+        )
+        for item in raw_observations
+    )
+
+    return Pose2DJournal(
+        source_id=source_id,
+        observations=observations,
+        clock_model=clock_model,
+    )
+
+
+def _parse_pose2d_events(
+    events: Iterable[SensorEvent],
+    *,
+    source_id: str,
+) -> tuple[VisionObservation, ...]:
     observations: list[VisionObservation] = []
     for event in events:
         if event.stream != "/camera/pose2d":
@@ -98,7 +144,6 @@ def load_pose2d_journal(
                 confidence=confidence,
             )
 
-        mapped = clock_model.map(event.device_time_ns)
         observations.append(
             VisionObservation(
                 source_id=source_id,
@@ -108,11 +153,8 @@ def load_pose2d_journal(
                 frame_source_time_ns=int(
                     round(float(payload["source_frame_pts_ns"]))
                 ),
-                mapped_session_time_ns=mapped,
-                timing_uncertainty_ns=max(
-                    0,
-                    round(clock_model.residual_rms_ns),
-                ),
+                mapped_session_time_ns=None,
+                timing_uncertainty_ns=None,
                 coordinate_frame="image_pixels",
                 model_identifier=str(
                     payload.get(
@@ -129,15 +171,11 @@ def load_pose2d_journal(
 
     observations.sort(
         key=lambda item: (
-            int(item.mapped_session_time_ns or 0),
+            item.frame_source_time_ns,
             item.frame_sequence,
         )
     )
-    return Pose2DJournal(
-        source_id=source_id,
-        observations=tuple(observations),
-        clock_model=clock_model,
-    )
+    return tuple(observations)
 
 
 def pair_pose_observations(
