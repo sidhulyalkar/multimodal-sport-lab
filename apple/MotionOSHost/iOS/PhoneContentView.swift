@@ -264,7 +264,7 @@ struct PhoneContentView: View {
                             Text(
                                 "\(diagnostics.afterShutdown) late · "
                                     + "\(diagnostics.sessionMismatch "
-                                    + diagnostics.noActiveSession) foreign · "
+                                    + "&+ diagnostics.noActiveSession) foreign · "
                                     + "\(diagnostics.staleMotionGeneration) stale"
                             )
                             .font(.system(.caption2, design: .monospaced))
