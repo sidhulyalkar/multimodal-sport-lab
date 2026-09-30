@@ -555,6 +555,14 @@ def _parser() -> argparse.ArgumentParser:
     )
     indo_pipeline.add_argument("spec")
     indo_pipeline.add_argument("output_directory")
+    indo_pipeline.add_argument(
+        "--resume",
+        action="store_true",
+        help=(
+            "reuse only hash-verified intermediate artifacts from the "
+            "same sealed inputs and pipeline implementation"
+        ),
+    )
 
     return parser
 
@@ -1072,6 +1080,7 @@ def main(argv: list[str] | None = None) -> int:
         result = process_indo_board_pipeline(
             args.spec,
             args.output_directory,
+            resume=args.resume,
         )
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0
