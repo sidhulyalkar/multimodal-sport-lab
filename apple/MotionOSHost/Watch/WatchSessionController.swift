@@ -547,15 +547,15 @@ final class WatchSessionController: ObservableObject {
                 self.visionSyncCueTitle = "SYNC · MOVE NOW"
                 WKInterfaceDevice.current().play(.notification)
 
-                _ = self.transport.sendMessage(
-                    [
-                        "motionos_message": "vision_sync_cue_ack_v1",
-                        "vision_session_id": visionSessionID,
-                        "landmark_id": landmarkID,
-                        "watch_session_id": watchSessionID,
-                        "watch_device_time_ns": receivedAtNS,
-                    ]
-                )
+                let acknowledgment: [String: Any] = [
+                    "motionos_message": "vision_sync_cue_ack_v1",
+                    "vision_session_id": visionSessionID,
+                    "landmark_id": landmarkID,
+                    "watch_session_id": watchSessionID,
+                    "watch_device_time_ns": receivedAtNS,
+                ]
+                _ = self.transport.sendMessage(acknowledgment)
+                _ = self.transport.queueUserInfo(acknowledgment)
 
                 Task { @MainActor [weak self] in
                     try? await Task.sleep(for: .milliseconds(1_500))
