@@ -48,13 +48,19 @@ jobs:
             -project apple/MotionOSHost/MotionOSHost.xcodeproj \
             -scheme MotionOS-iOS \
             -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/motionos-derived" \
             CODE_SIGNING_ALLOWED=NO \
             build
+      - name: Verify embedded Watch companion
+        run: |
+          bash apple/MotionOSHost/verify_companion_bundle.sh \
+            "$RUNNER_TEMP/motionos-derived/Build/Products/Debug-iphonesimulator/MotionOS.app"
       - name: Build Watch host
         run: |
           xcodebuild \
             -project apple/MotionOSHost/MotionOSHost.xcodeproj \
             -scheme MotionOS-Watch \
             -destination 'generic/platform=watchOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/motionos-watch-derived" \
             CODE_SIGNING_ALLOWED=NO \
             build
