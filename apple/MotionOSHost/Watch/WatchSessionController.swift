@@ -22,6 +22,11 @@ final class WatchSessionController: ObservableObject {
         case failed
     }
 
+    enum CaptureOrigin: String {
+        case iPhone = "iPhone"
+        case localSensorCheck = "Watch test"
+    }
+
     @Published private(set) var state: CaptureState = .idle
     @Published private(set) var sessionID: String?
     @Published private(set) var heartRateBPM: Double?
@@ -38,6 +43,12 @@ final class WatchSessionController: ObservableObject {
     @Published private(set) var startedAt: Date?
     @Published private(set) var lastTransferredURL: URL?
     @Published private(set) var errorMessage: String?
+    @Published private(set) var phoneReachable = false
+    @Published private(set) var companionAppInstalled = false
+    @Published private(set) var connectivityActivated = false
+    @Published private(set) var healthAuthorizationStatus: HKAuthorizationStatus = .notDetermined
+    @Published private(set) var captureOrigin: CaptureOrigin = .iPhone
+    @Published private(set) var lastPresencePublishedAt: Date?
     /// Operator diagnostics for late, foreign, or stale events that were not
     /// journaled. Not raw evidence.
     @Published private(set) var captureRejections = CaptureRejectionCounts()
@@ -81,6 +92,13 @@ final class WatchSessionController: ObservableObject {
             }
         }
 
+        transport.onStateChanged = { [weak self] in
+            guard let self else { return }
+            Task { @MainActor in
+                self.refreshReadinessAndPresence()
+            }
+        }
+
         transport.onFileTransferFinished = {
             [weak self] url, metadata, error in
             guard let self else { return }
@@ -106,6 +124,42 @@ final class WatchSessionController: ObservableObject {
                 self.handleMessage(message)
             }
         }
+
+        refreshReadinessAndPresence()
+    }
+
+    var healthAccessReady: Bool {
+        healthAuthorizationStatus == .sharingAuthorized
+    }
+
+    var healthAuthorizationLabel: String {
+        switch healthAuthorizationStatus {
+        case .sharingAuthorized:
+            "Enabled"
+        case .sharingDenied:
+            "Denied"
+        case .notDetermined:
+            "Needs access"
+        @unknown default:
+            "Unknown"
+        }
+    }
+
+    var phoneLinkLabel: String {
+        if phoneReachable {
+            return "Connected"
+        }
+        if companionAppInstalled {
+            return "Companion ready"
+        }
+        if connectivityActivated {
+            return "Waiting for iPhone"
+        }
+        return "Starting link"
+    }
+
+    func applicationDidBecomeActive() {
+        refreshReadinessAndPresence()
     }
 
     func requestAuthorization() async {
@@ -114,13 +168,34 @@ final class WatchSessionController: ObservableObject {
 
         do {
             try await workout.requestAuthorization()
+            healthAuthorizationStatus = workout.workoutAuthorizationStatus
             state = .idle
+            publishPresence()
         } catch {
+            healthAuthorizationStatus = workout.workoutAuthorizationStatus
             fail(error)
+            publishPresence()
         }
     }
 
-    func start(configuration: HKWorkoutConfiguration) async {
+    func startLocalSensorCheck() async {
+        let configuration = HKWorkoutConfiguration()
+        configuration.activityType = .other
+        configuration.locationType = .indoor
+        await start(
+            configuration: configuration,
+            mirrorToCompanion: false,
+            origin: .localSensorCheck,
+            sessionPrefix: "smoke-watch"
+        )
+    }
+
+    func start(
+        configuration: HKWorkoutConfiguration,
+        mirrorToCompanion: Bool = true,
+        origin: CaptureOrigin = .iPhone,
+        sessionPrefix: String = "p0-watch"
+    ) async {
         guard [
             CaptureState.idle,
             .journalReady,
@@ -131,6 +206,7 @@ final class WatchSessionController: ObservableObject {
         }
 
         state = .starting
+        captureOrigin = origin
         errorMessage = nil
         heartRateBPM = nil
         eventCount = 0
@@ -154,7 +230,7 @@ final class WatchSessionController: ObservableObject {
         captureRejections = admission.rejections
         staleMotionRejectionBaseline = motion.staleCallbackRejectionCount
 
-        let id = Self.makeSessionID()
+        let id = Self.makeSessionID(prefix: sessionPrefix)
         sessionID = id
 
         do {
@@ -229,11 +305,12 @@ final class WatchSessionController: ObservableObject {
 
             try await workout.start(
                 configuration: configuration,
-                mirrorToCompanion: true
+                mirrorToCompanion: mirrorToCompanion
             )
 
             startedAt = Date()
             state = .running
+            publishPresence()
         } catch {
             motion.stop()
             fail(error)
@@ -244,6 +321,7 @@ final class WatchSessionController: ObservableObject {
     func stop() {
         guard state == .running || state == .paused else { return }
         state = .ending
+        publishPresence()
         motion.stop()
         workout.stop()
     }
@@ -256,6 +334,18 @@ final class WatchSessionController: ObservableObject {
     func resume() {
         guard state == .paused else { return }
         workout.resume()
+    }
+
+    func refreshReadinessAndPresence() {
+        let session = transport.session
+        connectivityActivated = session.activationState == .activated
+        phoneReachable = connectivityActivated && session.isReachable
+        #if os(watchOS)
+        companionAppInstalled = connectivityActivated
+            && session.isCompanionAppInstalled
+        #endif
+        healthAuthorizationStatus = workout.workoutAuthorizationStatus
+        publishPresence()
     }
 
     func retryTransfer() {
@@ -591,11 +681,50 @@ final class WatchSessionController: ObservableObject {
         default:
             break
         }
+        publishPresence()
+    }
+
+    private func publishPresence() {
+        guard transport.session.activationState == .activated else {
+            return
+        }
+
+        let device = WKInterfaceDevice.current()
+        let appVersion = Bundle.main.object(
+            forInfoDictionaryKey: "CFBundleShortVersionString"
+        ) as? String ?? "unknown"
+        let appBuild = Bundle.main.object(
+            forInfoDictionaryKey: "CFBundleVersion"
+        ) as? String ?? "unknown"
+
+        var presence: [String: Any] = [
+            "motionos_message": "watch_presence_v1",
+            "bundle_id": Bundle.main.bundleIdentifier ?? "unknown",
+            "app_version": appVersion,
+            "app_build": appBuild,
+            "watch_system_version": device.systemVersion,
+            "capture_state": state.rawValue,
+            "capture_origin": captureOrigin.rawValue,
+            "health_authorization": healthAuthorizationLabel,
+            "sent_at_unix_s": Date().timeIntervalSince1970,
+        ]
+
+        let battery = device.batteryLevel
+        if battery >= 0 {
+            presence["watch_battery_level_fraction"] = Double(battery)
+        }
+
+        let contextSent = transport.updateApplicationContext(presence)
+        let liveSent = transport.sendMessage(presence)
+        if contextSent || liveSent {
+            lastPresencePublishedAt = Date()
+        }
     }
 
     private func fail(_ error: Error) {
         errorMessage = error.localizedDescription
         state = .failed
+        publishPresence()
     }
 
     private enum CaptureStartError: LocalizedError {
@@ -606,11 +735,11 @@ final class WatchSessionController: ObservableObject {
         }
     }
 
-    private static func makeSessionID() -> String {
+    private static func makeSessionID(prefix: String) -> String {
         let timestamp = ISO8601DateFormatter()
             .string(from: Date())
             .replacingOccurrences(of: ":", with: "")
-        return "p0-watch-\(timestamp)-\(UUID().uuidString.prefix(8).lowercased())"
+        return "\(prefix)-\(timestamp)-\(UUID().uuidString.prefix(8).lowercased())"
     }
 
     private static func makeJournalURL(
