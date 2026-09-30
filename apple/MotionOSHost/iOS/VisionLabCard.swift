@@ -104,7 +104,7 @@ struct VisionLabCard: View {
                     Label(
                         "Collect at least "
                             + "\(VisionLabController.minimumSyncLandmarkCount) "
-                            + "successful SYNC landmarks before sealing.",
+                            + "Watch-acknowledged SYNC landmarks before sealing.",
                         systemImage: "exclamationmark.triangle.fill"
                     )
                     .font(.caption)
@@ -307,6 +307,15 @@ struct VisionLabCard: View {
                 vision.fail(error)
             }
         }
+        .onChange(
+            of: coordinator.lastVisionSyncCueAcknowledgment
+        ) { _, acknowledgment in
+            guard let acknowledgment else { return }
+            vision.acknowledgeSyncLandmark(
+                landmarkID: acknowledgment.landmarkID,
+                visionSessionID: acknowledgment.visionSessionID
+            )
+        }
     }
 
     private func armSession() async {
@@ -418,7 +427,8 @@ struct VisionLabCard: View {
     }
 
     private var syncProgress: some View {
-        let count = vision.syncLandmarks.count
+        let count = vision.acknowledgedSyncLandmarkCount
+        let pending = vision.pendingSyncLandmarkCount
         let required = VisionLabController.minimumSyncLandmarkCount
         let ready = count >= required
 
@@ -430,14 +440,21 @@ struct VisionLabCard: View {
             )
             .foregroundStyle(ready ? .green : .yellow)
 
-            Text("SYNC landmarks")
+            Text("Watch-journaled SYNC")
                 .font(.caption)
 
             Spacer()
 
-            Text("\(count)/\(required) required")
-                .font(.system(.caption2, design: .monospaced))
-                .foregroundStyle(ready ? .green : .secondary)
+            VStack(alignment: .trailing, spacing: 1) {
+                Text("\(count)/\(required) acknowledged")
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundStyle(ready ? .green : .secondary)
+                if pending > 0 {
+                    Text("\(pending) awaiting Watch receipt")
+                        .font(.caption2)
+                        .foregroundStyle(.yellow)
+                }
+            }
         }
     }
 
@@ -503,16 +520,37 @@ struct VisionLabCard: View {
     private func emitSyncCue() {
         guard coordinator.watchReachable else { return }
         guard let landmark = vision.emitSyncLandmark() else { return }
-        _ = coordinator.sendVisionSyncCue(landmark)
 
+        guard coordinator.sendVisionSyncCue(landmark) else {
+            vision.discardUnacknowledgedSyncLandmark(
+                landmarkID: landmark.landmarkID,
+                message: (
+                    "Watch became unreachable before the SYNC cue "
+                        + "could be sent. Retry SYNC."
+                )
+            )
+            return
+        }
+
+        vision.emitLocalSyncSignals()
         withAnimation(.easeIn(duration: 0.03)) {
             flashVisible = true
         }
+
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(120))
             withAnimation(.easeOut(duration: 0.08)) {
                 flashVisible = false
             }
+
+            try? await Task.sleep(for: .milliseconds(4_880))
+            vision.discardUnacknowledgedSyncLandmark(
+                landmarkID: landmark.landmarkID,
+                message: (
+                    "Watch did not acknowledge journaling the SYNC cue "
+                        + "within 5 seconds. Retry SYNC."
+                )
+            )
         }
     }
 
