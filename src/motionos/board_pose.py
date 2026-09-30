@@ -17,12 +17,25 @@ class BoardMarkerLayout:
     frame_convention: str
     markers_m: dict[str, Vector3]
     marker_dictionary: str | None = None
+    marker_size_m: float | None = None
+    marker_asset_receipt_sha256: str | None = None
 
     def __post_init__(self) -> None:
         if len(self.markers_m) < 3:
             raise ValueError("board layout requires at least three markers")
         if not self.frame_convention.strip():
             raise ValueError("board frame convention is required")
+        if self.marker_size_m is not None and self.marker_size_m <= 0:
+            raise ValueError("marker_size_m must be positive")
+        if self.marker_asset_receipt_sha256 is not None:
+            digest = self.marker_asset_receipt_sha256
+            if (
+                len(digest) != 64
+                or any(character not in "0123456789abcdef" for character in digest)
+            ):
+                raise ValueError(
+                    "marker_asset_receipt_sha256 must be lowercase SHA-256"
+                )
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> BoardMarkerLayout:
@@ -47,6 +60,16 @@ class BoardMarkerLayout:
             marker_dictionary=(
                 str(data["marker_dictionary"])
                 if data.get("marker_dictionary") is not None
+                else None
+            ),
+            marker_size_m=(
+                float(data["marker_size_m"])
+                if data.get("marker_size_m") is not None
+                else None
+            ),
+            marker_asset_receipt_sha256=(
+                str(data["marker_asset_receipt_sha256"])
+                if data.get("marker_asset_receipt_sha256") is not None
                 else None
             ),
         )
