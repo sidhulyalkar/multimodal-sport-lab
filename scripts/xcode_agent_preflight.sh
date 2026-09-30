@@ -127,11 +127,15 @@ if MCPSERVER="$(xcrun --find mcp-server 2>/dev/null)"; then
 
 This Xcode build contains the headless MCP preview.
 
-To opt in:
+To opt in and launch MotionOS headlessly:
   sudo xcrun mcp-server enable
+  sudo xcrun mcp-server allow-folder "$REPO_ROOT" --for-24-hours
+  xcrun mcp-server open "$PROJECT"
   xcrun mcp-server status
 
-Do not use --unsafe-always-allow-all-agents on a normal workstation.
+Xcode 27.2 beta launches the service through 'mcp-server open'; there is no
+separate 'start' command. Do not use --unsafe-always-allow-all-agents on a
+normal workstation.
 EOF
 else
   cat <<'EOF'
