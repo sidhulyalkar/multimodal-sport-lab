@@ -90,6 +90,28 @@ struct PhoneContentView: View {
                 detail: coordinator.watchReachable ? "live link" : "background path only"
             )
 
+            if coordinator.watchAppInstalled
+                && !coordinator.systemWatchAppInstalled {
+                Label(
+                    "MotionOS handshake confirms the Watch app even though "
+                        + "the system install flag is stale.",
+                    systemImage: "applewatch.radiowaves.left.and.right"
+                )
+                .font(.caption2)
+                .foregroundStyle(.green)
+                .fixedSize(horizontal: false, vertical: true)
+            } else if coordinator.watchPaired
+                && !coordinator.watchAppInstalled {
+                Label(
+                    "Open MotionOS on the Watch to establish the companion "
+                        + "handshake.",
+                    systemImage: "applewatch"
+                )
+                .font(.caption2)
+                .foregroundStyle(.yellow)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+
             readinessRow(
                 "iPhone battery",
                 value: (coordinator.iPhoneBatteryLevel ?? 0) >= 0.20,
