@@ -126,7 +126,12 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
         let session = transport.session
         let activated = session.activationState == .activated
 
-        if activated {
+        if !activated {
+            // A deactivation can mean the user switched active Watches.
+            // Never carry a prior Watch's handshake into the new session.
+            watchPresence = nil
+            watchCaptureHealth = nil
+        } else {
             ingestWatchPresence(session.receivedApplicationContext)
             publishPhonePresence()
         }
