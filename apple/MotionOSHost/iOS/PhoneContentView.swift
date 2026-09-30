@@ -238,7 +238,7 @@ struct PhoneContentView: View {
                 if let origin = inbox.latestCaptureOrigin {
                     Label(
                         "Capture origin: \(origin)",
-                        systemImage: "applewatch.side.right"
+                        systemImage: "applewatch"
                     )
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -256,7 +256,7 @@ struct PhoneContentView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Label(
                                 "\(diagnostics.total) callbacks rejected at boundary",
-                                systemImage: "waveform.badge.exclamationmark"
+                                systemImage: "exclamationmark.triangle.fill"
                             )
                             .font(.caption2.weight(.semibold))
                             .foregroundStyle(.yellow)
