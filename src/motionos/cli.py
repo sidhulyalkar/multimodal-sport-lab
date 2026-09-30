@@ -45,6 +45,10 @@ from .experiments import (
     verify_grouped_split,
 )
 from .external_camera import import_external_camera_evidence
+from .fiducial_assets import (
+    build_aruco_marker_assets,
+    build_charuco_board_assets,
+)
 from .indo_board_pipeline import (
     process_indo_board_pipeline,
     validate_indo_board_pipeline_spec,
@@ -483,6 +487,26 @@ def _parser() -> argparse.ArgumentParser:
     triangulate.add_argument("correspondences")
     triangulate.add_argument("output")
     triangulate.add_argument("--measurements-output")
+
+    charuco_assets = sub.add_parser(
+        "build-charuco-board-assets",
+        help=(
+            "generate a metric ChArUco printable + hashed board contract "
+            "using the optional vision dependency"
+        ),
+    )
+    charuco_assets.add_argument("spec")
+    charuco_assets.add_argument("output_directory")
+
+    aruco_assets = sub.add_parser(
+        "build-aruco-marker-assets",
+        help=(
+            "generate metric ArUco marker PNGs + a hashed print receipt "
+            "for physical board tracking"
+        ),
+    )
+    aruco_assets.add_argument("spec")
+    aruco_assets.add_argument("output_directory")
 
     charuco = sub.add_parser(
         "calibrate-charuco",
@@ -1015,6 +1039,22 @@ def main(argv: list[str] | None = None) -> int:
             args.correspondences,
             args.output,
             measurements_output_path=args.measurements_output,
+        )
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+
+    if args.command == "build-charuco-board-assets":
+        result = build_charuco_board_assets(
+            args.spec,
+            args.output_directory,
+        )
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+
+    if args.command == "build-aruco-marker-assets":
+        result = build_aruco_marker_assets(
+            args.spec,
+            args.output_directory,
         )
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0
