@@ -63,8 +63,23 @@ struct PhoneContentView: View {
             readinessRow(
                 "Watch app",
                 value: coordinator.watchAppInstalled,
-                detail: coordinator.watchAppInstalled ? "installed" : "not installed"
+                detail: coordinator.watchPresence != nil
+                    ? "handshake confirmed"
+                    : (coordinator.watchAppInstalled ? "installed" : "not installed")
             )
+            if let presence = coordinator.watchPresence {
+                readinessRow(
+                    "Watch handshake",
+                    value: true,
+                    detail: "v\(presence.appVersion) · b\(presence.appBuild)"
+                )
+            } else {
+                readinessRow(
+                    "Watch handshake",
+                    value: false,
+                    detail: "waiting"
+                )
+            }
             readinessRow(
                 "Reachable now",
                 value: coordinator.watchReachable,
