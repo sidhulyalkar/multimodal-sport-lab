@@ -155,6 +155,36 @@ struct WatchContentView: View {
                 )
             }
 
+            if let sync = controller.visionSyncCueTitle {
+                Label(sync, systemImage: "waveform.circle.fill")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.yellow)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+            }
+
+            if let cue = controller.coachingCue {
+                VStack(spacing: 2) {
+                    Label(
+                        cue.message,
+                        systemImage: "scope"
+                    )
+                    .font(.caption.weight(.semibold))
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+
+                    if let value = cue.value {
+                        Text(
+                            cue.unit.map {
+                                String(format: "%.2f %@", value, $0)
+                            } ?? String(format: "%.2f", value)
+                        )
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                    }
+                }
+            }
+
             if let cue = controller.guidedCueTitle {
                 Label(cue, systemImage: "list.clipboard")
                     .font(.caption2.weight(.semibold))
