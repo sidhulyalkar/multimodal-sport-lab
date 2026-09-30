@@ -252,4 +252,28 @@ final class MotionOSAppleCaptureTests: XCTestCase {
         XCTAssertEqual(progress.completedStepIDs, ["required"])
         XCTAssertEqual(progress.state, .completed)
     }
+
+    func testCaptureSequenceFenceRejectsStaleGeneration() {
+        let fence = CaptureSequenceFence()
+
+        let first = fence.begin()
+        XCTAssertEqual(fence.takeNextSequence(for: first), 0)
+        XCTAssertEqual(fence.takeNextSequence(for: first), 1)
+
+        fence.invalidate()
+        XCTAssertNil(fence.takeNextSequence(for: first))
+    }
+
+    func testCaptureSequenceFenceResetsForNewGeneration() {
+        let fence = CaptureSequenceFence()
+
+        let first = fence.begin()
+        XCTAssertEqual(fence.takeNextSequence(for: first), 0)
+
+        let second = fence.begin()
+        XCTAssertNotEqual(first, second)
+        XCTAssertNil(fence.takeNextSequence(for: first))
+        XCTAssertEqual(fence.takeNextSequence(for: second), 0)
+        XCTAssertEqual(fence.takeNextSequence(for: second), 1)
+    }
 }
