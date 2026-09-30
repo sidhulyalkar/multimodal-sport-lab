@@ -322,6 +322,7 @@ final class WatchSessionController: ObservableObject {
 
             startedAt = Date()
             state = .running
+            WKInterfaceDevice.current().play(.start)
             publishPresence()
         } catch {
             motion.stop()
@@ -333,6 +334,7 @@ final class WatchSessionController: ObservableObject {
     func stop() {
         guard state == .running || state == .paused else { return }
         state = .ending
+        WKInterfaceDevice.current().play(.stop)
         publishPresence()
         motion.stop()
         workout.stop()
@@ -340,11 +342,13 @@ final class WatchSessionController: ObservableObject {
 
     func pause() {
         guard state == .running else { return }
+        WKInterfaceDevice.current().play(.click)
         workout.pause()
     }
 
     func resume() {
         guard state == .paused else { return }
+        WKInterfaceDevice.current().play(.click)
         workout.resume()
     }
 
@@ -361,6 +365,11 @@ final class WatchSessionController: ObservableObject {
         companionAppInstalled = connectivityActivated
             && (session.isCompanionAppInstalled || phonePresenceConfirmed)
         #endif
+
+        let device = WKInterfaceDevice.current()
+        device.isBatteryMonitoringEnabled = true
+        let battery = device.batteryLevel
+        watchBatteryLevel = battery >= 0 ? Double(battery) : nil
 
         healthAuthorizationStatus = workout.workoutAuthorizationStatus
         publishPresence()
@@ -652,6 +661,7 @@ final class WatchSessionController: ObservableObject {
 
         errorMessage = nil
         state = .transferred
+        WKInterfaceDevice.current().play(.success)
         publishPresence()
     }
 
@@ -766,6 +776,7 @@ final class WatchSessionController: ObservableObject {
     private func fail(_ error: Error) {
         errorMessage = error.localizedDescription
         state = .failed
+        WKInterfaceDevice.current().play(.failure)
         publishPresence()
     }
 
