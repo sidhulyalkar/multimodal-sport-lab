@@ -1,9 +1,15 @@
 import Foundation
 
-public struct ClockModel: Sendable, Equatable {
+public struct ClockModel: Codable, Sendable, Equatable {
     public let slope: Double
     public let interceptNS: Double
     public let residualRMSNS: Double
+
+    enum CodingKeys: String, CodingKey {
+        case slope
+        case interceptNS = "intercept_ns"
+        case residualRMSNS = "residual_rms_ns"
+    }
 
     public init(slope: Double, interceptNS: Double, residualRMSNS: Double) {
         self.slope = slope
