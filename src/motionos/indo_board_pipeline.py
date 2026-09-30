@@ -356,8 +356,10 @@ def validate_indo_board_pipeline_spec(
         {
             "iphone.video": _resolve(base, iphone["video"]),
             "iphone.journal": _resolve(base, iphone["journal"]),
+            "iphone.metadata": _resolve(base, iphone["metadata"]),
             "action4.video": _resolve(base, action4["video"]),
             "action4.journal": _resolve(base, action4["journal"]),
+            "action4.metadata": _resolve(base, action4["metadata"]),
         }
     )
     missing = [
@@ -426,6 +428,21 @@ def validate_indo_board_pipeline_spec(
             "camera-rig receipt does not contain journal camera IDs: "
             + ", ".join(sorted(missing_camera_ids))
         )
+
+    _validate_iphone_evidence_chain(
+        manifest,
+        video_path=required_paths["iphone.video"],
+        journal_path=required_paths["iphone.journal"],
+        metadata_path=required_paths["iphone.metadata"],
+        source_id=iphone_source_id,
+    )
+    _validate_action4_evidence_chain(
+        manifest,
+        video_path=required_paths["action4.video"],
+        journal_path=required_paths["action4.journal"],
+        metadata_path=required_paths["action4.metadata"],
+        source_id=action4_source_id,
+    )
 
     thresholds = _mapping(spec, "thresholds")
     _positive(
@@ -515,6 +532,122 @@ def validate_indo_board_pipeline_spec(
             "longitudinal_profile must be a file path"
         )
     return spec
+
+
+def _validate_iphone_evidence_chain(
+    manifest: VisionSessionManifest,
+    *,
+    video_path: Path,
+    journal_path: Path,
+    metadata_path: Path,
+    source_id: str,
+) -> None:
+    metadata = _json_object(metadata_path)
+    if metadata.get("schema_version") != "motionos.camera.v1":
+        raise ValueError("unsupported iPhone camera metadata schema")
+    if str(metadata.get("session_id", "")) != manifest.session_id:
+        raise ValueError(
+            "iPhone camera metadata session_id does not match vision session"
+        )
+
+    camera = metadata.get("camera")
+    if not isinstance(camera, dict):
+        raise TypeError("iPhone camera metadata.camera must be an object")
+    if str(camera.get("unique_id", "")) != source_id:
+        raise ValueError(
+            "iPhone camera metadata unique_id does not match pose journal"
+        )
+
+    provenance = metadata.get("provenance")
+    if not isinstance(provenance, dict):
+        raise TypeError(
+            "iPhone camera metadata.provenance must be an object"
+        )
+    expected_video = str(provenance.get("camera_mov_sha256", ""))
+    expected_journal = str(
+        provenance.get("camera_frames_jsonl_sha256", "")
+    )
+    if expected_video != sha256_file(video_path):
+        raise ValueError(
+            "iPhone video hash does not match sealed camera metadata"
+        )
+    if expected_journal != sha256_file(journal_path):
+        raise ValueError(
+            "iPhone journal hash does not match sealed camera metadata"
+        )
+
+
+def _validate_action4_evidence_chain(
+    manifest: VisionSessionManifest,
+    *,
+    video_path: Path,
+    journal_path: Path,
+    metadata_path: Path,
+    source_id: str,
+) -> None:
+    metadata = _json_object(metadata_path)
+    if metadata.get("schema_version") != (
+        "motionos.external-video-pose2d.v1"
+    ):
+        raise ValueError("unsupported Action4 derived metadata schema")
+    if str(metadata.get("session_id", "")) != manifest.session_id:
+        raise ValueError(
+            "Action4 metadata session_id does not match vision session"
+        )
+    if str(metadata.get("source_id", "")) != source_id:
+        raise ValueError(
+            "Action4 metadata source_id does not match pose journal"
+        )
+
+    source_video = metadata.get("source_video")
+    if not isinstance(source_video, dict):
+        raise TypeError(
+            "Action4 metadata.source_video must be an object"
+        )
+    video_hash = sha256_file(video_path)
+    journal_hash = sha256_file(journal_path)
+    metadata_hash = sha256_file(metadata_path)
+    if str(source_video.get("sha256", "")) != video_hash:
+        raise ValueError(
+            "Action4 video hash does not match derived pose metadata"
+        )
+
+    media_matches = [
+        artifact
+        for artifact in manifest.media_artifacts
+        if artifact.source_id == source_id
+        and artifact.sha256 == video_hash
+    ]
+    if not media_matches:
+        raise ValueError(
+            "Action4 video is not bound to the sealed vision session"
+        )
+
+    journal_matches = [
+        artifact
+        for artifact in manifest.derived_artifacts
+        if artifact.source_id == source_id
+        and artifact.kind == "pose2d_journal"
+        and artifact.sha256 == journal_hash
+        and artifact.source_media_sha256 == video_hash
+    ]
+    if not journal_matches:
+        raise ValueError(
+            "Action4 pose journal is not bound to the sealed vision session"
+        )
+
+    metadata_matches = [
+        artifact
+        for artifact in manifest.derived_artifacts
+        if artifact.source_id == source_id
+        and artifact.kind == "pose2d_metadata"
+        and artifact.sha256 == metadata_hash
+        and artifact.source_media_sha256 == video_hash
+    ]
+    if not metadata_matches:
+        raise ValueError(
+            "Action4 pose metadata is not bound to the sealed vision session"
+        )
 
 
 def _positive_required(
