@@ -44,6 +44,7 @@ final class WatchSessionController: ObservableObject {
     @Published private(set) var lastTransferredURL: URL?
     @Published private(set) var errorMessage: String?
     @Published private(set) var phoneReachable = false
+    @Published private(set) var phonePresenceConfirmed = false
     @Published private(set) var companionAppInstalled = false
     @Published private(set) var connectivityActivated = false
     @Published private(set) var healthAuthorizationStatus: HKAuthorizationStatus = .notDetermined
@@ -111,6 +112,13 @@ final class WatchSessionController: ObservableObject {
             }
         }
 
+        transport.onApplicationContextReceived = { [weak self] context in
+            guard let self else { return }
+            Task { @MainActor in
+                self.ingestPhonePresence(context)
+            }
+        }
+
         transport.onUserInfoReceived = { [weak self] userInfo in
             guard let self else { return }
             Task { @MainActor in
@@ -121,7 +129,9 @@ final class WatchSessionController: ObservableObject {
         transport.onMessageReceived = { [weak self] message in
             guard let self else { return }
             Task { @MainActor in
-                self.handleMessage(message)
+                if !self.ingestPhonePresence(message) {
+                    self.handleMessage(message)
+                }
             }
         }
 
@@ -148,6 +158,9 @@ final class WatchSessionController: ObservableObject {
     var phoneLinkLabel: String {
         if phoneReachable {
             return "Connected"
+        }
+        if phonePresenceConfirmed {
+            return "Handshake seen"
         }
         if companionAppInstalled {
             return "Companion ready"
