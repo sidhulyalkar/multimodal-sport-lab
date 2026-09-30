@@ -218,6 +218,42 @@ package only on the workstation used for ChArUco/ArUco processing:
 pip install -e '.[dev,vision]'
 ```
 
+### 0. Generate and physically verify fiducials
+
+Generate the exact ChArUco target and Indo Board ArUco markers from versioned
+specs instead of downloading visually similar assets:
+
+```bash
+motionos build-charuco-board-assets \
+  examples/charuco-board-build-spec.example.json \
+  build/fiducials/charuco
+
+motionos build-aruco-marker-assets \
+  examples/indo-board-aruco-build-spec.example.json \
+  build/fiducials/indo-board
+```
+
+The ChArUco command writes both a printable PNG and a
+`motionos.calibration-board.v1` JSON whose
+`printable_source_sha256` points to that exact PNG. The ArUco command writes
+one PNG per marker plus a build receipt fixing dictionary, IDs, intended marker
+size, DPI, and file hashes.
+
+Print at **100% / Actual Size** with Fit/Shrink/Scale disabled. Before using the
+assets:
+
+1. measure a printed ChArUco square edge and confirm it matches the declared
+   `square_length_m`;
+2. measure the outer width of each printed ArUco marker;
+3. reject/reprint if the physical scale is outside your frozen tolerance;
+4. mount the ArUco markers flat on the actual Indo Board;
+5. measure their final **center coordinates** on the mounted board and put those
+   measured values into `indo-board-marker-layout.json`;
+6. archive the generated build receipts with the experiment evidence.
+
+Digital dimensions and DPI do not prove printer accuracy. The ruler measurement
+is part of the physical calibration evidence.
+
 ### 1. Freeze camera geometry before the scored run
 
 Use the same pixel orientation/decoding convention for calibration images and
@@ -369,6 +405,8 @@ duplicate-safe longitudinal profile update
         ↓
 secondary Watch ↔ vision wrist-acceleration fusion
         ↓
+dimensioned evidence-quality report (no composite score)
+        ↓
 hash-linked pipeline receipt + resumable stage ledger
 ```
 
@@ -376,6 +414,14 @@ The secondary Watch fusion does not overwrite the five camera/board technique
 metrics. It is a cross-modal consistency estimate for the wrist linear
 acceleration magnitude, using gravity-subtracted Watch acceleration and the
 second derivative of triangulated wrist position.
+
+Before interpreting performance, inspect
+`indo-board-quality-report.json`. It keeps timing, calibrated reprojection,
+cross-view ray disagreement, board rigid-fit residuals/scale error,
+reconstruction rejection reasons, metric confidence/unavailability, and
+Watch↔vision disagreement as separate dimensions. `attention_flags` identify
+which dimensions deserve inspection; they are not a quality score or a claim of
+ground-truth accuracy.
 
 ### 5. External Action 4 session provenance
 
