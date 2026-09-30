@@ -51,27 +51,30 @@ def fit_embedded_host_clock(
 def load_unmapped_pose2d_journal(
     path: str | Path,
     *,
-    source_id: str,
+    source_id: str | None = None,
 ) -> tuple[VisionObservation, ...]:
+    events = _load_events(path)
+    resolved_source_id = source_id or _single_pose2d_source_id(events)
     return _parse_pose2d_events(
-        _load_events(path),
-        source_id=source_id,
+        events,
+        source_id=resolved_source_id,
     )
 
 
 def load_pose2d_journal(
     path: str | Path,
     *,
-    source_id: str,
+    source_id: str | None = None,
     clock_model: ClockModel | None = None,
 ) -> Pose2DJournal:
     events = _load_events(path)
+    resolved_source_id = source_id or _single_pose2d_source_id(events)
     if clock_model is None:
         clock_model = fit_embedded_host_clock(events)
 
     raw_observations = _parse_pose2d_events(
         events,
-        source_id=source_id,
+        source_id=resolved_source_id,
     )
     observations = tuple(
         VisionObservation(
@@ -93,7 +96,7 @@ def load_pose2d_journal(
     )
 
     return Pose2DJournal(
-        source_id=source_id,
+        source_id=resolved_source_id,
         observations=observations,
         clock_model=clock_model,
     )
@@ -229,6 +232,25 @@ def pair_pose_observations(
             pairs.append((reference_item, target_item))
 
     return tuple(pairs)
+
+
+def infer_pose2d_source_id(path: str | Path) -> str:
+    return _single_pose2d_source_id(_load_events(path))
+
+
+def _single_pose2d_source_id(
+    events: tuple[SensorEvent, ...],
+) -> str:
+    source_ids = {
+        event.device_id
+        for event in events
+        if event.stream == "/camera/pose2d"
+    }
+    if len(source_ids) != 1:
+        raise ValueError(
+            "pose2d journal must contain exactly one camera device ID"
+        )
+    return next(iter(source_ids))
 
 
 def _load_events(path: str | Path) -> tuple[SensorEvent, ...]:
