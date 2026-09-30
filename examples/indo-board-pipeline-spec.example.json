@@ -7,11 +7,13 @@
   "longitudinal_profile": "../profiles/indo-board-profile.json",
   "iphone": {
     "video": "REPLACE/iphone/camera.mov",
-    "journal": "REPLACE/iphone/camera-frames.jsonl"
+    "journal": "REPLACE/iphone/camera-frames.jsonl",
+    "metadata": "REPLACE/iphone/camera-metadata.json"
   },
   "action4": {
     "video": "REPLACE/action4/original.mov",
-    "journal": "REPLACE/action4/action4-frames.jsonl"
+    "journal": "REPLACE/action4/action4-frames.jsonl",
+    "metadata": "REPLACE/action4/action4-derived-metadata.json"
   },
   "thresholds": {
     "maximum_pose_pair_ms": 10,
