@@ -14,7 +14,11 @@ from .indo_board import analyze_indo_board
 from .indo_board_reconstruction import build_indo_board_samples
 from .longitudinal import update_longitudinal_profile
 from .multiview_pose import write_skeleton_sequence_correspondences
-from .pose2d_io import load_pose2d_journal, pair_pose_observations
+from .pose2d_io import (
+    infer_pose2d_source_id,
+    load_pose2d_journal,
+    pair_pose_observations,
+)
 from .provenance import sha256_file
 from .vision_clock import build_vision_clock_bundle, load_clock_from_bundle
 from .vision_contract import VisionSessionManifest
@@ -30,9 +34,7 @@ def process_indo_board_pipeline(
     output_directory: str | Path,
 ) -> dict[str, object]:
     spec_source = Path(spec_path).resolve()
-    spec = _json_object(spec_source)
-    if spec.get("schema_version") != PIPELINE_SPEC_SCHEMA_VERSION:
-        raise ValueError("unsupported Indo Board pipeline spec schema")
+    spec = validate_indo_board_pipeline_spec(spec_source)
 
     output = Path(output_directory).resolve()
     output.mkdir(parents=True, exist_ok=True)
@@ -330,6 +332,251 @@ def process_indo_board_pipeline(
         encoding="utf-8",
     )
     return receipt
+
+
+def validate_indo_board_pipeline_spec(
+    spec_path: str | Path,
+) -> dict[str, object]:
+    spec_source = Path(spec_path).resolve()
+    spec = _json_object(spec_source)
+    if spec.get("schema_version") != PIPELINE_SPEC_SCHEMA_VERSION:
+        raise ValueError("unsupported Indo Board pipeline spec schema")
+
+    base = spec_source.parent
+    required_paths = {
+        "vision_session": _resolve(base, spec["vision_session"]),
+        "watch_journal": _resolve(base, spec["watch_journal"]),
+        "rig_receipt": _resolve(base, spec["rig_receipt"]),
+        "board_marker_layout": _resolve(base, spec["board_marker_layout"]),
+    }
+    iphone = _mapping(spec, "iphone")
+    action4 = _mapping(spec, "action4")
+    required_paths.update(
+        {
+            "iphone.video": _resolve(base, iphone["video"]),
+            "iphone.journal": _resolve(base, iphone["journal"]),
+            "action4.video": _resolve(base, action4["video"]),
+            "action4.journal": _resolve(base, action4["journal"]),
+        }
+    )
+    missing = [
+        label
+        for label, path in required_paths.items()
+        if not path.is_file()
+    ]
+    if missing:
+        raise FileNotFoundError(
+            "pipeline input files are missing: " + ", ".join(missing)
+        )
+
+    manifest = VisionSessionManifest.from_dict(
+        _json_object(required_paths["vision_session"])
+    )
+    if manifest.sport != "indo_board":
+        raise ValueError(
+            "vision session sport must be 'indo_board'"
+        )
+    if manifest.capture_mode != "multiview_calibration":
+        raise ValueError(
+            "vision session capture_mode must be 'multiview_calibration'"
+        )
+    if len(
+        [
+            landmark
+            for landmark in manifest.sync_landmarks
+            if landmark.kind == "whole_body_impulse"
+        ]
+    ) < 3:
+        raise ValueError(
+            "vision session requires at least three whole-body sync landmarks"
+        )
+
+    rig = _json_object(required_paths["rig_receipt"])
+    if rig.get("schema_version") != "motionos.camera-rig-receipt.v1":
+        raise ValueError("pipeline requires a camera-rig receipt")
+    if rig.get("passed") is not True:
+        raise ValueError("pipeline requires a passing camera-rig receipt")
+    cameras = rig.get("cameras")
+    if not isinstance(cameras, list) or len(cameras) < 2:
+        raise ValueError(
+            "camera-rig receipt must contain at least two cameras"
+        )
+    rig_camera_ids = {
+        str(camera["camera_id"])
+        for camera in cameras
+        if isinstance(camera, dict) and camera.get("camera_id") is not None
+    }
+    iphone_source_id = infer_pose2d_source_id(
+        required_paths["iphone.journal"]
+    )
+    action4_source_id = infer_pose2d_source_id(
+        required_paths["action4.journal"]
+    )
+    if iphone_source_id == action4_source_id:
+        raise ValueError(
+            "iPhone and Action4 journals must have distinct camera IDs"
+        )
+    missing_camera_ids = {
+        iphone_source_id,
+        action4_source_id,
+    } - rig_camera_ids
+    if missing_camera_ids:
+        raise ValueError(
+            "camera-rig receipt does not contain journal camera IDs: "
+            + ", ".join(sorted(missing_camera_ids))
+        )
+
+    thresholds = _mapping(spec, "thresholds")
+    _positive(
+        thresholds,
+        "maximum_pose_pair_ms",
+        default=10.0,
+    )
+    _positive(
+        thresholds,
+        "maximum_marker_pair_ms",
+        default=10.0,
+    )
+    _fraction(
+        thresholds,
+        "minimum_joint_confidence",
+        default=0.6,
+    )
+    _positive_integer(
+        thresholds,
+        "marker_frame_stride",
+        default=1,
+    )
+    _positive(
+        thresholds,
+        "maximum_board_scale_error_fraction",
+        default=0.03,
+        allow_zero=True,
+    )
+    _positive(
+        thresholds,
+        "maximum_skeleton_board_pair_ms",
+        default=20.0,
+    )
+    _fraction(
+        thresholds,
+        "minimum_modeled_mass_coverage",
+        default=0.75,
+    )
+    _positive(
+        thresholds,
+        "maximum_board_fit_residual_m",
+        default=0.03,
+    )
+    _fraction(
+        thresholds,
+        "minimum_pose_confidence",
+        default=0.6,
+    )
+    _positive(
+        thresholds,
+        "maximum_timing_uncertainty_ms",
+        default=20.0,
+    )
+    _positive(
+        thresholds,
+        "maximum_reprojection_rms_px",
+        default=3.0,
+    )
+    _fraction(
+        thresholds,
+        "minimum_longitudinal_confidence",
+        default=0.6,
+    )
+
+    fusion = _mapping(spec, "wrist_fusion")
+    _positive_required(
+        fusion,
+        "watch_acceleration_std_m_s2",
+    )
+    _positive_required(
+        fusion,
+        "vision_acceleration_std_m_s2",
+    )
+    _positive_required(
+        fusion,
+        "maximum_acceleration_rate_m_s3",
+    )
+    _positive(
+        fusion,
+        "maximum_time_delta_ms",
+        default=20.0,
+    )
+
+    profile = _resolve(base, spec["longitudinal_profile"])
+    if profile.exists() and not profile.is_file():
+        raise ValueError(
+            "longitudinal_profile must be a file path"
+        )
+    return spec
+
+
+def _positive_required(
+    mapping: dict[str, object],
+    key: str,
+) -> float:
+    if key not in mapping:
+        raise ValueError(f"{key} is required")
+    return _positive(mapping, key)
+
+
+def _positive(
+    mapping: dict[str, object],
+    key: str,
+    *,
+    default: float | None = None,
+    allow_zero: bool = False,
+) -> float:
+    raw = mapping.get(key, default)
+    if raw is None:
+        raise ValueError(f"{key} is required")
+    try:
+        value = float(raw)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{key} must be numeric") from exc
+    if allow_zero:
+        if value < 0:
+            raise ValueError(f"{key} must be non-negative")
+    elif value <= 0:
+        raise ValueError(f"{key} must be positive")
+    return value
+
+
+def _fraction(
+    mapping: dict[str, object],
+    key: str,
+    *,
+    default: float,
+) -> float:
+    value = _positive(mapping, key, default=default, allow_zero=True)
+    if value > 1:
+        raise ValueError(f"{key} must be between 0 and 1")
+    return value
+
+
+def _positive_integer(
+    mapping: dict[str, object],
+    key: str,
+    *,
+    default: int,
+) -> int:
+    raw = mapping.get(key, default)
+    if isinstance(raw, bool):
+        raise ValueError(f"{key} must be a positive integer")
+    try:
+        value = int(raw)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"{key} must be a positive integer"
+        ) from exc
+    if value <= 0 or float(raw) != value:
+        raise ValueError(f"{key} must be a positive integer")
+    return value
 
 
 def _mapping(
