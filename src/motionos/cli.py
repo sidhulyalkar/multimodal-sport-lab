@@ -45,7 +45,10 @@ from .experiments import (
     verify_grouped_split,
 )
 from .external_camera import import_external_camera_evidence
-from .indo_board_pipeline import process_indo_board_pipeline
+from .indo_board_pipeline import (
+    process_indo_board_pipeline,
+    validate_indo_board_pipeline_spec,
+)
 from .insole import (
     import_opengo_text_export,
     write_p2_capture_receipt,
@@ -533,6 +536,15 @@ def _parser() -> argparse.ArgumentParser:
     vision_clock.add_argument("iphone_journal")
     vision_clock.add_argument("external_sync")
     vision_clock.add_argument("output")
+
+    indo_preflight = sub.add_parser(
+        "validate-indo-board-vision-spec",
+        help=(
+            "fail-fast validate an Indo Board M0-Vision pipeline spec "
+            "without producing derived artifacts"
+        ),
+    )
+    indo_preflight.add_argument("spec")
 
     indo_pipeline = sub.add_parser(
         "process-indo-board-vision",
@@ -1039,6 +1051,21 @@ def main(argv: list[str] | None = None) -> int:
             args.output,
         )
         print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+
+    if args.command == "validate-indo-board-vision-spec":
+        spec = validate_indo_board_pipeline_spec(args.spec)
+        print(
+            json.dumps(
+                {
+                    "valid": True,
+                    "schema_version": spec["schema_version"],
+                    "spec": args.spec,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
         return 0
 
     if args.command == "process-indo-board-vision":
