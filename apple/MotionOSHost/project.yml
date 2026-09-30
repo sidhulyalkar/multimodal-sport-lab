@@ -43,6 +43,8 @@ targets:
         CFBundleDisplayName: MotionOS
         WKCompanionAppBundleIdentifier: com.sidhulyalkar.motionos
         WKRunsIndependentlyOfCompanionApp: false
+        WKBackgroundModes:
+          - workout-processing
         NSHealthShareUsageDescription: MotionOS reads workout metrics so it can synchronize physiology with motion.
         NSHealthUpdateUsageDescription: MotionOS saves the workout you explicitly start.
         NSMotionUsageDescription: MotionOS records wrist motion during an active workout.
