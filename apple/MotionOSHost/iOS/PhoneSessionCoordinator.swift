@@ -134,6 +134,54 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
         )
     }
 
+    @discardableResult
+    func sendVisionSyncCue(_ landmark: SyncLandmark) -> Bool {
+        transport.sendMessage(
+            [
+                "motionos_message": "vision_sync_cue_v1",
+                "vision_session_id": landmark.sessionID,
+                "landmark_id": landmark.landmarkID,
+                "kind": landmark.kind.rawValue,
+                "host_monotonic_time_ns": landmark.hostMonotonicTimeNS,
+                "created_at_unix_ms": landmark.createdAtUnixMS,
+            ]
+        )
+    }
+
+    @discardableResult
+    func sendCoachingCue(
+        _ cue: CoachingCue,
+        condition: CoachingCondition
+    ) -> Bool {
+        let nowMS = UInt64(
+            max(0, Date().timeIntervalSince1970 * 1000.0)
+        )
+        guard condition == .feedbackEnabled,
+              cue.isEligibleForLiveDelivery(nowUnixMS: nowMS)
+        else {
+            return false
+        }
+
+        var message: [String: Any] = [
+            "motionos_message": "coaching_cue_v1",
+            "cue_id": cue.cueID,
+            "vision_session_id": cue.sessionID,
+            "metric_id": cue.metricID,
+            "message": cue.message,
+            "kind": cue.kind.rawValue,
+            "confidence": cue.confidence,
+            "issued_at_unix_ms": cue.issuedAtUnixMS,
+            "valid_for_ms": cue.validForMS,
+        ]
+        if let value = cue.value {
+            message["value"] = value
+        }
+        if let unit = cue.unit {
+            message["unit"] = unit
+        }
+        return transport.sendMessage(message)
+    }
+
     func watchCaptureHealthAge(
         at date: Date = Date()
     ) -> TimeInterval? {
