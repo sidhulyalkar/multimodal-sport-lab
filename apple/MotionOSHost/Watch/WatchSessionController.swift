@@ -142,8 +142,18 @@ final class WatchSessionController: ObservableObject {
         healthAuthorizationStatus == .sharingAuthorized
     }
 
+    var hasRecoverableJournal: Bool {
+        closedJournalURL != nil && closedJournalEvidence != nil
+    }
+
     var canStartCapture: Bool {
-        state == .idle || state == .transferred
+        if state == .idle || state == .transferred {
+            return true
+        }
+        if state == .failed {
+            return journal == nil && !hasRecoverableJournal
+        }
+        return false
     }
 
     var healthAuthorizationLabel: String {
@@ -397,10 +407,11 @@ final class WatchSessionController: ObservableObject {
     }
 
     func retryTransfer() {
-        guard [
-            CaptureState.journalReady,
-            .transportComplete,
-        ].contains(state),
+        guard (
+            state == .journalReady
+                || state == .transportComplete
+                || (state == .failed && hasRecoverableJournal)
+        ),
         let journalURL = closedJournalURL,
         let id = sessionID
         else {
