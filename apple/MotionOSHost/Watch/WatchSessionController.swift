@@ -142,6 +142,10 @@ final class WatchSessionController: ObservableObject {
         healthAuthorizationStatus == .sharingAuthorized
     }
 
+    var canStartCapture: Bool {
+        state == .idle || state == .transferred
+    }
+
     var healthAuthorizationLabel: String {
         switch healthAuthorizationStatus {
         case .sharingAuthorized:
@@ -209,12 +213,7 @@ final class WatchSessionController: ObservableObject {
         origin: CaptureOrigin = .iPhone,
         sessionPrefix: String = "p0-watch"
     ) async {
-        guard [
-            CaptureState.idle,
-            .journalReady,
-            .transferred,
-            .failed,
-        ].contains(state) else {
+        guard canStartCapture else {
             return
         }
 
@@ -585,6 +584,7 @@ final class WatchSessionController: ObservableObject {
             )
             state = .journalReady
         }
+        publishPresence()
     }
 
     private func handleTransferFinished(
@@ -611,6 +611,7 @@ final class WatchSessionController: ObservableObject {
         if state != .transferred {
             state = .transportComplete
         }
+        publishPresence()
     }
 
     private func handleMessage(
@@ -651,6 +652,7 @@ final class WatchSessionController: ObservableObject {
 
         errorMessage = nil
         state = .transferred
+        publishPresence()
     }
 
     private func publishCaptureHealthIfNeeded() {
