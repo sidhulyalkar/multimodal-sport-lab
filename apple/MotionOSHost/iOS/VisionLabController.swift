@@ -27,6 +27,7 @@ final class VisionLabController: ObservableObject {
     @Published var action4RecordingConfirmed = false
     @Published var coachingCondition: CoachingCondition = .feedbackDisabled
     @Published private(set) var syncLandmarks: [SyncLandmark] = []
+    @Published private(set) var acknowledgedSyncLandmarkIDs: Set<String> = []
     @Published private(set) var mediaArtifacts: [CapturedMediaArtifact] = []
     @Published private(set) var derivedArtifacts: [DerivedEvidenceArtifact] = []
     @Published private(set) var action4PosePhase: ExternalPosePhase = .idle
@@ -91,6 +92,7 @@ final class VisionLabController: ObservableObject {
         phase = .armed
         action4RecordingConfirmed = false
         syncLandmarks = []
+        acknowledgedSyncLandmarkIDs = []
         mediaArtifacts = []
         derivedArtifacts = []
         action4PosePhase = .idle
@@ -132,17 +134,47 @@ final class VisionLabController: ObservableObject {
             )
         )
         syncLandmarks.append(landmark)
-        flashGeneration &+= 1
+        return landmark
+    }
 
+    func emitLocalSyncSignals() {
+        flashGeneration &+= 1
         do {
             try syncCueEmitter.emitChirp()
         } catch {
             errorMessage = (
-                "Sync landmark recorded, but audio chirp failed: "
+                "SYNC was sent to Watch, but the iPhone chirp failed: "
                     + error.localizedDescription
             )
         }
-        return landmark
+    }
+
+    func acknowledgeSyncLandmark(
+        landmarkID: String,
+        visionSessionID: String
+    ) {
+        guard visionSessionID == sessionID,
+              syncLandmarks.contains(
+                where: { $0.landmarkID == landmarkID }
+              )
+        else {
+            return
+        }
+        acknowledgedSyncLandmarkIDs.insert(landmarkID)
+        errorMessage = nil
+    }
+
+    func discardUnacknowledgedSyncLandmark(
+        landmarkID: String,
+        message: String
+    ) {
+        guard !acknowledgedSyncLandmarkIDs.contains(landmarkID) else {
+            return
+        }
+        syncLandmarks.removeAll {
+            $0.landmarkID == landmarkID
+        }
+        errorMessage = message
     }
 
     func importAction4Video(_ sourceURL: URL) throws {
@@ -312,7 +344,7 @@ final class VisionLabController: ObservableObject {
             captureMode: "multiview_calibration",
             createdAtUTC: createdAtUTC,
             cameraSources: cameraSources,
-            syncLandmarks: syncLandmarks,
+            syncLandmarks: acknowledgedSyncLandmarks,
             mediaArtifacts: mediaArtifacts,
             derivedArtifacts: derivedArtifacts,
             coachingCondition: coachingCondition
@@ -331,8 +363,22 @@ final class VisionLabController: ObservableObject {
         return url
     }
 
+    var acknowledgedSyncLandmarks: [SyncLandmark] {
+        syncLandmarks.filter {
+            acknowledgedSyncLandmarkIDs.contains($0.landmarkID)
+        }
+    }
+
+    var acknowledgedSyncLandmarkCount: Int {
+        acknowledgedSyncLandmarks.count
+    }
+
+    var pendingSyncLandmarkCount: Int {
+        syncLandmarks.count - acknowledgedSyncLandmarkCount
+    }
+
     var hasMinimumSyncLandmarks: Bool {
-        syncLandmarks.count >= Self.minimumSyncLandmarkCount
+        acknowledgedSyncLandmarkCount >= Self.minimumSyncLandmarkCount
     }
 
     func mediaArtifactURL(
