@@ -28,6 +28,7 @@ def _fixture(tmp_path):
     watch = tmp_path / "watch.jsonl"
     rig = tmp_path / "rig.json"
     layout = tmp_path / "layout.json"
+    marker_receipt = tmp_path / "marker-build-receipt.json"
     iphone_video = tmp_path / "iphone.mov"
     iphone_journal = tmp_path / "iphone.jsonl"
     iphone_metadata = tmp_path / "iphone-metadata.json"
@@ -83,7 +84,47 @@ def _fixture(tmp_path):
         ),
         encoding="utf-8",
     )
-    layout.write_text("{}\n", encoding="utf-8")
+    marker_receipt.write_text(
+        json.dumps(
+            {
+                "schema_version":
+                    "motionos.aruco-marker-build-receipt.v1",
+                "asset_id": "indo-board-four-marker-v1",
+                "dictionary": "DICT_4X4_50",
+                "marker_size_m": 0.05,
+                "markers": [
+                    {
+                        "marker_id": marker_id,
+                        "physical_size_m": 0.05,
+                    }
+                    for marker_id in (21, 22, 23, 24)
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    layout.write_text(
+        json.dumps(
+            {
+                "schema_version":
+                    "motionos.board-marker-layout.v1",
+                "layout_id": "indo-board-four-marker-v1",
+                "frame_convention":
+                    "+X rider-right,+Y board-up,+Z board-forward",
+                "marker_dictionary": "DICT_4X4_50",
+                "marker_size_m": 0.05,
+                "marker_asset_receipt_sha256":
+                    sha256_file(marker_receipt),
+                "markers_m": {
+                    "21": [-0.16, 0.0, 0.30],
+                    "22": [0.16, 0.0, 0.30],
+                    "23": [-0.16, 0.0, -0.30],
+                    "24": [0.16, 0.0, -0.30],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
     iphone_video.write_bytes(b"iphone-video")
     action_video.write_bytes(b"action-video")
     _write_pose_journal(
@@ -199,6 +240,7 @@ def _fixture(tmp_path):
         "watch_journal": watch.name,
         "rig_receipt": rig.name,
         "board_marker_layout": layout.name,
+        "board_marker_asset_receipt": marker_receipt.name,
         "longitudinal_profile": profile.name,
         "iphone": {
             "video": iphone_video.name,
@@ -244,6 +286,36 @@ def test_pipeline_preflight_accepts_matching_camera_contract(tmp_path):
     validated = validate_indo_board_pipeline_spec(spec)
 
     assert validated == document
+
+
+def test_pipeline_preflight_rejects_wrong_marker_asset_receipt(
+    tmp_path,
+):
+    spec, document, _rig = _fixture(tmp_path)
+    receipt = tmp_path / document["board_marker_asset_receipt"]
+    raw = json.loads(receipt.read_text(encoding="utf-8"))
+    raw["asset_id"] = "different-marker-set"
+    receipt.write_text(json.dumps(raw), encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match="not bound to this ArUco build receipt",
+    ):
+        validate_indo_board_pipeline_spec(spec)
+
+
+def test_pipeline_preflight_rejects_marker_size_drift(tmp_path):
+    spec, document, _rig = _fixture(tmp_path)
+    layout = tmp_path / document["board_marker_layout"]
+    raw = json.loads(layout.read_text(encoding="utf-8"))
+    raw["marker_size_m"] = 0.06
+    layout.write_text(json.dumps(raw), encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match="marker size does not match",
+    ):
+        validate_indo_board_pipeline_spec(spec)
 
 
 def test_pipeline_preflight_rejects_camera_id_not_in_rig(tmp_path):
@@ -409,6 +481,7 @@ def _state_fixture(tmp_path):
         "watch.jsonl",
         "rig.json",
         "layout.json",
+        "marker-receipt.json",
         "iphone-metadata.json",
         "action-metadata.json",
     ):
@@ -421,6 +494,8 @@ def _state_fixture(tmp_path):
         "watch_journal": paths["watch.jsonl"].name,
         "rig_receipt": paths["rig.json"].name,
         "board_marker_layout": paths["layout.json"].name,
+        "board_marker_asset_receipt":
+            paths["marker-receipt.json"].name,
         "iphone": {
             "metadata": paths["iphone-metadata.json"].name,
         },
