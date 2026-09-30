@@ -128,6 +128,7 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
 
         if activated {
             ingestWatchPresence(session.receivedApplicationContext)
+            publishPhonePresence()
         }
 
         // WCSession's install bit can lag a development install. A current
@@ -249,6 +250,31 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
                 message["watch_battery_level_fraction"]
             )
         )
+    }
+
+    private func publishPhonePresence() {
+        guard transport.session.activationState == .activated else {
+            return
+        }
+
+        let version = Bundle.main.object(
+            forInfoDictionaryKey: "CFBundleShortVersionString"
+        ) as? String ?? "unknown"
+        let build = Bundle.main.object(
+            forInfoDictionaryKey: "CFBundleVersion"
+        ) as? String ?? "unknown"
+
+        let message: [String: Any] = [
+            "motionos_message": "phone_presence_v1",
+            "bundle_id": Bundle.main.bundleIdentifier ?? "unknown",
+            "app_version": version,
+            "app_build": build,
+            "workout_state": state.rawValue,
+            "sent_at_unix_s": Date().timeIntervalSince1970,
+        ]
+
+        _ = transport.updateApplicationContext(message)
+        _ = transport.sendMessage(message)
     }
 
     private func ingestWatchPresence(
