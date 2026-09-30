@@ -602,6 +602,15 @@ final class WatchSessionController: ObservableObject {
                 "stream": "/body/watch",
                 "journal_sha256": evidence.sha256,
                 "journal_byte_count": evidence.byteCount,
+                "capture_origin": captureOrigin.rawValue,
+                "rejected_after_shutdown_count":
+                    captureRejections.afterShutdown,
+                "rejected_session_mismatch_count":
+                    captureRejections.sessionMismatch,
+                "rejected_no_session_count":
+                    captureRejections.noActiveSession,
+                "rejected_stale_motion_count":
+                    captureRejections.staleMotionGeneration,
             ]
         )
 
