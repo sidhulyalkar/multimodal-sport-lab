@@ -122,7 +122,9 @@ The iPhone host now includes an **Indo Board · M0-Vision** card:
 2. choose and persist the feedback condition before capture;
 3. start the Action 4 manually and confirm it in MotionOS;
 4. start Watch + iPhone capture under the vision session;
-5. emit start/middle/end sync cues;
+5. emit start/middle/end sync cues and wait for each to show as
+   **Watch-journaled**; button taps that never receive a Watch acknowledgment
+   do not count toward the required three;
 6. stop and seal the iPhone evidence;
 7. import the untouched Action 4 movie;
 8. MotionOS copies the file into the session evidence directory and records its
@@ -139,9 +141,17 @@ Each sync button press creates three operator-visible signals:
 - a Watch haptic plus `/sync/vision_cue` event timestamped on the Watch
   monotonic clock.
 
-Immediately after the cue, perform one sharp whole-body/board impulse. The cue
-receipt is a clock landmark; the physical impulse is the independent
-cross-modal landmark visible in Watch IMU and both camera streams.
+Immediately after the cue, perform one sharp whole-body/board impulse. The
+iPhone treats a cue as qualified only after the Watch has durably appended its
+`/sync/vision_cue` event and returned the landmark ID. Immediate and queued
+WatchConnectivity acknowledgments are both accepted; an unacknowledged cue
+expires from the current qualification count and must be retried. The sealed
+`vision_session.json` contains only acknowledged landmarks.
+
+The cue receipt is a clock landmark; the physical impulse is the independent
+cross-modal landmark visible in Watch IMU and both camera streams. Desktop
+preflight also requires exactly one matching Watch-journal receipt for every
+sealed landmark before any camera processing begins.
 
 Do not claim frame-accurate synchronization from cue delivery alone. Fit and
 validate the camera/Watch clock mappings from repeated physical landmarks and
@@ -300,7 +310,9 @@ Preflight rejects the run before an output directory is created if any of the
 following are wrong:
 
 - required evidence files are missing;
-- fewer than three whole-body synchronization landmarks were sealed;
+- fewer than three Watch-acknowledged whole-body synchronization landmarks
+  were sealed, or the Watch journal lacks a unique matching receipt for any
+  sealed landmark;
 - the vision session is not an Indo Board multiview-calibration session;
 - a camera journal ID is absent from the passing rig receipt;
 - the iPhone MOV or frame journal hash does not match
