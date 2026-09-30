@@ -14,6 +14,7 @@ from .session import SessionReader, SessionWriter
 
 CAMERA_FRAME_STREAM = "/camera/frame"
 CAMERA_POSE_STREAM = "/camera/pose3d"
+CAMERA_POSE2D_STREAM = "/camera/pose2d"
 CAMERA_DROP_STREAM = "/camera/drop"
 CAMERA_MOTION_STREAM = "/camera/pose_motion"
 
@@ -304,12 +305,20 @@ def import_camera_evidence(
 
     frames = [event for event in events if event.stream == CAMERA_FRAME_STREAM]
     poses = [event for event in events if event.stream == CAMERA_POSE_STREAM]
+    poses2d = [
+        event for event in events if event.stream == CAMERA_POSE2D_STREAM
+    ]
     drops = [event for event in events if event.stream == CAMERA_DROP_STREAM]
     unknown = [
         event
         for event in events
         if event.stream
-        not in {CAMERA_FRAME_STREAM, CAMERA_POSE_STREAM, CAMERA_DROP_STREAM}
+        not in {
+            CAMERA_FRAME_STREAM,
+            CAMERA_POSE_STREAM,
+            CAMERA_POSE2D_STREAM,
+            CAMERA_DROP_STREAM,
+        }
     ]
     if unknown:
         raise ValueError(
@@ -348,6 +357,7 @@ def import_camera_evidence(
                 streams=(
                     CAMERA_FRAME_STREAM,
                     CAMERA_POSE_STREAM,
+                    CAMERA_POSE2D_STREAM,
                     CAMERA_DROP_STREAM,
                     CAMERA_MOTION_STREAM,
                 ),
@@ -397,6 +407,7 @@ def import_camera_evidence(
                 "source_evidence_sha256": hashes,
                 "frame_events": len(frames),
                 "pose_events": len(poses),
+                "pose2d_events": len(poses2d),
                 "drop_events": len(drops),
                 "derived_motion_events": len(motion),
             },
