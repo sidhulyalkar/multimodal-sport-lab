@@ -26,6 +26,10 @@ public final class WatchWorkoutRecorder: NSObject, HKWorkoutSessionDelegate, HKL
         self.healthStore = healthStore
     }
 
+    public var workoutAuthorizationStatus: HKAuthorizationStatus {
+        healthStore.authorizationStatus(for: HKObjectType.workoutType())
+    }
+
     public func requestAuthorization() async throws {
         guard let heartRate = HKObjectType.quantityType(forIdentifier: .heartRate) else { return }
         try await healthStore.requestAuthorization(
