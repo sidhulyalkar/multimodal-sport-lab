@@ -14,23 +14,23 @@
     "journal": "REPLACE/action4/action4-frames.jsonl"
   },
   "thresholds": {
-    "maximum_pose_pair_ms": 10.0,
-    "maximum_marker_pair_ms": 10.0,
+    "maximum_pose_pair_ms": 10,
+    "maximum_marker_pair_ms": 10,
     "minimum_joint_confidence": 0.6,
     "marker_frame_stride": 1,
     "maximum_board_scale_error_fraction": 0.03,
-    "maximum_skeleton_board_pair_ms": 20.0,
+    "maximum_skeleton_board_pair_ms": 20,
     "minimum_modeled_mass_coverage": 0.75,
     "maximum_board_fit_residual_m": 0.03,
     "minimum_pose_confidence": 0.6,
-    "maximum_timing_uncertainty_ms": 20.0,
-    "maximum_reprojection_rms_px": 3.0,
+    "maximum_timing_uncertainty_ms": 20,
+    "maximum_reprojection_rms_px": 3,
     "minimum_longitudinal_confidence": 0.6
   },
   "wrist_fusion": {
-    "watch_acceleration_std_m_s2": 0.25,
-    "vision_acceleration_std_m_s2": 0.75,
-    "maximum_acceleration_rate_m_s3": 30.0,
-    "maximum_time_delta_ms": 20.0
+    "watch_acceleration_std_m_s2": "REPLACE_WITH_EMPIRICAL_WATCH_STD",
+    "vision_acceleration_std_m_s2": "REPLACE_WITH_EMPIRICAL_VISION_STD",
+    "maximum_acceleration_rate_m_s3": "REPLACE_WITH_PREDECLARED_JERK_BOUND",
+    "maximum_time_delta_ms": 20
   }
 }
