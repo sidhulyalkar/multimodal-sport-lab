@@ -6,6 +6,16 @@ final class CaptureSequenceFence: @unchecked Sendable {
     private let lock = NSLock()
     private var generation: UInt64 = 0
     private var nextSequence: UInt64 = 0
+    private var rejectedCallbacks: UInt64 = 0
+
+    /// Callbacks rejected because their generation was invalidated, over the
+    /// fence's lifetime. Evidence-health diagnostics only; never journaled.
+    var rejectedCallbackCount: UInt64 {
+        lock.lock()
+        defer { lock.unlock() }
+
+        return rejectedCallbacks
+    }
 
     func begin() -> UInt64 {
         lock.lock()
@@ -29,6 +39,7 @@ final class CaptureSequenceFence: @unchecked Sendable {
         defer { lock.unlock() }
 
         guard expectedGeneration == generation else {
+            rejectedCallbacks &+= 1
             return nil
         }
 

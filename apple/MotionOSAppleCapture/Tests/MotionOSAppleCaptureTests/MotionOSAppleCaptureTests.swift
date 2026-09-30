@@ -276,4 +276,258 @@ final class MotionOSAppleCaptureTests: XCTestCase {
         XCTAssertEqual(fence.takeNextSequence(for: second), 0)
         XCTAssertEqual(fence.takeNextSequence(for: second), 1)
     }
+
+    func testCaptureSequenceFenceCountsRejectedCallbacks() {
+        let fence = CaptureSequenceFence()
+
+        let first = fence.begin()
+        XCTAssertEqual(fence.takeNextSequence(for: first), 0)
+        XCTAssertEqual(fence.rejectedCallbackCount, 0)
+
+        fence.invalidate()
+        XCTAssertNil(fence.takeNextSequence(for: first))
+        XCTAssertNil(fence.takeNextSequence(for: first))
+        XCTAssertEqual(fence.rejectedCallbackCount, 2)
+
+        let second = fence.begin()
+        XCTAssertEqual(fence.takeNextSequence(for: second), 0)
+        XCTAssertEqual(fence.rejectedCallbackCount, 2)
+    }
+
+    // MARK: - Shutdown boundary
+
+    func testAdmissionRejectsSameSessionEventsOnceFinalizationBegins() {
+        var admission = CaptureEventAdmission()
+        admission.begin(sessionID: "s1")
+        XCTAssertNil(admission.admit(sessionID: "s1"))
+
+        admission.beginFinalizing()
+        XCTAssertFalse(admission.isCapturing)
+        XCTAssertEqual(admission.admit(sessionID: "s1"), .afterShutdown)
+
+        admission.finish()
+        XCTAssertEqual(admission.admit(sessionID: "s1"), .afterShutdown)
+        XCTAssertEqual(admission.rejections.afterShutdown, 2)
+        XCTAssertEqual(admission.rejections.total, 2)
+    }
+
+    func testAdmissionRejectsForeignSessionsInEveryPhase() {
+        var admission = CaptureEventAdmission()
+        XCTAssertEqual(admission.admit(sessionID: "s1"), .noActiveSession)
+
+        admission.begin(sessionID: "s2")
+        XCTAssertEqual(admission.admit(sessionID: "s1"), .sessionMismatch)
+        admission.beginFinalizing()
+        XCTAssertEqual(admission.admit(sessionID: "s1"), .sessionMismatch)
+        admission.finish()
+        XCTAssertEqual(admission.admit(sessionID: "s1"), .sessionMismatch)
+
+        XCTAssertEqual(admission.rejections.sessionMismatch, 3)
+        XCTAssertEqual(admission.rejections.afterShutdown, 0)
+    }
+
+    func testAdmissionBeginResetsCountsForNewSession() {
+        var admission = CaptureEventAdmission()
+        admission.begin(sessionID: "s1")
+        admission.beginFinalizing()
+        _ = admission.admit(sessionID: "s1")
+        admission.setStaleMotionGenerationCount(3)
+        XCTAssertEqual(admission.rejections.total, 4)
+
+        admission.begin(sessionID: "s2")
+        XCTAssertEqual(admission.rejections, CaptureRejectionCounts())
+        XCTAssertNil(admission.admit(sessionID: "s2"))
+    }
+
+    func testSessionJournalRejectsAppendAfterCloseWithoutThrowing() async throws {
+        let url = try makeShutdownJournalURL()
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let journal = try CaptureSessionJournal(sessionID: "s1", url: url)
+
+        let first = try await journal.append(Self.shutdownEvent(sequence: 0))
+        XCTAssertEqual(first, .appended(count: 1))
+        let closedCount = try await journal.close()
+        XCTAssertEqual(closedCount, 1)
+
+        let late = try await journal.append(Self.shutdownEvent(sequence: 1))
+        XCTAssertEqual(late, .rejected(.afterShutdown))
+        let reclosedCount = try await journal.close()
+        XCTAssertEqual(reclosedCount, 1)
+        XCTAssertEqual(try journalSequences(url), [0])
+    }
+
+    func testSessionJournalRejectsForeignSessionEvents() async throws {
+        let url = try makeShutdownJournalURL()
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let journal = try CaptureSessionJournal(sessionID: "s1", url: url)
+
+        let foreign = try await journal.append(
+            Self.shutdownEvent(sequence: 0, sessionID: "s0")
+        )
+        XCTAssertEqual(foreign, .rejected(.sessionMismatch))
+        let count = try await journal.close()
+        XCTAssertEqual(count, 0)
+        XCTAssertEqual(try journalSequences(url), [])
+    }
+
+    /// Forces the shutdown interleaving: an append is suspended inside the
+    /// writer when close() begins. The late append is rejected, and the writer
+    /// is not closed until the admitted append has finished.
+    func testSessionJournalCloseWaitsForInFlightAppend() async throws {
+        let writer = GatedJournalWriter()
+        let journal = CaptureSessionJournal(
+            sessionID: "s1",
+            url: URL(fileURLWithPath: "/dev/null"),
+            writer: writer
+        )
+
+        let admitted = Task {
+            try await journal.append(Self.shutdownEvent(sequence: 0))
+        }
+        await writer.waitUntilAppendEntered()
+
+        let closing = Task { try await journal.close() }
+        while !(await journal.isClosing) {
+            await Task.yield()
+        }
+
+        let late = try await journal.append(Self.shutdownEvent(sequence: 1))
+        XCTAssertEqual(late, .rejected(.afterShutdown))
+        let logBeforeRelease = await writer.log
+        XCTAssertEqual(logBeforeRelease, ["append-begin 0"])
+
+        await writer.release()
+        let admittedOutcome = try await admitted.value
+        let closedCount = try await closing.value
+        XCTAssertEqual(admittedOutcome, .appended(count: 1))
+        XCTAssertEqual(closedCount, 1)
+        let finalLog = await writer.log
+        XCTAssertEqual(finalLog, ["append-begin 0", "append-end 0", "close"])
+    }
+
+    /// Races appends against close() on the real file journal. Whatever the
+    /// interleaving, every append reported as written is on disk and nothing
+    /// rejected is.
+    func testSessionJournalCloseDrainsAdmittedAppendsUnderRace() async throws {
+        for _ in 0..<50 {
+            let url = try makeShutdownJournalURL()
+            defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+            let journal = try CaptureSessionJournal(sessionID: "s1", url: url)
+            let total = 40
+
+            let (outcomes, closedCount) = try await withThrowingTaskGroup(
+                of: (UInt64, CaptureSessionJournal.AppendOutcome)?.self
+            ) { group in
+                for sequence in 0..<UInt64(total) {
+                    group.addTask {
+                        let outcome = try await journal.append(
+                            Self.shutdownEvent(sequence: sequence)
+                        )
+                        return (sequence, outcome)
+                    }
+                    if sequence == UInt64(total / 2) {
+                        group.addTask {
+                            _ = try await journal.close()
+                            return nil
+                        }
+                    }
+                }
+
+                var outcomes: [UInt64: CaptureSessionJournal.AppendOutcome] = [:]
+                for try await result in group {
+                    if let (sequence, outcome) = result {
+                        outcomes[sequence] = outcome
+                    }
+                }
+                return (outcomes, try await journal.close())
+            }
+
+            let written = Set(outcomes.compactMap { sequence, outcome in
+                if case .appended = outcome { return sequence }
+                return nil
+            })
+            let rejected = outcomes.values.filter {
+                $0 == .rejected(.afterShutdown)
+            }.count
+
+            XCTAssertEqual(outcomes.count, total)
+            XCTAssertEqual(written.count + rejected, total)
+            XCTAssertEqual(closedCount, written.count)
+            XCTAssertEqual(Set(try journalSequences(url)), written)
+            XCTAssertEqual(try journalSequences(url).count, written.count)
+        }
+    }
+
+    /// A journal writer whose first append suspends until `release()`.
+    private actor GatedJournalWriter: CaptureJournalWriting {
+        private(set) var log: [String] = []
+        private var appendEntered = false
+        private var enteredWaiters: [CheckedContinuation<Void, Never>] = []
+        private var released = false
+        private var gate: CheckedContinuation<Void, Never>?
+
+        func append(_ event: SensorEnvelope) async throws {
+            log.append("append-begin \(event.sequence)")
+            let isFirstAppend = !appendEntered
+            appendEntered = true
+            enteredWaiters.forEach { $0.resume() }
+            enteredWaiters.removeAll()
+            if isFirstAppend, !released {
+                await withCheckedContinuation { gate = $0 }
+            }
+            log.append("append-end \(event.sequence)")
+        }
+
+        func close() async throws {
+            log.append("close")
+        }
+
+        func waitUntilAppendEntered() async {
+            guard !appendEntered else { return }
+            await withCheckedContinuation { enteredWaiters.append($0) }
+        }
+
+        func release() {
+            released = true
+            gate?.resume()
+            gate = nil
+        }
+    }
+
+    private func makeShutdownJournalURL() throws -> URL {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "motionos-shutdown-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+        return directory.appendingPathComponent("watch.jsonl")
+    }
+
+    private static func shutdownEvent(
+        sequence: UInt64,
+        sessionID: String = "s1"
+    ) -> SensorEnvelope {
+        SensorEnvelope(
+            sessionID: sessionID,
+            deviceID: "apple-watch",
+            stream: "/body/watch/imu",
+            sequence: sequence,
+            deviceTimeNS: 1_000 + sequence,
+            payload: ["ax": .number(0)]
+        )
+    }
+
+    private func journalSequences(_ url: URL) throws -> [UInt64] {
+        let text = try String(contentsOf: url, encoding: .utf8)
+        return try text.split(separator: "\n").map {
+            try JSONDecoder().decode(
+                SensorEnvelope.self,
+                from: Data($0.utf8)
+            ).sequence
+        }
+    }
 }
