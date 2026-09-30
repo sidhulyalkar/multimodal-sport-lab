@@ -6,7 +6,6 @@ import math
 from pathlib import Path
 from typing import Any
 
-
 CHARUCO_BUILD_SPEC_SCHEMA_VERSION = "motionos.charuco-board-build-spec.v1"
 ARUCO_MARKER_BUILD_SPEC_SCHEMA_VERSION = (
     "motionos.aruco-marker-build-spec.v1"
@@ -153,12 +152,27 @@ def build_aruco_marker_assets(
         or any(isinstance(value, bool) for value in raw_ids)
     ):
         raise ValueError("marker_ids must contain at least three integers")
-    marker_ids = [int(value) for value in raw_ids]
+    marker_ids: list[int] = []
+    for raw_id in raw_ids:
+        try:
+            marker_id = int(raw_id)
+            exact = float(raw_id)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                "marker_ids must contain exact integers"
+            ) from exc
+        if (
+            not math.isfinite(exact)
+            or exact != marker_id
+            or marker_id < 0
+        ):
+            raise ValueError(
+                "marker_ids must contain exact non-negative integers"
+            )
+        marker_ids.append(marker_id)
+
     if len(marker_ids) != len(set(marker_ids)):
         raise ValueError("marker_ids must be unique")
-    if any(value < 0 for value in marker_ids):
-        raise ValueError("marker_ids must be non-negative")
-
     dictionary = _dictionary(cv2, dictionary_name)
     dictionary_size = _dictionary_size(dictionary)
     if any(marker_id >= dictionary_size for marker_id in marker_ids):
