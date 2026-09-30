@@ -6,6 +6,7 @@ from motionos.indo_board_pipeline import (
     process_indo_board_pipeline,
     validate_indo_board_pipeline_spec,
 )
+from motionos.provenance import sha256_file
 from motionos.schema import SensorEvent
 
 
@@ -28,8 +29,10 @@ def _fixture(tmp_path):
     layout = tmp_path / "layout.json"
     iphone_video = tmp_path / "iphone.mov"
     iphone_journal = tmp_path / "iphone.jsonl"
+    iphone_metadata = tmp_path / "iphone-metadata.json"
     action_video = tmp_path / "action.mov"
     action_journal = tmp_path / "action.jsonl"
+    action_metadata = tmp_path / "action-metadata.json"
     profile = tmp_path / "profile.json"
     spec = tmp_path / "pipeline.json"
 
@@ -45,24 +48,6 @@ def _fixture(tmp_path):
         }
         for index in range(3)
     ]
-    vision.write_text(
-        json.dumps(
-            {
-                "schema_version": "motionos.vision-session.v1",
-                "session_id": "vision-s1",
-                "sport": "indo_board",
-                "capture_mode": "multiview_calibration",
-                "created_at_utc": "2026-09-30T23:00:00Z",
-                "camera_sources": [],
-                "sync_landmarks": landmarks,
-                "media_artifacts": [],
-                "derived_artifacts": [],
-                "coaching_condition": "feedback_disabled",
-                "claim_boundary": "",
-            }
-        ),
-        encoding="utf-8",
-    )
     watch.write_text("{}\n", encoding="utf-8")
     rig.write_text(
         json.dumps(
@@ -90,6 +75,104 @@ def _fixture(tmp_path):
         source_id="dji-action4",
     )
 
+    iphone_video_hash = sha256_file(iphone_video)
+    iphone_journal_hash = sha256_file(iphone_journal)
+    iphone_metadata.write_text(
+        json.dumps(
+            {
+                "schema_version": "motionos.camera.v1",
+                "session_id": "vision-s1",
+                "camera": {"unique_id": "iphone-camera-id"},
+                "provenance": {
+                    "camera_mov_sha256": iphone_video_hash,
+                    "camera_frames_jsonl_sha256":
+                        iphone_journal_hash,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    action_video_hash = sha256_file(action_video)
+    action_journal_hash = sha256_file(action_journal)
+    action_metadata.write_text(
+        json.dumps(
+            {
+                "schema_version":
+                    "motionos.external-video-pose2d.v1",
+                "session_id": "vision-s1",
+                "source_id": "dji-action4",
+                "source_video": {
+                    "filename": action_video.name,
+                    "sha256": action_video_hash,
+                    "byte_count": action_video.stat().st_size,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    action_metadata_hash = sha256_file(action_metadata)
+
+    vision.write_text(
+        json.dumps(
+            {
+                "schema_version": "motionos.vision-session.v1",
+                "session_id": "vision-s1",
+                "sport": "indo_board",
+                "capture_mode": "multiview_calibration",
+                "created_at_utc": "2026-09-30T23:00:00Z",
+                "camera_sources": [],
+                "sync_landmarks": landmarks,
+                "media_artifacts": [
+                    {
+                        "source_id": "dji-action4",
+                        "relative_path": "external/action4.mov",
+                        "original_filename": action_video.name,
+                        "sha256": action_video_hash,
+                        "byte_count": action_video.stat().st_size,
+                        "imported_at_utc":
+                            "2026-09-30T23:00:00Z",
+                    }
+                ],
+                "derived_artifacts": [
+                    {
+                        "artifact_id":
+                            "action4-pose2d-journal",
+                        "source_id": "dji-action4",
+                        "kind": "pose2d_journal",
+                        "relative_path":
+                            "derived/action4-frames.jsonl",
+                        "sha256": action_journal_hash,
+                        "byte_count":
+                            action_journal.stat().st_size,
+                        "generated_at_utc":
+                            "2026-09-30T23:01:00Z",
+                        "source_media_sha256":
+                            action_video_hash,
+                    },
+                    {
+                        "artifact_id":
+                            "action4-pose2d-metadata",
+                        "source_id": "dji-action4",
+                        "kind": "pose2d_metadata",
+                        "relative_path":
+                            "derived/action4-metadata.json",
+                        "sha256": action_metadata_hash,
+                        "byte_count":
+                            action_metadata.stat().st_size,
+                        "generated_at_utc":
+                            "2026-09-30T23:01:00Z",
+                        "source_media_sha256":
+                            action_video_hash,
+                    },
+                ],
+                "coaching_condition": "feedback_disabled",
+                "claim_boundary": "",
+            }
+        ),
+        encoding="utf-8",
+    )
+
     document = {
         "schema_version": "motionos.indo-board-pipeline-spec.v1",
         "vision_session": vision.name,
@@ -100,10 +183,12 @@ def _fixture(tmp_path):
         "iphone": {
             "video": iphone_video.name,
             "journal": iphone_journal.name,
+            "metadata": iphone_metadata.name,
         },
         "action4": {
             "video": action_video.name,
             "journal": action_journal.name,
+            "metadata": action_metadata.name,
         },
         "thresholds": {
             "maximum_pose_pair_ms": 10,
@@ -229,4 +314,32 @@ def test_pipeline_preflight_rejects_non_finite_threshold(tmp_path, value):
     spec.write_text(json.dumps(document), encoding="utf-8")
 
     with pytest.raises(ValueError, match="must be finite"):
+        validate_indo_board_pipeline_spec(spec)
+
+
+
+def test_pipeline_preflight_rejects_modified_action4_video(tmp_path):
+    spec, document, _rig = _fixture(tmp_path)
+    video = tmp_path / document["action4"]["video"]
+    video.write_bytes(video.read_bytes() + b"-modified-after-seal")
+
+    with pytest.raises(
+        ValueError,
+        match="Action4 video hash does not match",
+    ):
+        validate_indo_board_pipeline_spec(spec)
+
+
+def test_pipeline_preflight_rejects_modified_iphone_journal(tmp_path):
+    spec, document, _rig = _fixture(tmp_path)
+    journal = tmp_path / document["iphone"]["journal"]
+    journal.write_text(
+        journal.read_text(encoding="utf-8") + "{}\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="iPhone journal hash does not match",
+    ):
         validate_indo_board_pipeline_spec(spec)
