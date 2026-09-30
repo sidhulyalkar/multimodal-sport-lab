@@ -41,7 +41,7 @@ def _session():
 
 
 def test_indo_board_report_derives_five_metrics_without_overclaiming():
-    report = analyze_indo_board(_session())
+    report = analyze_indo_board(_session(), session_id="indo-fixture")
     by_id = {metric.metric_id: metric for metric in report.metrics}
 
     assert report.accepted_sample_count == report.sample_count
@@ -61,14 +61,14 @@ def test_quality_gate_rejects_bad_timing_and_low_pose_confidence():
     samples[0] = replace(samples[0], pose_confidence=0.1)
     samples[1] = replace(samples[1], timing_uncertainty_ms=100.0)
 
-    report = analyze_indo_board(samples)
+    report = analyze_indo_board(samples, session_id="indo-quality")
 
     assert report.rejected_sample_count == 2
     assert report.accepted_sample_count == len(samples) - 2
 
 
 def test_longitudinal_baseline_tracks_mean_variance_and_best():
-    report = analyze_indo_board(_session())
+    report = analyze_indo_board(_session(), session_id="indo-fixture")
     baselines = update_longitudinal_baselines({}, report)
     first = baselines["balance_stability_rms_m"]
     assert first.sample_count == 1
