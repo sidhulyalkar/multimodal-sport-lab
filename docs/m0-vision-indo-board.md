@@ -249,7 +249,11 @@ assets:
 4. mount the ArUco markers flat on the actual Indo Board;
 5. measure their final **center coordinates** on the mounted board and put those
    measured values into `indo-board-marker-layout.json`;
-6. archive the generated build receipts with the experiment evidence.
+6. copy the marker size into `marker_size_m` and put the SHA-256 of the
+   generated ArUco build receipt into `marker_asset_receipt_sha256`;
+7. add that same receipt path as `board_marker_asset_receipt` in the final
+   pipeline spec;
+8. archive the generated build receipts with the experiment evidence.
 
 Digital dimensions and DPI do not prove printer accuracy. The ruler measurement
 is part of the physical calibration evidence.
@@ -351,6 +355,8 @@ following are wrong:
   sealed landmark;
 - the vision session is not an Indo Board multiview-calibration session;
 - a camera journal ID is absent from the passing rig receipt;
+- the measured Indo Board marker layout is not bound to the exact ArUco print
+  receipt, or its dictionary, IDs, or marker size disagree with that receipt;
 - the iPhone MOV or frame journal hash does not match
   `camera-metadata.json`;
 - the Action 4 video, pose journal, or derived metadata is not hash-bound to the
