@@ -5,7 +5,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 from statistics import median
-from typing import Iterable
+from collections.abc import Iterable
 
 from .vision_contract import VisionObservation
 
