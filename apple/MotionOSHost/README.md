@@ -113,8 +113,11 @@ outside the capture contract.
 
 HealthKit Background Delivery is also not required for the P0 workout path.
 P0 uses an active Watch workout session for workout lifecycle and live
-collection. Add background-delivery entitlement only when MotionOS introduces
-a concrete observer-query feature that requires it.
+collection. The Watch target does enable the `workout-processing` background
+mode because Apple requires it for an active workout session to continue while
+the watchOS app is in the background. This is separate from HealthKit
+Background Delivery. Add the latter only when MotionOS introduces a concrete
+observer-query feature that requires it.
 
 Treat `project.yml` and the checked-in entitlement files as the source of
 truth. Manual capability toggles in the generated Xcode project are disposable
