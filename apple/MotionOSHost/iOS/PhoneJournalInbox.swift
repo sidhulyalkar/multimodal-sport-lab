@@ -121,6 +121,11 @@ final class PhoneJournalInbox: ObservableObject {
             "session_id",
             "journal_sha256",
             "journal_byte_count",
+            "capture_origin",
+            "rejected_after_shutdown_count",
+            "rejected_session_mismatch_count",
+            "rejected_no_session_count",
+            "rejected_stale_motion_count",
         ] {
             if let value = metadata?[key] {
                 transferMetadata[key] = value
