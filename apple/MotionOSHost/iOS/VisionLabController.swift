@@ -38,11 +38,14 @@ final class VisionLabController: ObservableObject {
 
     private let syncCueEmitter = SyncCueEmitter()
     private let externalPoseProcessor = ExternalVideoPose2DProcessor()
+    private var iPhoneCameraSourceID = "iphone-rear"
+    private var iPhoneCameraDisplayName = "iPhone rear camera"
 
-    let cameraSources = [
+    var cameraSources: [CameraSource] {
+        [
         CameraSource(
-            sourceID: "iphone-rear",
-            displayName: "iPhone rear camera",
+            sourceID: iPhoneCameraSourceID,
+            displayName: iPhoneCameraDisplayName,
             kind: .builtIn,
             clockDomain: "avcapture-pts",
             timestampBasis: "avcapture_presentation_timestamp",
@@ -70,7 +73,15 @@ final class VisionLabController: ObservableObject {
                 "offline_vision_pose2d",
             ]
         ),
-    ]
+        ]
+    }
+
+    func bindIPhoneCamera(
+        _ configuration: CameraCaptureConfiguration
+    ) {
+        iPhoneCameraSourceID = configuration.uniqueID
+        iPhoneCameraDisplayName = configuration.localizedName
+    }
 
     @discardableResult
     func armSession() -> String {
@@ -86,6 +97,8 @@ final class VisionLabController: ObservableObject {
         action4PoseFrameCount = 0
         action4PoseCount = 0
         manifestURL = nil
+        iPhoneCameraSourceID = "iphone-rear"
+        iPhoneCameraDisplayName = "iPhone rear camera"
         errorMessage = nil
         return id
     }
