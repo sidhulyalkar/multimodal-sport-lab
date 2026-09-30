@@ -56,13 +56,15 @@ struct VisionLabCard: View {
                 || vision.phase == .sealed
                 || vision.phase == .failed {
                 Button {
-                    _ = vision.armSession()
+                    Task { await armSession() }
                 } label: {
                     Label("Arm New Indo Board Session", systemImage: "scope")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
             } else if vision.phase == .armed {
+                capturePreflight
+
                 Button {
                     Task { await startCoordinatedCapture() }
                 } label: {
@@ -73,7 +75,7 @@ struct VisionLabCard: View {
                     .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(!vision.action4RecordingConfirmed)
+                .disabled(!captureReady)
             }
 
             if vision.phase == .capturing {
@@ -87,6 +89,9 @@ struct VisionLabCard: View {
                     .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
+                .disabled(!coordinator.watchReachable)
+
+                syncProgress
 
                 Text(
                     "When cued, make one sharp whole-body/board impulse. "
@@ -94,6 +99,17 @@ struct VisionLabCard: View {
                 )
                 .font(.caption)
                 .foregroundStyle(.secondary)
+
+                if !vision.hasMinimumSyncLandmarks {
+                    Label(
+                        "Collect at least "
+                            + "\(VisionLabController.minimumSyncLandmarkCount) "
+                            + "successful SYNC landmarks before sealing.",
+                        systemImage: "exclamationmark.triangle.fill"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.yellow)
+                }
 
                 Button {
                     Task { await finishCapture() }
@@ -108,6 +124,33 @@ struct VisionLabCard: View {
             }
 
             if vision.phase == .sealed {
+                if let bundle = camera.evidenceBundle {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("iPhone sealed evidence")
+                            .font(.subheadline.weight(.semibold))
+
+                        ShareLink(item: bundle.videoURL) {
+                            Label(
+                                "Share iPhone camera.mov",
+                                systemImage: "video"
+                            )
+                        }
+                        ShareLink(item: bundle.journalURL) {
+                            Label(
+                                "Share iPhone camera-frames.jsonl",
+                                systemImage: "doc.text"
+                            )
+                        }
+                        ShareLink(item: bundle.metadataURL) {
+                            Label(
+                                "Share iPhone camera-metadata.json",
+                                systemImage: "checkmark.seal"
+                            )
+                        }
+                    }
+                    .font(.caption)
+                }
+
                 Button {
                     importingAction4 = true
                 } label: {
@@ -160,6 +203,39 @@ struct VisionLabCard: View {
                         )
                         .font(.caption)
                         .foregroundStyle(.green)
+
+                        if let movieURL = vision.mediaArtifactURL(
+                            sourceID: "dji-action4"
+                        ) {
+                            ShareLink(item: movieURL) {
+                                Label(
+                                    "Share sealed Action 4 movie",
+                                    systemImage: "video"
+                                )
+                            }
+                        }
+                        if let journalURL = vision.derivedArtifactURL(
+                            sourceID: "dji-action4",
+                            kind: "pose2d_journal"
+                        ) {
+                            ShareLink(item: journalURL) {
+                                Label(
+                                    "Share Action 4 pose journal",
+                                    systemImage: "doc.text"
+                                )
+                            }
+                        }
+                        if let metadataURL = vision.derivedArtifactURL(
+                            sourceID: "dji-action4",
+                            kind: "pose2d_metadata"
+                        ) {
+                            ShareLink(item: metadataURL) {
+                                Label(
+                                    "Share Action 4 pose metadata",
+                                    systemImage: "checkmark.seal"
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -233,6 +309,156 @@ struct VisionLabCard: View {
         }
     }
 
+    private func armSession() async {
+        _ = vision.armSession()
+        coordinator.refreshWatchState()
+        coordinator.refreshHostReadiness()
+
+        if camera.phase == .idle
+            || camera.phase == .failed
+            || camera.phase == .denied {
+            await camera.prepare()
+        }
+    }
+
+    private var captureReady: Bool {
+        coordinator.watchPaired
+            && coordinator.watchAppInstalled
+            && coordinator.watchReachable
+            && vision.action4RecordingConfirmed
+            && (
+                camera.phase == .ready
+                    || camera.phase == .evidenceReady
+            )
+            && (coordinator.iPhoneBatteryLevel ?? 0) >= 0.20
+            && (coordinator.iPhoneAvailableStorageBytes ?? 0)
+                >= 5_000_000_000
+    }
+
+    private var capturePreflight: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack {
+                Text("Capture preflight")
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                Button {
+                    Task {
+                        coordinator.refreshWatchState()
+                        coordinator.refreshHostReadiness()
+                        if camera.phase == .idle
+                            || camera.phase == .failed
+                            || camera.phase == .denied {
+                            await camera.prepare()
+                        }
+                    }
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel("Refresh capture preflight")
+            }
+
+            readinessRow(
+                "Watch paired",
+                ready: coordinator.watchPaired,
+                value: coordinator.watchPaired ? "yes" : "no"
+            )
+            readinessRow(
+                "Watch app",
+                ready: coordinator.watchAppInstalled,
+                value: coordinator.watchAppInstalled
+                    ? "installed"
+                    : "missing"
+            )
+            readinessRow(
+                "Watch reachable",
+                ready: coordinator.watchReachable,
+                value: coordinator.watchReachable
+                    ? "reachable"
+                    : "not reachable"
+            )
+            readinessRow(
+                "iPhone camera",
+                ready: camera.phase == .ready
+                    || camera.phase == .evidenceReady,
+                value: camera.phase.rawValue
+            )
+            readinessRow(
+                "iPhone battery",
+                ready: (coordinator.iPhoneBatteryLevel ?? 0) >= 0.20,
+                value: coordinator.iPhoneBatteryLevel.map {
+                    String(format: "%.0f%%", $0 * 100)
+                } ?? "unknown"
+            )
+            readinessRow(
+                "Free storage",
+                ready: (coordinator.iPhoneAvailableStorageBytes ?? 0)
+                    >= 5_000_000_000,
+                value: coordinator.iPhoneAvailableStorageBytes.map {
+                    ByteCountFormatter.string(
+                        fromByteCount: $0,
+                        countStyle: .file
+                    )
+                } ?? "unknown"
+            )
+            readinessRow(
+                "Action 4 recording",
+                ready: vision.action4RecordingConfirmed,
+                value: vision.action4RecordingConfirmed
+                    ? "confirmed"
+                    : "not confirmed"
+            )
+        }
+    }
+
+    private var syncProgress: some View {
+        let count = vision.syncLandmarks.count
+        let required = VisionLabController.minimumSyncLandmarkCount
+        let ready = count >= required
+
+        return HStack {
+            Image(
+                systemName: ready
+                    ? "checkmark.circle.fill"
+                    : "circle.dashed"
+            )
+            .foregroundStyle(ready ? .green : .yellow)
+
+            Text("SYNC landmarks")
+                .font(.caption)
+
+            Spacer()
+
+            Text("\(count)/\(required) required")
+                .font(.system(.caption2, design: .monospaced))
+                .foregroundStyle(ready ? .green : .secondary)
+        }
+    }
+
+    private func readinessRow(
+        _ title: String,
+        ready: Bool,
+        value: String
+    ) -> some View {
+        HStack {
+            Image(
+                systemName: ready
+                    ? "checkmark.circle.fill"
+                    : "exclamationmark.circle"
+            )
+            .foregroundStyle(ready ? .green : .yellow)
+
+            Text(title)
+                .font(.caption)
+
+            Spacer()
+
+            Text(value)
+                .font(.system(.caption2, design: .monospaced))
+                .foregroundStyle(.secondary)
+        }
+    }
+
     private func startCoordinatedCapture() async {
         guard let id = vision.sessionID else {
             vision.fail(VisionLabController.VisionLabError.sessionNotArmed)
@@ -266,6 +492,7 @@ struct VisionLabCard: View {
     }
 
     private func emitSyncCue() {
+        guard coordinator.watchReachable else { return }
         guard let landmark = vision.emitSyncLandmark() else { return }
         _ = coordinator.sendVisionSyncCue(landmark)
 
