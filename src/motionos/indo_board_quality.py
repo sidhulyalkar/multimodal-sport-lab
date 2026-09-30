@@ -6,7 +6,6 @@ import statistics
 from collections import Counter
 from pathlib import Path
 
-
 QUALITY_REPORT_SCHEMA_VERSION = "motionos.indo-board-quality-report.v1"
 
 
