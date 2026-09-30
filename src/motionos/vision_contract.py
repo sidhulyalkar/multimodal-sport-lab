@@ -130,6 +130,16 @@ class SyncLandmark:
 
 
 @dataclass(frozen=True)
+class CapturedMediaArtifact:
+    source_id: str
+    relative_path: str
+    original_filename: str
+    sha256: str
+    byte_count: int
+    imported_at_utc: str
+
+
+@dataclass(frozen=True)
 class VisionSessionManifest:
     session_id: str
     sport: str
@@ -137,6 +147,7 @@ class VisionSessionManifest:
     created_at_utc: str
     camera_sources: tuple[CameraSource, ...]
     sync_landmarks: tuple[SyncLandmark, ...] = ()
+    media_artifacts: tuple[CapturedMediaArtifact, ...] = ()
     coaching_condition: str = "feedback_disabled"
     schema_version: str = VISION_SESSION_SCHEMA_VERSION
     claim_boundary: str = (
@@ -164,6 +175,9 @@ class VisionSessionManifest:
             "sync_landmarks": [
                 asdict(landmark) for landmark in self.sync_landmarks
             ],
+            "media_artifacts": [
+                asdict(artifact) for artifact in self.media_artifacts
+            ],
             "coaching_condition": self.coaching_condition,
             "claim_boundary": self.claim_boundary,
         }
@@ -182,6 +196,10 @@ class VisionSessionManifest:
             sync_landmarks=tuple(
                 SyncLandmark(**item)
                 for item in data.get("sync_landmarks", [])
+            ),
+            media_artifacts=tuple(
+                CapturedMediaArtifact(**item)
+                for item in data.get("media_artifacts", [])
             ),
             coaching_condition=str(
                 data.get("coaching_condition", "feedback_disabled")
