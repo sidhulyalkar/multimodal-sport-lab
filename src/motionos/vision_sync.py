@@ -235,7 +235,7 @@ def _motion_series(
     minimum_joint_confidence: float,
 ) -> tuple[MotionPeak, ...]:
     values: list[MotionPeak] = []
-    for first, second in zip(observations, observations[1:], strict=False):
+    for first, second in itertools.pairwise(observations):
         if use_mapped_time:
             if (
                 first.mapped_session_time_ns is None
@@ -316,7 +316,7 @@ def _peaks_near_cues(
 
     if any(
         later.time_ns <= earlier.time_ns
-        for earlier, later in zip(selected, selected[1:], strict=False)
+        for earlier, later in itertools.pairwise(selected)
     ):
         raise ValueError(
             "detected iPhone impulse peaks are not chronological"
