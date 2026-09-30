@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import math
-from itertools import pairwise
 from pathlib import Path
 
 from .indo_board_reconstruction import load_skeleton_frames
