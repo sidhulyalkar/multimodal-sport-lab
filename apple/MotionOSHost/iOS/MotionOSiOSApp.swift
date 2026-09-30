@@ -7,6 +7,7 @@ struct MotionOSiOSApp: App {
     @StateObject private var cameraController = CameraCaptureController()
     @StateObject private var fieldRun = FieldRunCoordinator()
     @StateObject private var guidedP0 = GuidedP0Controller()
+    @StateObject private var visionLab = VisionLabController()
 
     var body: some Scene {
         WindowGroup {
@@ -17,6 +18,7 @@ struct MotionOSiOSApp: App {
                 .environmentObject(cameraController)
                 .environmentObject(fieldRun)
                 .environmentObject(guidedP0)
+                .environmentObject(visionLab)
         }
     }
 }
