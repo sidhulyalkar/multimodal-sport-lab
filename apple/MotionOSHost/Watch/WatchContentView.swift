@@ -348,7 +348,7 @@ struct WatchContentView: View {
     }
 
     private func errorCard(_ message: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 6) {
             Label("Capture issue", systemImage: "exclamationmark.triangle.fill")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.red)
@@ -356,6 +356,16 @@ struct WatchContentView: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+
+            if controller.hasRecoverableJournal {
+                Button {
+                    controller.retryTransfer()
+                } label: {
+                    Label("Transfer Saved Journal", systemImage: "arrow.up.doc")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .panelStyle()
