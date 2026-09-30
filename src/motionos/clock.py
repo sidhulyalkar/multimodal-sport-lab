@@ -109,3 +109,46 @@ def estimate_clock_model(
         residual_rms_ns=rms,
         observations_used=len(selected),
     )
+
+
+def invert_clock_model(model: ClockModel) -> ClockModel:
+    if abs(model.slope) <= 1e-15:
+        raise ValueError("clock model slope must be non-zero")
+    inverse_slope = 1.0 / model.slope
+    return ClockModel(
+        slope=inverse_slope,
+        intercept_ns=-model.intercept_ns * inverse_slope,
+        residual_rms_ns=(
+            model.residual_rms_ns * abs(inverse_slope)
+        ),
+        observations_used=model.observations_used,
+    )
+
+
+def compose_clock_models(
+    first: ClockModel,
+    second: ClockModel,
+) -> ClockModel:
+    """Compose A-to-B with B-to-C into one A-to-C affine clock model.
+
+    Residual RMS is propagated as independent timing noise. This is a
+    conservative first-order uncertainty approximation, not a covariance fit.
+    """
+    slope = second.slope * first.slope
+    intercept = (
+        second.slope * first.intercept_ns
+        + second.intercept_ns
+    )
+    residual = math.sqrt(
+        (second.slope * first.residual_rms_ns) ** 2
+        + second.residual_rms_ns**2
+    )
+    return ClockModel(
+        slope=slope,
+        intercept_ns=intercept,
+        residual_rms_ns=residual,
+        observations_used=min(
+            first.observations_used,
+            second.observations_used,
+        ),
+    )
