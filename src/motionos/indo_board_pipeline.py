@@ -570,7 +570,7 @@ def _positive_integer(
 ) -> int:
     raw = mapping.get(key, default)
     if isinstance(raw, bool):
-        raise ValueError(f"{key} must be a positive integer")
+        raise TypeError(f"{key} must be a positive integer")
     try:
         value = int(raw)
     except (TypeError, ValueError) as exc:
