@@ -21,6 +21,7 @@ from .pose2d_io import (
     pair_pose_observations,
 )
 from .provenance import sha256_file
+from .schema import SensorEvent
 from .vision_clock import build_vision_clock_bundle, load_clock_from_bundle
 from .vision_contract import VisionSessionManifest
 from .vision_sync import write_external_camera_sync
@@ -563,16 +564,28 @@ def validate_indo_board_pipeline_spec(
         raise ValueError(
             "vision session capture_mode must be 'multiview_calibration'"
         )
-    if len(
-        [
-            landmark
-            for landmark in manifest.sync_landmarks
-            if landmark.kind == "whole_body_impulse"
-        ]
-    ) < 3:
+    sealed_sync_landmarks = [
+        landmark
+        for landmark in manifest.sync_landmarks
+        if landmark.kind == "whole_body_impulse"
+    ]
+    if len(sealed_sync_landmarks) < 3:
         raise ValueError(
             "vision session requires at least three whole-body sync landmarks"
         )
+    landmark_ids = [
+        landmark.landmark_id
+        for landmark in sealed_sync_landmarks
+    ]
+    if len(set(landmark_ids)) != len(landmark_ids):
+        raise ValueError(
+            "vision session sync landmark IDs must be unique"
+        )
+    _validate_watch_sync_receipts(
+        required_paths["watch_journal"],
+        vision_session_id=manifest.session_id,
+        landmark_ids=landmark_ids,
+    )
 
     rig = _json_object(required_paths["rig_receipt"])
     if rig.get("schema_version") != "motionos.camera-rig-receipt.v1":
@@ -718,6 +731,66 @@ def validate_indo_board_pipeline_spec(
             "longitudinal_profile must be a file path"
         )
     return spec
+
+
+def _validate_watch_sync_receipts(
+    watch_journal_path: Path,
+    *,
+    vision_session_id: str,
+    landmark_ids: list[str],
+) -> None:
+    receipt_counts = {
+        landmark_id: 0
+        for landmark_id in landmark_ids
+    }
+
+    for line_number, line in enumerate(
+        watch_journal_path.read_text(
+            encoding="utf-8"
+        ).splitlines(),
+        start=1,
+    ):
+        if not line.strip():
+            continue
+        try:
+            event = SensorEvent.from_json(line)
+        except Exception as exc:
+            raise ValueError(
+                f"invalid Watch sensor event at line {line_number}"
+            ) from exc
+        if event.stream != "/sync/vision_cue":
+            continue
+        if str(event.payload.get("vision_session_id", "")) != (
+            vision_session_id
+        ):
+            continue
+        landmark_id = str(
+            event.payload.get("landmark_id", "")
+        )
+        if landmark_id in receipt_counts:
+            receipt_counts[landmark_id] += 1
+
+    missing = sorted(
+        landmark_id
+        for landmark_id, count in receipt_counts.items()
+        if count == 0
+    )
+    if missing:
+        raise ValueError(
+            "Watch journal is missing sealed SYNC receipts: "
+            + ", ".join(missing)
+        )
+
+    duplicates = sorted(
+        landmark_id
+        for landmark_id, count in receipt_counts.items()
+        if count > 1
+    )
+    if duplicates:
+        raise ValueError(
+            "Watch journal contains duplicate sealed SYNC receipts: "
+            + ", ".join(duplicates)
+        )
 
 
 def _initialize_pipeline_state(
