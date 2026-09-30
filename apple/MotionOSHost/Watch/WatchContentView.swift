@@ -466,8 +466,15 @@ struct WatchContentView: View {
     }
 
     private var buildFooter: some View {
-        Text("MotionOS · evidence-first capture")
-            .font(.system(size: 8))
+        let version = Bundle.main.object(
+            forInfoDictionaryKey: "CFBundleShortVersionString"
+        ) as? String ?? "?"
+        let build = Bundle.main.object(
+            forInfoDictionaryKey: "CFBundleVersion"
+        ) as? String ?? "?"
+
+        return Text("MotionOS v\(version) · b\(build)")
+            .font(.system(size: 8, design: .monospaced))
             .foregroundStyle(.tertiary)
             .padding(.top, 2)
     }
