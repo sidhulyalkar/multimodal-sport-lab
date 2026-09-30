@@ -38,6 +38,7 @@ class MetricEstimate:
 @dataclass(frozen=True)
 class IndoBoardReport:
     schema_version: str
+    session_id: str
     sample_count: int
     accepted_sample_count: int
     rejected_sample_count: int
@@ -47,6 +48,7 @@ class IndoBoardReport:
     def to_dict(self) -> dict[str, object]:
         return {
             "schema_version": self.schema_version,
+            "session_id": self.session_id,
             "sample_count": self.sample_count,
             "accepted_sample_count": self.accepted_sample_count,
             "rejected_sample_count": self.rejected_sample_count,
@@ -92,6 +94,7 @@ class LongitudinalBaseline:
 def analyze_indo_board(
     samples: Iterable[IndoBoardSample],
     *,
+    session_id: str,
     minimum_pose_confidence: float = 0.6,
     maximum_timing_uncertainty_ms: float = 20.0,
     maximum_reprojection_rms_px: float = 3.0,
@@ -100,6 +103,8 @@ def analyze_indo_board(
     recovered_com_radius_m: float = 0.04,
     recovery_hold_s: float = 0.5,
 ) -> IndoBoardReport:
+    if not session_id.strip():
+        raise ValueError("session_id is required")
     all_samples = tuple(sorted(samples, key=lambda sample: sample.time_s))
     if len(all_samples) < 3:
         raise ValueError("Indo Board analysis requires at least three samples")
@@ -224,6 +229,7 @@ def analyze_indo_board(
 
     return IndoBoardReport(
         schema_version="motionos.indo-board-report.v1",
+        session_id=session_id,
         sample_count=len(all_samples),
         accepted_sample_count=len(accepted),
         rejected_sample_count=len(all_samples) - len(accepted),
