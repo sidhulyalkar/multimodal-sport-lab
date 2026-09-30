@@ -12,6 +12,7 @@ from .board_marker_correspondences import (
 )
 from .board_pose_series import build_board_pose_series
 from .indo_board import analyze_indo_board
+from .indo_board_quality import build_indo_board_quality_report
 from .indo_board_reconstruction import build_indo_board_samples
 from .longitudinal import update_longitudinal_profile
 from .multiview_pose import write_skeleton_sequence_correspondences
@@ -461,6 +462,27 @@ def process_indo_board_pipeline(
             profile_path,
         )
 
+    quality_path = output / "indo-board-quality-report.json"
+    quality_report = build_indo_board_quality_report(
+        external_sync_path=external_sync_path,
+        clock_bundle_path=clock_bundle_path,
+        skeleton_correspondences_path=skeleton_correspondences,
+        skeleton_geometry_path=skeleton_geometry,
+        board_correspondences_path=board_correspondences,
+        board_geometry_path=board_geometry,
+        board_pose_series_path=board_pose_series,
+        reconstruction_path=reconstruction_path,
+        metrics_path=metrics_path,
+        wrist_fusion_path=wrist_path,
+        output_path=quality_path,
+    )
+    _record_stage(
+        state,
+        state_path,
+        "indo_board_quality_report",
+        quality_path,
+    )
+
     artifacts = [
         external_sync_path,
         clock_bundle_path,
@@ -474,6 +496,7 @@ def process_indo_board_pipeline(
         reconstruction_path,
         metrics_path,
         wrist_path,
+        quality_path,
         profile_path,
         state_path,
     ]
@@ -487,6 +510,8 @@ def process_indo_board_pipeline(
         "metric_count": len(metrics.metrics),
         "longitudinal_metric_count": len(profile.metric_baselines),
         "wrist_fusion_sample_count": wrist_report["sample_count"],
+        "quality_summary": quality_report["summary"],
+        "attention_flags": quality_report["attention_flags"],
         "execution": {
             "resume_requested": resume,
             "reused_stages": sorted(reused_stages),
