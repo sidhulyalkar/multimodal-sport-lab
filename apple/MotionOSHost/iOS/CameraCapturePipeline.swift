@@ -153,6 +153,7 @@ final class CameraCapturePipeline:
     private var writerStarted = false
     private var frameSequence: UInt64 = 0
     private var poseSequence: UInt64 = 0
+    private var pose2DSequence: UInt64 = 0
     private var dropSequence: UInt64 = 0
     private var deliveredFrameCount: UInt64 = 0
     private var writtenFrameCount: UInt64 = 0
@@ -421,6 +422,7 @@ final class CameraCapturePipeline:
         writerStarted = false
         frameSequence = 0
         poseSequence = 0
+        pose2DSequence = 0
         dropSequence = 0
         deliveredFrameCount = 0
         writtenFrameCount = 0
@@ -466,6 +468,7 @@ final class CameraCapturePipeline:
         do {
             let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
             let ptsNS = try presentationTimeNS(pts)
+            let hostMonotonicTimeNS = MonotonicClock.nowNS()
 
             if !writerStarted {
                 guard writer.startWriting() else {
@@ -509,12 +512,22 @@ final class CameraCapturePipeline:
                 frameSequence % Self.poseStride == 0
             var poseStatus = "not_scheduled"
             var posePayload: [String: JSONValue]?
+            var pose2DPayload: [String: JSONValue]?
 
             if shouldAnalyzePose {
                 poseScheduledCount += 1
                 if let pixelBuffer = CMSampleBufferGetImageBuffer(
                     sampleBuffer
                 ) {
+                    do {
+                        pose2DPayload = try Pose2DExtractor.extract(
+                            from: pixelBuffer,
+                            orientation: .up
+                        )
+                    } catch {
+                        pose2DPayload = nil
+                    }
+
                     do {
                         if let pose = try Pose3DExtractor.extract(
                             from: pixelBuffer,
@@ -555,6 +568,8 @@ final class CameraCapturePipeline:
                 ),
                 "width_px": .number(Double(dimensions.width)),
                 "height_px": .number(Double(dimensions.height)),
+                "host_monotonic_time_ns":
+                    .number(Double(hostMonotonicTimeNS)),
             ]
             if let intrinsic {
                 framePayload["camera_intrinsic_matrix"] =
@@ -575,6 +590,38 @@ final class CameraCapturePipeline:
                     payload: framePayload
                 )
             )
+
+            if let pose2DPayload {
+                var payload = pose2DPayload
+                payload["source_frame_sequence"] =
+                    .number(Double(frameSequence))
+                payload["source_frame_pts_ns"] =
+                    .number(Double(ptsNS))
+                payload["timestamp_basis"] = .string(
+                    "avcapture_presentation_timestamp"
+                )
+                payload["source"] = .string(
+                    "vision_2d_pose_from_camera_frame"
+                )
+                payload["image_width_px"] =
+                    .number(Double(dimensions.width))
+                payload["image_height_px"] =
+                    .number(Double(dimensions.height))
+                payload["vision_orientation"] = .string("up")
+
+                try appendEvent(
+                    SensorEnvelope(
+                        sessionID: sessionID,
+                        deviceID:
+                            configuration?.uniqueID ?? "iphone-camera",
+                        stream: "/camera/pose2d",
+                        sequence: pose2DSequence,
+                        deviceTimeNS: ptsNS,
+                        payload: payload
+                    )
+                )
+                pose2DSequence += 1
+            }
 
             if let posePayload {
                 var payload = posePayload
@@ -756,7 +803,10 @@ final class CameraCapturePipeline:
                         "rear_camera_native_landscape",
                 ],
                 "pose": [
-                    "request": "VNDetectHumanBodyPose3DRequest",
+                    "requests": [
+                        "VNDetectHumanBodyPoseRequest",
+                        "VNDetectHumanBodyPose3DRequest",
+                    ],
                     "stride_delivered_frames": Int(Self.poseStride),
                     "vision_orientation": "up",
                     "joint_coordinate_frame":
