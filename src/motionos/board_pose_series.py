@@ -107,6 +107,9 @@ def build_board_pose_series(
         "schema_version": "motionos.board-pose-series.v1",
         "layout_id": layout.layout_id,
         "marker_layout_sha256": _sha256(layout_path),
+        "marker_asset_receipt_sha256":
+            layout.marker_asset_receipt_sha256,
+        "marker_size_m": layout.marker_size_m,
         "triangulation_report_sha256": _sha256(
             triangulation_path
         ),
