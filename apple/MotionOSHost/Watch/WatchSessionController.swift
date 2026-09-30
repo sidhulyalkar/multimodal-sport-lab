@@ -285,6 +285,10 @@ final class WatchSessionController: ObservableObject {
                 "system_name": .string(device.systemName),
                 "system_version": .string(device.systemVersion),
                 "requested_imu_hz": .number(requestedMotionHz),
+                "capture_origin": .string(origin.rawValue),
+                "workout_mirrored_to_companion": .bool(mirrorToCompanion),
+                "hr_timestamp_semantics":
+                    .string("callback_arrival_monotonic"),
                 "app_version": .string(appVersion),
                 "app_build": .string(appBuild),
                 "wrist_location": .string(
@@ -510,7 +514,12 @@ final class WatchSessionController: ObservableObject {
             deviceTimeNS: timestamp,
             sessionTimeNS: nil,
             syncQuality: nil,
-            payload: ["bpm": .number(bpm)]
+            payload: [
+                "bpm": .number(bpm),
+                "source": .string("healthkit_live_workout_builder"),
+                "timestamp_semantics":
+                    .string("callback_arrival_monotonic"),
+            ]
         )
         heartRateSequence += 1
         await append(event, to: journal)
