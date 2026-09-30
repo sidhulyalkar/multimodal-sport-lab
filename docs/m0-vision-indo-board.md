@@ -113,3 +113,86 @@ After the two-camera Indo Board run is qualified:
 3. train a wearable-only student model against the camera-rich teacher;
 4. periodically repeat camera calibration sessions to detect drift;
 5. add sport-specific state machines for climbing, MTB, and skiing.
+
+## App workflow
+
+The iPhone host now includes an **Indo Board · M0-Vision** card:
+
+1. arm a new vision session;
+2. choose and persist the feedback condition before capture;
+3. start the Action 4 manually and confirm it in MotionOS;
+4. start Watch + iPhone capture under the vision session;
+5. emit start/middle/end sync cues;
+6. stop and seal the iPhone evidence;
+7. import the untouched Action 4 movie;
+8. MotionOS copies the file into the session evidence directory and records its
+   SHA-256 and byte count in the sealed sidecar.
+
+The imported movie is not transcoded before hashing.
+
+## Synchronization evidence
+
+Each sync button press creates three operator-visible signals:
+
+- a short iPhone audio chirp;
+- a bright iPhone UI flash;
+- a Watch haptic plus `/sync/vision_cue` event timestamped on the Watch
+  monotonic clock.
+
+Immediately after the cue, perform one sharp whole-body/board impulse. The cue
+receipt is a clock landmark; the physical impulse is the independent
+cross-modal landmark visible in Watch IMU and both camera streams.
+
+Do not claim frame-accurate synchronization from cue delivery alone. Fit and
+validate the camera/Watch clock mappings from repeated physical landmarks and
+retain predictive timing uncertainty.
+
+## Board 6-DoF
+
+`examples/indo-board-marker-layout.example.json` defines the board-local marker
+frame. Replace every example coordinate with a physical measurement before
+qualification. `motionos.board_pose.estimate_board_pose` rigidly fits
+triangulated marker positions to that frozen layout and returns:
+
+- world translation;
+- board-to-world rotation matrix;
+- roll, pitch, and yaw;
+- fitted scale;
+- RMS and maximum marker residual.
+
+A scale mismatch larger than the declared tolerance fails closed.
+
+## 2D → 3D pose bridge
+
+`motionos.multiview_pose.build_skeleton_correspondences` takes one
+quality-gated 2D pose frame per camera, requires explicit session-clock mapping,
+rejects frames outside the timing-span limit, and emits the repository's
+existing `motionos.multiview-correspondences.v1` input. The existing world
+geometry pipeline remains the authoritative triangulator.
+
+`motionos.uncertainty_fusion.inverse_variance_fuse` may then combine two
+measurements only when they declare the same quantity and coordinate frame.
+Timing uncertainty is converted into additional variance when a maximum
+physical rate is supplied. Frame or quantity mismatches are errors rather than
+implicit transformations.
+
+## Long-term progress
+
+`motionos.longitudinal` stores a durable
+`motionos.longitudinal-profile.v1` profile. A source session can update the
+profile only once. Metrics below the configured confidence floor do not alter
+the baseline. Raw session reports remain separate evidence.
+
+This provides the first real progression loop:
+
+```text
+camera-rich session
+    ↓
+quality-gated biomechanics metrics
+    ↓
+session report
+    ↓
+duplicate-safe longitudinal baseline
+    ↓
+future session comparison / personalized wearable teacher
+```
