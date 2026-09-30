@@ -555,6 +555,10 @@ def validate_indo_board_pipeline_spec(
         "watch_journal": _resolve(base, spec["watch_journal"]),
         "rig_receipt": _resolve(base, spec["rig_receipt"]),
         "board_marker_layout": _resolve(base, spec["board_marker_layout"]),
+        "board_marker_asset_receipt": _resolve(
+            base,
+            spec["board_marker_asset_receipt"],
+        ),
     }
     iphone = _mapping(spec, "iphone")
     action4 = _mapping(spec, "action4")
@@ -577,6 +581,11 @@ def validate_indo_board_pipeline_spec(
         raise FileNotFoundError(
             "pipeline input files are missing: " + ", ".join(missing)
         )
+
+    _validate_board_marker_asset_chain(
+        layout_path=required_paths["board_marker_layout"],
+        receipt_path=required_paths["board_marker_asset_receipt"],
+    )
 
     manifest = VisionSessionManifest.from_dict(
         _json_object(required_paths["vision_session"])
@@ -758,6 +767,99 @@ def validate_indo_board_pipeline_spec(
     return spec
 
 
+def _validate_board_marker_asset_chain(
+    *,
+    layout_path: Path,
+    receipt_path: Path,
+) -> None:
+    layout = _json_object(layout_path)
+    if layout.get("schema_version") != "motionos.board-marker-layout.v1":
+        raise ValueError("unsupported board marker layout schema")
+
+    receipt = _json_object(receipt_path)
+    if receipt.get("schema_version") != (
+        "motionos.aruco-marker-build-receipt.v1"
+    ):
+        raise ValueError("unsupported ArUco marker build receipt schema")
+
+    receipt_hash = sha256_file(receipt_path)
+    if layout.get("marker_asset_receipt_sha256") != receipt_hash:
+        raise ValueError(
+            "board marker layout is not bound to this ArUco build receipt"
+        )
+
+    layout_id = str(layout.get("layout_id", ""))
+    if not layout_id or str(receipt.get("asset_id", "")) != layout_id:
+        raise ValueError(
+            "board marker layout_id must match ArUco asset_id"
+        )
+
+    dictionary = str(layout.get("marker_dictionary", ""))
+    if not dictionary or str(receipt.get("dictionary", "")) != dictionary:
+        raise ValueError(
+            "board marker dictionary does not match ArUco build receipt"
+        )
+
+    try:
+        layout_marker_size = float(layout["marker_size_m"])
+        receipt_marker_size = float(receipt["marker_size_m"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError(
+            "board marker layout and receipt require marker_size_m"
+        ) from exc
+    if (
+        not math.isfinite(layout_marker_size)
+        or layout_marker_size <= 0
+        or not math.isclose(
+            layout_marker_size,
+            receipt_marker_size,
+            rel_tol=1e-12,
+            abs_tol=1e-12,
+        )
+    ):
+        raise ValueError(
+            "board marker size does not match ArUco build receipt"
+        )
+
+    markers = layout.get("markers_m")
+    if not isinstance(markers, dict) or len(markers) < 3:
+        raise ValueError(
+            "board marker layout requires at least three measured markers"
+        )
+    try:
+        layout_ids = {int(marker_id) for marker_id in markers}
+    except ValueError as exc:
+        raise ValueError(
+            "board marker layout IDs must be numeric ArUco IDs"
+        ) from exc
+
+    receipt_markers = receipt.get("markers")
+    if not isinstance(receipt_markers, list):
+        raise TypeError("ArUco build receipt markers must be a list")
+    receipt_ids: set[int] = set()
+    for item in receipt_markers:
+        if not isinstance(item, dict):
+            raise TypeError(
+                "ArUco build receipt marker entries must be objects"
+            )
+        marker_id = int(item["marker_id"])
+        receipt_ids.add(marker_id)
+        if not math.isclose(
+            float(item["physical_size_m"]),
+            layout_marker_size,
+            rel_tol=1e-12,
+            abs_tol=1e-12,
+        ):
+            raise ValueError(
+                "ArUco build receipt contains inconsistent marker size"
+            )
+
+    if layout_ids != receipt_ids:
+        raise ValueError(
+            "board marker layout IDs do not match ArUco build receipt"
+        )
+
+
 def _validate_watch_sync_receipts(
     watch_journal_path: Path,
     *,
@@ -866,6 +968,10 @@ def _pipeline_state_input_hashes(
         "board_marker_layout": _resolve(
             base,
             spec["board_marker_layout"],
+        ),
+        "board_marker_asset_receipt": _resolve(
+            base,
+            spec["board_marker_asset_receipt"],
         ),
         "iphone_metadata": _resolve(base, iphone["metadata"]),
         "action4_metadata": _resolve(base, action4["metadata"]),
