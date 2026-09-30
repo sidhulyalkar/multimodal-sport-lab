@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from typing import Any
 
 VISION_SESSION_SCHEMA_VERSION = "motionos.vision-session.v1"
@@ -137,11 +137,19 @@ class VisionSessionManifest:
     created_at_utc: str
     camera_sources: tuple[CameraSource, ...]
     sync_landmarks: tuple[SyncLandmark, ...] = ()
+    coaching_condition: str = "feedback_disabled"
     schema_version: str = VISION_SESSION_SCHEMA_VERSION
     claim_boundary: str = (
         "Camera and wearable streams retain native timing until explicit "
         "calibration; derived biomechanics carry uncertainty."
     )
+
+    def __post_init__(self) -> None:
+        if self.coaching_condition not in {
+            "feedback_disabled",
+            "feedback_enabled",
+        }:
+            raise ValueError("unsupported coaching condition")
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -156,6 +164,7 @@ class VisionSessionManifest:
             "sync_landmarks": [
                 asdict(landmark) for landmark in self.sync_landmarks
             ],
+            "coaching_condition": self.coaching_condition,
             "claim_boundary": self.claim_boundary,
         }
 
@@ -173,6 +182,9 @@ class VisionSessionManifest:
             sync_landmarks=tuple(
                 SyncLandmark(**item)
                 for item in data.get("sync_landmarks", [])
+            ),
+            coaching_condition=str(
+                data.get("coaching_condition", "feedback_disabled")
             ),
             schema_version=str(
                 data.get("schema_version", VISION_SESSION_SCHEMA_VERSION)
