@@ -333,7 +333,7 @@ struct WatchContentView: View {
     private var rejectionDiagnostics: some View {
         let value = controller.captureRejections
         return VStack(alignment: .leading, spacing: 3) {
-            Label("Capture diagnostics", systemImage: "waveform.badge.exclamationmark")
+            Label("Capture diagnostics", systemImage: "exclamationmark.triangle.fill")
                 .font(.caption2.weight(.semibold))
             Text(
                 "\(value.afterShutdown) late · "
