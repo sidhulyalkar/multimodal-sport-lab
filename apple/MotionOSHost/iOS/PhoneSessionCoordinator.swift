@@ -50,6 +50,7 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
     @Published private(set) var state: State = .idle
     @Published private(set) var watchPaired = false
     @Published private(set) var watchAppInstalled = false
+    @Published private(set) var systemWatchAppInstalled = false
     @Published private(set) var watchReachable = false
     @Published private(set) var watchCaptureHealth: WatchLiveCaptureHealth?
     @Published private(set) var watchPresence: WatchPresence?
@@ -141,9 +142,10 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
         // that the counterpart app exists on the active paired Watch.
         watchPaired = activated && session.isPaired
         watchReachable = activated && session.isReachable
+        systemWatchAppInstalled = activated && session.isWatchAppInstalled
         watchAppInstalled = activated
             && (
-                session.isWatchAppInstalled
+                systemWatchAppInstalled
                     || hasRecentWatchPresence()
                     || session.isReachable
             )
