@@ -3,6 +3,20 @@ import Foundation
 import MotionOSAppleCapture
 import UIKit
 
+struct WatchTransferDiagnostics: Equatable, Sendable {
+    let afterShutdown: UInt64
+    let sessionMismatch: UInt64
+    let noActiveSession: UInt64
+    let staleMotionGeneration: UInt64
+
+    var total: UInt64 {
+        afterShutdown
+            &+ sessionMismatch
+            &+ noActiveSession
+            &+ staleMotionGeneration
+    }
+}
+
 struct JournalIngestReceipt: Sendable {
     let sessionID: String
     let journalURL: URL
@@ -10,6 +24,8 @@ struct JournalIngestReceipt: Sendable {
     let journalSHA256: String
     let byteCount: UInt64
     let duplicateRetransfer: Bool
+    let captureOrigin: String?
+    let transferDiagnostics: WatchTransferDiagnostics?
 }
 
 @MainActor
@@ -20,6 +36,8 @@ final class PhoneJournalInbox: ObservableObject {
     @Published private(set) var latestJournalSHA256: String?
     @Published private(set) var latestJournalByteCount: UInt64?
     @Published private(set) var latestDuplicateRetransfer = false
+    @Published private(set) var latestCaptureOrigin: String?
+    @Published private(set) var latestTransferDiagnostics: WatchTransferDiagnostics?
     @Published private(set) var lastError: String?
 
     func ingest(
@@ -37,6 +55,8 @@ final class PhoneJournalInbox: ObservableObject {
             latestJournalSHA256 = receipt.journalSHA256
             latestJournalByteCount = receipt.byteCount
             latestDuplicateRetransfer = receipt.duplicateRetransfer
+            latestCaptureOrigin = receipt.captureOrigin
+            latestTransferDiagnostics = receipt.transferDiagnostics
             lastError = nil
             return receipt
         } catch {
@@ -155,13 +175,42 @@ final class PhoneJournalInbox: ObservableObject {
             options: .atomic
         )
 
+        let captureOrigin = metadata?["capture_origin"] as? String
+        let diagnosticKeys = [
+            "rejected_after_shutdown_count",
+            "rejected_session_mismatch_count",
+            "rejected_no_session_count",
+            "rejected_stale_motion_count",
+        ]
+        let hasDiagnostics = diagnosticKeys.contains {
+            metadata?[$0] != nil
+        }
+        let diagnostics = hasDiagnostics
+            ? WatchTransferDiagnostics(
+                afterShutdown: Self.uint64(
+                    metadata?["rejected_after_shutdown_count"]
+                ) ?? 0,
+                sessionMismatch: Self.uint64(
+                    metadata?["rejected_session_mismatch_count"]
+                ) ?? 0,
+                noActiveSession: Self.uint64(
+                    metadata?["rejected_no_session_count"]
+                ) ?? 0,
+                staleMotionGeneration: Self.uint64(
+                    metadata?["rejected_stale_motion_count"]
+                ) ?? 0
+            )
+            : nil
+
         return JournalIngestReceipt(
             sessionID: sessionID,
             journalURL: destination,
             hostMetadataURL: hostMetadataURL,
             journalSHA256: incoming.sha256,
             byteCount: incoming.byteCount,
-            duplicateRetransfer: duplicateRetransfer
+            duplicateRetransfer: duplicateRetransfer,
+            captureOrigin: captureOrigin,
+            transferDiagnostics: diagnostics
         )
     }
 
