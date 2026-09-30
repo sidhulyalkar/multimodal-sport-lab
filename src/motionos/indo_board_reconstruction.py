@@ -410,9 +410,7 @@ def _canonical_joint(name: str) -> str:
         for character in name.lower()
         if character.isalnum()
     )
-    if canonical.endswith("joint"):
-        canonical = canonical[:-5]
-    return canonical
+    return canonical.removesuffix("joint")
 
 
 def _midpoint_optional(
