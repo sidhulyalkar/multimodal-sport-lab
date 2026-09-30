@@ -41,6 +41,7 @@ targets:
       path: Watch/Info.plist
       properties:
         CFBundleDisplayName: MotionOS
+        WKApplication: true
         WKCompanionAppBundleIdentifier: com.sidhulyalkar.motionos
         WKRunsIndependentlyOfCompanionApp: false
         WKBackgroundModes:
