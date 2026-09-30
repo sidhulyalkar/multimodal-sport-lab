@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from itertools import pairwise
 from statistics import median
-from collections.abc import Iterable
 
 
 @dataclass(frozen=True)
