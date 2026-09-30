@@ -41,8 +41,11 @@ targets:
       path: Watch/Info.plist
       properties:
         CFBundleDisplayName: MotionOS
+        WKApplication: true
         WKCompanionAppBundleIdentifier: com.sidhulyalkar.motionos
         WKRunsIndependentlyOfCompanionApp: false
+        WKBackgroundModes:
+          - workout-processing
         NSHealthShareUsageDescription: MotionOS reads workout metrics so it can synchronize physiology with motion.
         NSHealthUpdateUsageDescription: MotionOS saves the workout you explicitly start.
         NSMotionUsageDescription: MotionOS records wrist motion during an active workout.

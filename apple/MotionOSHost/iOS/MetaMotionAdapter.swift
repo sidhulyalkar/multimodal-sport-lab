@@ -330,7 +330,7 @@ actor MetaMotionCaptureEngine {
                         )
                     }
                 } catch {
-                    await self.previewFailed(error)
+                    self.previewFailed(error)
                 }
             }
 
@@ -346,7 +346,7 @@ actor MetaMotionCaptureEngine {
                         )
                     }
                 } catch {
-                    await self.previewFailed(error)
+                    self.previewFailed(error)
                 }
             }
         } catch {

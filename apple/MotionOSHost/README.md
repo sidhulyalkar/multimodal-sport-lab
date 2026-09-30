@@ -32,6 +32,32 @@ These values are **operator feedback only**. They do not replace the sealed
 journals, native timestamps, file hashes, or repository-side qualification
 receipts.
 
+## Apple toolchain baseline
+
+The shared `MotionOSAppleCapture` package declares
+`swift-tools-version: 6.0`, so its targets compile in Swift 6 language mode
+rather than inheriting the older Swift 5 package default. The current package
+graph also pins MetaWear at a revision that declares `swift-tools-version: 6.1`.
+Xcode 16.2 ships an older SwiftPM toolchain and cannot resolve that graph.
+
+- **Absolute package-resolution minimum:** Xcode 16.3.
+- **Recommended physical MotionOS toolchain in 2026:** Xcode 26 or newer.
+- For current iOS/watchOS 26 devices, use the Xcode 26 family rather than
+  upgrading only far enough to satisfy SwiftPM.
+
+The bootstrap script checks this before touching the package graph and reports
+the detected Xcode version explicitly.
+
+If multiple Xcode installations coexist, select one per-run without changing
+global system state:
+
+```bash
+export MOTIONOS_DEVELOPER_DIR="/Applications/Xcode-26.app/Contents/Developer"
+bash bootstrap.sh --reset-packages
+```
+
+Or point the system default at the desired installation with `xcode-select`.
+
 ## Generate the Xcode project
 
 Install XcodeGen 2.46+:
@@ -39,23 +65,125 @@ Install XcodeGen 2.46+:
 ```bash
 brew install xcodegen
 cd apple/MotionOSHost
+bash bootstrap.sh
+```
+
+`bootstrap.sh` is the preferred entry point. It:
+
+1. verifies the installed Xcode, Swift, and XcodeGen toolchains;
+2. validates the local `MotionOSAppleCapture` Swift package;
+3. regenerates `MotionOSHost.xcodeproj`;
+4. resolves the local and remote Swift packages into the repo-local
+   `.build/apple-source-packages` cache;
+5. verifies that the generated schemes are readable before opening Xcode.
+
+This keeps package resolution deterministic and makes the first SwiftPM error
+visible instead of leaving Xcode with only downstream “Missing package
+product” diagnostics.
+
+If package resolution is stale:
+
+```bash
+cd apple/MotionOSHost
+bash bootstrap.sh --reset-packages
+```
+
+The reset removes only the generated MotionOS Xcode project and the repo-local
+Swift package cache. It does not touch global Xcode caches or user signing
+configuration.
+
+For manual generation:
+
+```bash
+cd apple/MotionOSHost
 xcodegen generate
+xcodebuild -resolvePackageDependencies \
+  -project MotionOSHost.xcodeproj \
+  -scheme MotionOS-iOS \
+  -clonedSourcePackagesDirPath ../../.build/apple-source-packages
 open MotionOSHost.xcodeproj
 ```
 
 XcodeGen has a currently open Xcode 26 issue that embeds modern single-target watch apps in the legacy `Watch/` location. The project spec contains a guarded post-generation patch to place Watch content in `PlugIns/` instead. Remove this workaround when upstream fixes the issue.
 
+## Watch app install metadata
+
+MotionOS uses the modern single-target watchOS app architecture. The generated
+Watch Info.plist declares `WKApplication=true`, alongside the companion bundle
+identifier. Physical watchOS installation rejects a single-target app bundle
+that lacks the application marker even when simulator builds succeed.
+
+## HealthKit capability policy
+
+The generated project intentionally enables the base HealthKit entitlement on
+the iPhone and Watch targets. Do **not** enable Clinical Health Records for
+P0. MotionOS does not read clinical/FHIR records, and that entitlement is
+outside the capture contract.
+
+HealthKit Background Delivery is also not required for the P0 workout path.
+P0 uses an active Watch workout session for workout lifecycle and live
+collection. The Watch target does enable the `workout-processing` background
+mode because Apple requires it for an active workout session to continue while
+the watchOS app is in the background. This is separate from HealthKit
+Background Delivery. Add the latter only when MotionOS introduces a concrete
+observer-query feature that requires it.
+
+Treat `project.yml` and the checked-in entitlement files as the source of
+truth. Manual capability toggles in the generated Xcode project are disposable
+and may be removed the next time XcodeGen runs.
+
 ## Before running on real devices
 
-1. Select your Apple Developer Team for **both** targets.
-2. Confirm bundle identifiers are unique for your developer account.
-3. Confirm the HealthKit capability is present on both targets.
-4. Pair the iPhone and Apple Watch.
-5. Install the iPhone app; the paired Watch app should also become available.
-6. Open the Watch app once and grant HealthKit authorization.
-7. Start P0 from the iPhone.
+1. Connect the physical iPhone and let Xcode finish preparing the device.
+2. Select your Apple Developer Team for **both** targets.
+3. Confirm bundle identifiers are unique for your developer account.
+4. Confirm the base HealthKit capability is present on both targets.
+5. Keep Clinical Health Records disabled.
+6. Pair the iPhone and Apple Watch.
+7. Select **MotionOS-iOS + the physical iPhone** as the run destination.
+8. Install the iPhone app; the paired Watch app should also become available.
+9. Open the Watch app once and grant HealthKit authorization.
+10. Start P0 from the iPhone.
 
 Simulator builds verify compile-time contracts, but workout mirroring and real motion qualification require physical paired devices.
+
+### Xcode versus Command Line Tools
+
+If Terminal reports:
+
+```text
+xcode-select: error: tool 'xcodebuild' requires Xcode, but active developer
+directory '/Library/Developer/CommandLineTools' is a command line tools instance
+```
+
+the full Xcode app is installed but Terminal is still pointed at the smaller
+Command Line Tools bundle. The bootstrap script now detects the standard
+`/Applications/Xcode.app` installation and uses it for the current run without
+changing global system configuration.
+
+You can also make the full Xcode toolchain the global default:
+
+```bash
+sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer
+xcodebuild -version
+```
+
+If Xcode is installed elsewhere, set
+`MOTIONOS_DEVELOPER_DIR=/path/to/Xcode.app/Contents/Developer` before running
+the bootstrap script.
+
+### Signing versus package resolution
+
+These are independent failure classes:
+
+- **“Missing package product”** means SwiftPM resolution failed. Run
+  `bash bootstrap.sh --reset-packages` and use the first resolver error.
+- **“Communication with Apple failed” / “team has no devices”** is signing and
+  provisioning. Confirm the physical iPhone appears in
+  **Window → Devices and Simulators**, refresh the Apple ID in
+  **Xcode → Settings → Accounts**, then retry automatic signing.
+- Do not delete package dependencies to work around a signing error, and do
+  not change bundle identifiers to work around a SwiftPM resolver error.
 
 ## P0 expected flow
 

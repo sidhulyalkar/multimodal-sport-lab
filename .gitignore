@@ -20,3 +20,9 @@ participant-data/
 profiles/private/
 exports/private/
 consent/
+
+# Generated Apple/Xcode state
+**/.swiftpm/
+apple/MotionOSHost/MotionOSHost.xcodeproj/
+apple/MotionOSHost/iOS/Info.plist
+apple/MotionOSHost/Watch/Info.plist
