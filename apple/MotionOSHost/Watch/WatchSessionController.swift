@@ -53,6 +53,8 @@ final class WatchSessionController: ObservableObject {
     private var staleMotionRejectionBaseline: UInt64 = 0
     private var finalized = false
     private var heartRateSequence: UInt64 = 0
+    private var syncCueSequence: UInt64 = 0
+    private var lastVisionSyncLandmarkID: String?
     private var closedJournalURL: URL?
     private var closedJournalEvidence: FileEvidenceDigest?
     private var imuHealth = SampleTimingHealth()
@@ -148,6 +150,8 @@ final class WatchSessionController: ObservableObject {
         coachingCue = nil
         lastIMUSampleReceivedAt = nil
         heartRateSequence = 0
+        syncCueSequence = 0
+        lastVisionSyncLandmarkID = nil
         finalized = false
         closedJournalURL = nil
         closedJournalEvidence = nil
@@ -504,17 +508,43 @@ final class WatchSessionController: ObservableObject {
 
         case "vision_sync_cue_v1":
             guard state == .running || state == .paused,
-                  let landmarkID = message["landmark_id"] as? String
+                  let landmarkID = message["landmark_id"] as? String,
+                  let visionSessionID =
+                    message["vision_session_id"] as? String,
+                  let watchSessionID = sessionID
             else {
                 return
             }
 
+            let receivedAtNS = MonotonicClock.nowNS()
+            let syncEvent = SensorEnvelope(
+                sessionID: watchSessionID,
+                deviceID: "apple-watch",
+                stream: "/sync/vision_cue",
+                sequence: syncCueSequence,
+                deviceTimeNS: receivedAtNS,
+                payload: [
+                    "vision_session_id": .string(visionSessionID),
+                    "landmark_id": .string(landmarkID),
+                    "cue_kind": .string(
+                        message["kind"] as? String
+                            ?? SyncLandmarkKind.wholeBodyImpulse.rawValue
+                    ),
+                ]
+            )
+            syncCueSequence += 1
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                await self.record(syncEvent)
+            }
+
+            lastVisionSyncLandmarkID = landmarkID
             visionSyncCueTitle = "SYNC · MOVE NOW"
             WKInterfaceDevice.current().play(.notification)
             Task { @MainActor [weak self] in
                 try? await Task.sleep(for: .milliseconds(1_500))
                 guard let self,
-                      message["landmark_id"] as? String == landmarkID
+                      self.lastVisionSyncLandmarkID == landmarkID
                 else {
                     return
                 }
