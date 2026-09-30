@@ -2,6 +2,7 @@ import json
 
 import pytest
 
+import motionos.indo_board_pipeline as pipeline_module
 from motionos.indo_board_pipeline import (
     process_indo_board_pipeline,
     validate_indo_board_pipeline_spec,
@@ -343,3 +344,116 @@ def test_pipeline_preflight_rejects_modified_iphone_journal(tmp_path):
         match="iPhone journal hash does not match",
     ):
         validate_indo_board_pipeline_spec(spec)
+
+
+
+def _state_fixture(tmp_path):
+    paths = {}
+    for name in (
+        "vision.json",
+        "watch.jsonl",
+        "rig.json",
+        "layout.json",
+        "iphone-metadata.json",
+        "action-metadata.json",
+    ):
+        path = tmp_path / name
+        path.write_text(name + "\n", encoding="utf-8")
+        paths[name] = path
+
+    spec_document = {
+        "vision_session": paths["vision.json"].name,
+        "watch_journal": paths["watch.jsonl"].name,
+        "rig_receipt": paths["rig.json"].name,
+        "board_marker_layout": paths["layout.json"].name,
+        "iphone": {
+            "metadata": paths["iphone-metadata.json"].name,
+        },
+        "action4": {
+            "metadata": paths["action-metadata.json"].name,
+        },
+    }
+    spec = tmp_path / "state-spec.json"
+    spec.write_text(
+        json.dumps(spec_document, sort_keys=True),
+        encoding="utf-8",
+    )
+    return spec, spec_document, paths
+
+
+def test_pipeline_state_reuses_only_untampered_artifacts(tmp_path):
+    spec, spec_document, _paths = _state_fixture(tmp_path)
+    state_path = tmp_path / "derived" / "pipeline-state.json"
+    state = pipeline_module._initialize_pipeline_state(
+        state_path,
+        spec_source=spec,
+        spec=spec_document,
+        resume=False,
+    )
+    artifact = tmp_path / "derived" / "geometry.json"
+    artifact.write_text("sealed-result\n", encoding="utf-8")
+
+    pipeline_module._record_stage(
+        state,
+        state_path,
+        "geometry",
+        artifact,
+    )
+
+    resumed = pipeline_module._initialize_pipeline_state(
+        state_path,
+        spec_source=spec,
+        spec=spec_document,
+        resume=True,
+    )
+    assert pipeline_module._stage_reusable(
+        resumed,
+        "geometry",
+        artifact,
+    )
+
+    artifact.write_text("tampered-result\n", encoding="utf-8")
+    assert not pipeline_module._stage_reusable(
+        resumed,
+        "geometry",
+        artifact,
+    )
+
+
+def test_pipeline_state_invalidates_when_authoritative_input_changes(
+    tmp_path,
+):
+    spec, spec_document, paths = _state_fixture(tmp_path)
+    state_path = tmp_path / "derived" / "pipeline-state.json"
+    state = pipeline_module._initialize_pipeline_state(
+        state_path,
+        spec_source=spec,
+        spec=spec_document,
+        resume=False,
+    )
+    artifact = tmp_path / "derived" / "geometry.json"
+    artifact.write_text("sealed-result\n", encoding="utf-8")
+    pipeline_module._record_stage(
+        state,
+        state_path,
+        "geometry",
+        artifact,
+    )
+
+    paths["watch.jsonl"].write_text(
+        "different-watch-evidence\n",
+        encoding="utf-8",
+    )
+    resumed = pipeline_module._initialize_pipeline_state(
+        state_path,
+        spec_source=spec,
+        spec=spec_document,
+        resume=True,
+    )
+
+    assert resumed["stages"] == {}
+    assert not pipeline_module._stage_reusable(
+        resumed,
+        "geometry",
+        artifact,
+    )
