@@ -582,6 +582,9 @@ final class WatchSessionController: ObservableObject {
             return
         }
 
+        let preservingCaptureFailure = state == .failed
+        let priorError = errorMessage
+
         let transfer = transport.transferJournal(
             journalURL,
             metadata: [
@@ -595,14 +598,21 @@ final class WatchSessionController: ObservableObject {
 
         if transfer != nil {
             lastTransferredURL = journalURL
-            errorMessage = nil
+            if !preservingCaptureFailure {
+                errorMessage = nil
+            }
             state = .transferQueued
         } else {
-            errorMessage = (
+            let transferMessage = (
                 "WatchConnectivity is not active yet. "
                 + "The journal remains safe on Watch."
             )
-            state = .journalReady
+            errorMessage = preservingCaptureFailure
+                ? [priorError, transferMessage]
+                    .compactMap { $0 }
+                    .joined(separator: " ")
+                : transferMessage
+            state = preservingCaptureFailure ? .failed : .journalReady
         }
         publishPresence()
     }
