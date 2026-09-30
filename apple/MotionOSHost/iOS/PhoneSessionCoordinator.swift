@@ -139,7 +139,7 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
         watchAppInstalled = activated
             && (
                 session.isWatchAppInstalled
-                    || watchPresence != nil
+                    || hasRecentWatchPresence()
                     || session.isReachable
             )
         refreshHostReadiness()
@@ -194,7 +194,16 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
         at date: Date = Date()
     ) -> TimeInterval? {
         guard let watchPresence else { return nil }
-        return max(0, date.timeIntervalSince(watchPresence.receivedAt))
+        let timestamp = watchPresence.sourceSentAt ?? watchPresence.receivedAt
+        return max(0, date.timeIntervalSince(timestamp))
+    }
+
+    private func hasRecentWatchPresence(
+        at date: Date = Date(),
+        maxAge: TimeInterval = 600
+    ) -> Bool {
+        guard let age = watchPresenceAge(at: date) else { return false }
+        return age <= maxAge
     }
 
     private func ingestWatchMessage(
