@@ -136,3 +136,77 @@ def write_skeleton_correspondences(
         encoding="utf-8",
     )
     return document
+
+
+def build_skeleton_sequence_correspondences(
+    pairs: Iterable[tuple[VisionObservation, VisionObservation]],
+    *,
+    rig_id: str,
+    rig_receipt_sha256: str,
+    minimum_joint_confidence: float = 0.6,
+    maximum_frame_time_delta_ms: float = 10.0,
+) -> dict[str, object]:
+    all_points: list[dict[str, object]] = []
+    pair_count = 0
+    accepted_joint_count = 0
+    rejected_joint_count = 0
+
+    for pair in pairs:
+        result = build_skeleton_correspondences(
+            pair,
+            minimum_joint_confidence=minimum_joint_confidence,
+            maximum_frame_time_delta_ms=maximum_frame_time_delta_ms,
+        )
+        all_points.extend(result.points)
+        pair_count += 1
+        accepted_joint_count += result.accepted_joint_count
+        rejected_joint_count += result.rejected_joint_count
+
+    if not all_points:
+        raise ValueError(
+            "no synchronized frame pairs produced multiview correspondences"
+        )
+    point_ids = [str(point["point_id"]) for point in all_points]
+    if len(point_ids) != len(set(point_ids)):
+        raise ValueError(
+            "sequence correspondences produced duplicate point identifiers"
+        )
+
+    return {
+        "schema_version": "motionos.multiview-correspondences.v1",
+        "rig_id": rig_id,
+        "rig_receipt_sha256": rig_receipt_sha256,
+        "frozen_before_geometry_review": True,
+        "pair_count": pair_count,
+        "accepted_joint_count": accepted_joint_count,
+        "rejected_joint_count": rejected_joint_count,
+        "points": all_points,
+    }
+
+
+def write_skeleton_sequence_correspondences(
+    pairs: Iterable[tuple[VisionObservation, VisionObservation]],
+    output_path: str | Path,
+    *,
+    rig_id: str,
+    rig_receipt_path: str | Path,
+    minimum_joint_confidence: float = 0.6,
+    maximum_frame_time_delta_ms: float = 10.0,
+) -> dict[str, object]:
+    rig_path = Path(rig_receipt_path)
+    document = build_skeleton_sequence_correspondences(
+        pairs,
+        rig_id=rig_id,
+        rig_receipt_sha256=hashlib.sha256(
+            rig_path.read_bytes()
+        ).hexdigest(),
+        minimum_joint_confidence=minimum_joint_confidence,
+        maximum_frame_time_delta_ms=maximum_frame_time_delta_ms,
+    )
+    output = Path(output_path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(
+        json.dumps(document, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return document
