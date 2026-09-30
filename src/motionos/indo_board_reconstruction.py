@@ -405,11 +405,14 @@ def _board_poses(path: str | Path) -> tuple[dict[str, object], ...]:
 
 
 def _canonical_joint(name: str) -> str:
-    return "".join(
+    canonical = "".join(
         character
         for character in name.lower()
         if character.isalnum()
     )
+    if canonical.endswith("joint"):
+        canonical = canonical[:-5]
+    return canonical
 
 
 def _midpoint_optional(
