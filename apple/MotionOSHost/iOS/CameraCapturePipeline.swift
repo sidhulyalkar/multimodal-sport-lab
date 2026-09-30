@@ -258,9 +258,9 @@ final class CameraCapturePipeline:
 
         return try await withCheckedThrowingContinuation { continuation in
             outputQueue.async {
-                self.finishRecordingOnOutputQueue { result in
-                    continuation.resume(with: result)
-                }
+                self.finishRecordingOnOutputQueue(
+                    continuation: continuation
+                )
             }
         }
     }
@@ -665,61 +665,64 @@ final class CameraCapturePipeline:
     }
 
     private func finishRecordingOnOutputQueue(
-        completion: @escaping (
-            Result<CameraEvidenceBundle, Error>
-        ) -> Void
+        continuation: CheckedContinuation<
+            CameraEvidenceBundle,
+            any Error
+        >
     ) {
-        guard let sessionID,
-              let writer,
-              let writerInput,
-              let directoryURL,
-              let videoURL,
-              let journalURL,
-              let metadataURL
+        guard let writer,
+              let writerInput
         else {
-            completion(.failure(CameraCaptureError.recordingNotActive))
+            continuation.resume(
+                throwing: CameraCaptureError.recordingNotActive
+            )
             return
         }
 
         if writerStarted, writer.status == .writing {
             writerInput.markAsFinished()
-            writer.finishWriting {
-                self.outputQueue.async {
-                    self.finalizeEvidence(
-                        sessionID: sessionID,
-                        writer: writer,
-                        directoryURL: directoryURL,
-                        videoURL: videoURL,
-                        journalURL: journalURL,
-                        metadataURL: metadataURL,
-                        completion: completion
+            writer.finishWriting { [weak self] in
+                guard let self else {
+                    continuation.resume(
+                        throwing: CameraCaptureError.recordingNotActive
                     )
+                    return
+                }
+                self.outputQueue.async {
+                    self.completeFinalization(continuation)
                 }
             }
         } else {
-            finalizeEvidence(
-                sessionID: sessionID,
-                writer: writer,
-                directoryURL: directoryURL,
-                videoURL: videoURL,
-                journalURL: journalURL,
-                metadataURL: metadataURL,
-                completion: completion
-            )
+            completeFinalization(continuation)
         }
     }
 
-    private func finalizeEvidence(
-        sessionID: String,
-        writer: AVAssetWriter,
-        directoryURL: URL,
-        videoURL: URL,
-        journalURL: URL,
-        metadataURL: URL,
-        completion: @escaping (
-            Result<CameraEvidenceBundle, Error>
-        ) -> Void
+    private func completeFinalization(
+        _ continuation: CheckedContinuation<
+            CameraEvidenceBundle,
+            any Error
+        >
     ) {
+        do {
+            continuation.resume(
+                returning: try finalizeEvidence()
+            )
+        } catch {
+            continuation.resume(throwing: error)
+        }
+    }
+
+    private func finalizeEvidence() throws -> CameraEvidenceBundle {
+        guard let sessionID,
+              let writer,
+              let directoryURL,
+              let videoURL,
+              let journalURL,
+              let metadataURL
+        else {
+            throw CameraCaptureError.recordingNotActive
+        }
+
         do {
             try journalHandle?.synchronize()
             try journalHandle?.close()
@@ -809,10 +812,10 @@ final class CameraCapturePipeline:
                 metadataURL: metadataURL
             )
             resetRecordingState()
-            completion(.success(bundle))
+            return bundle
         } catch {
             resetRecordingState()
-            completion(.failure(error))
+            throw error
         }
     }
 
