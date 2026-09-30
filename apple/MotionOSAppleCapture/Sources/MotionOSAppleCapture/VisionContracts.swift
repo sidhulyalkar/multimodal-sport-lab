@@ -281,6 +281,48 @@ public struct CapturedMediaArtifact: Codable, Sendable, Equatable {
     }
 }
 
+public struct DerivedEvidenceArtifact: Codable, Sendable, Equatable {
+    public let artifactID: String
+    public let sourceID: String
+    public let kind: String
+    public let relativePath: String
+    public let sha256: String
+    public let byteCount: UInt64
+    public let generatedAtUTC: String
+    public let sourceMediaSHA256: String?
+
+    enum CodingKeys: String, CodingKey {
+        case artifactID = "artifact_id"
+        case sourceID = "source_id"
+        case kind
+        case relativePath = "relative_path"
+        case sha256
+        case byteCount = "byte_count"
+        case generatedAtUTC = "generated_at_utc"
+        case sourceMediaSHA256 = "source_media_sha256"
+    }
+
+    public init(
+        artifactID: String,
+        sourceID: String,
+        kind: String,
+        relativePath: String,
+        sha256: String,
+        byteCount: UInt64,
+        generatedAtUTC: String,
+        sourceMediaSHA256: String? = nil
+    ) {
+        self.artifactID = artifactID
+        self.sourceID = sourceID
+        self.kind = kind
+        self.relativePath = relativePath
+        self.sha256 = sha256
+        self.byteCount = byteCount
+        self.generatedAtUTC = generatedAtUTC
+        self.sourceMediaSHA256 = sourceMediaSHA256
+    }
+}
+
 public struct VisionSessionManifest: Codable, Sendable, Equatable {
     public let schemaVersion: String
     public let sessionID: String
@@ -290,6 +332,7 @@ public struct VisionSessionManifest: Codable, Sendable, Equatable {
     public let cameraSources: [CameraSource]
     public let syncLandmarks: [SyncLandmark]
     public let mediaArtifacts: [CapturedMediaArtifact]
+    public let derivedArtifacts: [DerivedEvidenceArtifact]
     public let coachingCondition: CoachingCondition
     public let claimBoundary: String
 
@@ -302,6 +345,7 @@ public struct VisionSessionManifest: Codable, Sendable, Equatable {
         case cameraSources = "camera_sources"
         case syncLandmarks = "sync_landmarks"
         case mediaArtifacts = "media_artifacts"
+        case derivedArtifacts = "derived_artifacts"
         case coachingCondition = "coaching_condition"
         case claimBoundary = "claim_boundary"
     }
@@ -315,6 +359,7 @@ public struct VisionSessionManifest: Codable, Sendable, Equatable {
         cameraSources: [CameraSource],
         syncLandmarks: [SyncLandmark],
         mediaArtifacts: [CapturedMediaArtifact] = [],
+        derivedArtifacts: [DerivedEvidenceArtifact] = [],
         coachingCondition: CoachingCondition = .feedbackDisabled,
         claimBoundary: String = "Camera and wearable streams retain native timing until explicit calibration; derived biomechanics carry uncertainty."
     ) {
@@ -326,8 +371,42 @@ public struct VisionSessionManifest: Codable, Sendable, Equatable {
         self.cameraSources = cameraSources
         self.syncLandmarks = syncLandmarks
         self.mediaArtifacts = mediaArtifacts
+        self.derivedArtifacts = derivedArtifacts
         self.coachingCondition = coachingCondition
         self.claimBoundary = claimBoundary
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        schemaVersion = try container.decode(String.self, forKey: .schemaVersion)
+        sessionID = try container.decode(String.self, forKey: .sessionID)
+        sport = try container.decode(String.self, forKey: .sport)
+        captureMode = try container.decode(String.self, forKey: .captureMode)
+        createdAtUTC = try container.decode(String.self, forKey: .createdAtUTC)
+        cameraSources = try container.decode(
+            [CameraSource].self,
+            forKey: .cameraSources
+        )
+        syncLandmarks = try container.decodeIfPresent(
+            [SyncLandmark].self,
+            forKey: .syncLandmarks
+        ) ?? []
+        mediaArtifacts = try container.decodeIfPresent(
+            [CapturedMediaArtifact].self,
+            forKey: .mediaArtifacts
+        ) ?? []
+        derivedArtifacts = try container.decodeIfPresent(
+            [DerivedEvidenceArtifact].self,
+            forKey: .derivedArtifacts
+        ) ?? []
+        coachingCondition = try container.decodeIfPresent(
+            CoachingCondition.self,
+            forKey: .coachingCondition
+        ) ?? .feedbackDisabled
+        claimBoundary = try container.decodeIfPresent(
+            String.self,
+            forKey: .claimBoundary
+        ) ?? ""
     }
 }
 
