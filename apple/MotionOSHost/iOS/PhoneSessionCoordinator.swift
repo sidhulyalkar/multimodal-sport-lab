@@ -198,7 +198,7 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
         return max(0, date.timeIntervalSince(timestamp))
     }
 
-    private func hasRecentWatchPresence(
+    func hasRecentWatchPresence(
         at date: Date = Date(),
         maxAge: TimeInterval = 600
     ) -> Bool {
