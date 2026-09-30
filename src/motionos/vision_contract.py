@@ -37,7 +37,7 @@ class CameraSource:
         return data
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "CameraSource":
+    def from_dict(cls, data: dict[str, Any]) -> CameraSource:
         return cls(
             source_id=str(data["source_id"]),
             display_name=str(data["display_name"]),
@@ -183,7 +183,7 @@ class VisionSessionManifest:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "VisionSessionManifest":
+    def from_dict(cls, data: dict[str, Any]) -> VisionSessionManifest:
         return cls(
             session_id=str(data["session_id"]),
             sport=str(data["sport"]),
