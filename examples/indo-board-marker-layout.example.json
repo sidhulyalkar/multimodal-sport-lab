@@ -1,0 +1,12 @@
+{
+  "schema_version": "motionos.board-marker-layout.v1",
+  "layout_id": "indo-board-four-corner-v1",
+  "frame_convention": "+X rider-right, +Y board-up, +Z board-forward; origin at board deck center",
+  "markers_m": {
+    "deck-front-left": [-0.16, 0.0, 0.30],
+    "deck-front-right": [0.16, 0.0, 0.30],
+    "deck-rear-left": [-0.16, 0.0, -0.30],
+    "deck-rear-right": [0.16, 0.0, -0.30]
+  },
+  "notes": "Example coordinates only. Measure the actual marker centers on the physical board before qualification and freeze the resulting layout."
+}
