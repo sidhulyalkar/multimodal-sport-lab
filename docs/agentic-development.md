@@ -80,14 +80,22 @@ Detect rather than assume:
 xcrun --find mcp-server
 ```
 
-If present:
+If present, enable headless access once, grant only the project folder needed by the agent, then open the project. In Xcode 27.2 beta the server is launched by `open`; there is no separate `start` command.
 
 ```bash
 sudo xcrun mcp-server enable
+sudo xcrun mcp-server allow-folder "$HOME/Documents/Projects/multimodal-sport-lab" --for-24-hours
+xcrun mcp-server open apple/MotionOSHost/MotionOSHost.xcodeproj
 xcrun mcp-server status
 ```
 
-Do not configure blanket unattended approval on a normal workstation.
+For isolated agent worktrees, grant the worktree root separately after creating it:
+
+```bash
+sudo xcrun mcp-server allow-folder "$HOME/Documents/Projects/motionos-agents" --for-24-hours
+```
+
+Use `xcrun mcp-server stop` when headless Xcode is no longer needed. Do not configure blanket unattended approval on a normal workstation.
 
 Use:
 
