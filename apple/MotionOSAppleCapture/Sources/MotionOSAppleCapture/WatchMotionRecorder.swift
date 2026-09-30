@@ -5,7 +5,7 @@ import Foundation
 public final class WatchMotionRecorder: @unchecked Sendable {
     private let manager = CMMotionManager()
     private let queue: OperationQueue
-    private var sequence: UInt64 = 0
+    private let sequenceFence = CaptureSequenceFence()
 
     public init() {
         queue = OperationQueue()
@@ -23,10 +23,17 @@ public final class WatchMotionRecorder: @unchecked Sendable {
         guard manager.isDeviceMotionAvailable else {
             throw RecorderError.deviceMotionUnavailable
         }
-        sequence = 0
+        let generation = sequenceFence.begin()
         manager.deviceMotionUpdateInterval = 1.0 / hz
         manager.startDeviceMotionUpdates(to: queue) { [weak self] motion, _ in
-            guard let self, let motion else { return }
+            guard let self,
+                  let motion,
+                  let sequence = self.sequenceFence.takeNextSequence(
+                      for: generation
+                  )
+            else {
+                return
+            }
             let timestampNS = UInt64(max(0, motion.timestamp * 1_000_000_000))
             let standardGravity = 9.80665
             let totalAX = (motion.userAcceleration.x + motion.gravity.x) * standardGravity
@@ -62,16 +69,18 @@ public final class WatchMotionRecorder: @unchecked Sendable {
                 sessionID: sessionID,
                 deviceID: deviceID,
                 stream: "/body/watch/imu",
-                sequence: self.sequence,
+                sequence: sequence,
                 deviceTimeNS: timestampNS,
                 payload: payload
             )
-            self.sequence += 1
             sink(event)
         }
     }
 
     public func stop() {
+        // Invalidate first so callbacks already queued by Core Motion are
+        // rejected even if they execute after stop() returns.
+        sequenceFence.invalidate()
         manager.stopDeviceMotionUpdates()
     }
 
