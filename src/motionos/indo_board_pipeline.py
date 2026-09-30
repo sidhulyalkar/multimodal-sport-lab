@@ -23,7 +23,6 @@ from .vision_sync import write_external_camera_sync
 from .world_geometry import triangulate_multiview
 from .wrist_fusion import build_wrist_acceleration_fusion
 
-
 PIPELINE_SPEC_SCHEMA_VERSION = "motionos.indo-board-pipeline-spec.v1"
 
 
