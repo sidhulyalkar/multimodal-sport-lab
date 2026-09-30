@@ -130,6 +130,37 @@ struct VisionLabCard: View {
                     )
                     .font(.caption)
                     .foregroundStyle(.green)
+
+                    if vision.action4PosePhase == .idle
+                        || vision.action4PosePhase == .failed {
+                        Button {
+                            Task {
+                                await vision.processAction4Pose2D()
+                            }
+                        } label: {
+                            Label(
+                                "Extract Action 4 2D Pose",
+                                systemImage: "figure.walk.motion"
+                            )
+                            .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                    } else if vision.action4PosePhase == .processing {
+                        HStack {
+                            ProgressView()
+                            Text("Extracting timestamped 2D pose…")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } else if vision.action4PosePhase == .ready {
+                        Label(
+                            "\(vision.action4PoseCount) poses from "
+                                + "\(vision.action4PoseFrameCount) frames",
+                            systemImage: "checkmark.circle.fill"
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.green)
+                    }
                 }
 
                 if let manifestURL = vision.manifestURL {
