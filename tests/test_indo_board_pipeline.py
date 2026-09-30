@@ -49,7 +49,26 @@ def _fixture(tmp_path):
         }
         for index in range(3)
     ]
-    watch.write_text("{}\n", encoding="utf-8")
+    watch_events = [
+        SensorEvent(
+            session_id="watch-s1",
+            device_id="apple-watch",
+            stream="/sync/vision_cue",
+            sequence=index,
+            device_time_ns=
+                1_100_000_000 + index * 2_000_000_000,
+            payload={
+                "vision_session_id": "vision-s1",
+                "landmark_id": landmark["landmark_id"],
+                "cue_kind": "whole_body_impulse",
+            },
+        )
+        for index, landmark in enumerate(landmarks)
+    ]
+    watch.write_text(
+        "\n".join(event.to_json() for event in watch_events) + "\n",
+        encoding="utf-8",
+    )
     rig.write_text(
         json.dumps(
             {
@@ -292,6 +311,42 @@ def test_pipeline_preflight_requires_three_sync_landmarks(tmp_path):
     vision.write_text(json.dumps(raw), encoding="utf-8")
 
     with pytest.raises(ValueError, match="at least three"):
+        validate_indo_board_pipeline_spec(spec)
+
+
+def test_pipeline_preflight_rejects_missing_watch_sync_receipt(
+    tmp_path,
+):
+    spec, document, _rig = _fixture(tmp_path)
+    watch = tmp_path / document["watch_journal"]
+    events = watch.read_text(encoding="utf-8").splitlines()
+    watch.write_text(
+        "\n".join(events[:2]) + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="Watch journal is missing sealed SYNC receipts",
+    ):
+        validate_indo_board_pipeline_spec(spec)
+
+
+def test_pipeline_preflight_rejects_duplicate_watch_sync_receipt(
+    tmp_path,
+):
+    spec, document, _rig = _fixture(tmp_path)
+    watch = tmp_path / document["watch_journal"]
+    events = watch.read_text(encoding="utf-8").splitlines()
+    watch.write_text(
+        "\n".join([*events, events[0]]) + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="duplicate sealed SYNC receipts",
+    ):
         validate_indo_board_pipeline_spec(spec)
 
 
