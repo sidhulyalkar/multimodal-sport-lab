@@ -162,6 +162,18 @@ final class VisionLabController: ObservableObject {
         }
         acknowledgedSyncLandmarkIDs.insert(landmarkID)
         errorMessage = nil
+
+        if phase == .sealed {
+            do {
+                _ = try sealSession()
+            } catch {
+                errorMessage = (
+                    "Watch SYNC was acknowledged, but MotionOS could not "
+                        + "refresh the sealed vision sidecar: "
+                        + error.localizedDescription
+                )
+            }
+        }
     }
 
     func discardUnacknowledgedSyncLandmark(
