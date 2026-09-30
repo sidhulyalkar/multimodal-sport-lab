@@ -147,8 +147,14 @@ public final class WatchConnectivityTransport: NSObject, WCSessionDelegate {
     }
 
     #if os(iOS)
-    public func sessionDidBecomeInactive(_ session: WCSession) {}
+    public func sessionDidBecomeInactive(_ session: WCSession) {
+        onStateChanged?()
+    }
+
     public func sessionDidDeactivate(_ session: WCSession) {
+        // Surface the deactivation before activating the newly selected Watch,
+        // so consumers can discard state belonging to the previous companion.
+        onStateChanged?()
         session.activate()
     }
     #endif
