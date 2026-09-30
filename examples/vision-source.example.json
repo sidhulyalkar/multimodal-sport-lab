@@ -13,7 +13,11 @@
       "timestamp_basis": "avcapture_presentation_timestamp",
       "supports_live_frames": true,
       "supports_remote_control": true,
-      "capabilities": ["vision_pose", "intrinsics", "live_preview"]
+      "capabilities": [
+        "vision_pose",
+        "intrinsics",
+        "live_preview"
+      ]
     },
     {
       "source_id": "dji-action4",
@@ -23,7 +27,12 @@
       "timestamp_basis": "container_video_pts",
       "supports_live_frames": false,
       "supports_remote_control": false,
-      "capabilities": ["4k", "timecode", "wide_fov", "manual_import"]
+      "capabilities": [
+        "4k",
+        "timecode",
+        "wide_fov",
+        "manual_import"
+      ]
     }
   ],
   "sync_landmarks": [
@@ -36,5 +45,7 @@
       "note": "whole-body impulse visible to both cameras and Watch IMU"
     }
   ],
-  "claim_boundary": "Camera and wearable streams retain native timing until explicit calibration; derived biomechanics carry uncertainty."
+  "claim_boundary": "Camera and wearable streams retain native timing until explicit calibration; derived biomechanics carry uncertainty.",
+  "coaching_condition": "feedback_disabled",
+  "media_artifacts": []
 }
