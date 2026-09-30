@@ -3,11 +3,12 @@ import SwiftUI
 struct PhoneContentView: View {
     @EnvironmentObject private var coordinator: PhoneSessionCoordinator
     @EnvironmentObject private var inbox: PhoneJournalInbox
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 16) {
+                LazyVStack(spacing: sectionSpacing) {
                     header
                     readiness
                     FieldRunCard()
@@ -21,13 +22,22 @@ struct PhoneContentView: View {
                         Text(error)
                             .font(.footnote)
                             .foregroundStyle(.red)
+                            .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding()
-                            .background(.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
+                            .padding(14)
+                            .background(
+                                .red.opacity(0.08),
+                                in: RoundedRectangle(cornerRadius: 14)
+                            )
                     }
                 }
-                .padding()
+                .frame(maxWidth: 720)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, pagePadding)
+                .padding(.top, 8)
+                .padding(.bottom, 24)
             }
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle("MotionOS")
             .toolbar {
                 Button("Refresh") {
@@ -43,9 +53,17 @@ struct PhoneContentView: View {
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
             Text("MotionOS capture lab")
-                .font(.largeTitle.bold())
-            Text("Capture Watch, equipment, and camera evidence without collapsing their clock domains. Each source stays raw until explicit calibration.")
-                .foregroundStyle(.secondary)
+                .font(heroFont)
+                .minimumScaleFactor(0.82)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(
+                "Capture Watch, equipment, and camera evidence without "
+                    + "collapsing their clock domains. Each source stays raw "
+                    + "until explicit calibration."
+            )
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -256,24 +274,46 @@ struct PhoneContentView: View {
                         .foregroundStyle(.secondary)
                     }
 
-                    HStack {
-                        metric(
-                            "IMU",
-                            health.recentMedianIMUHz.map {
-                                String(format: "%.1f Hz", $0)
-                            } ?? "warming up"
-                        )
-                        metric(
-                            "gap",
-                            String(
-                                format: "%.0f ms",
-                                health.maxIMUGapMS
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 8) {
+                            metric(
+                                "IMU",
+                                health.recentMedianIMUHz.map {
+                                    String(format: "%.1f Hz", $0)
+                                } ?? "warming up"
                             )
-                        )
-                        metric(
-                            "samples",
-                            "\(health.imuSampleCount)"
-                        )
+                            metric(
+                                "gap",
+                                String(
+                                    format: "%.0f ms",
+                                    health.maxIMUGapMS
+                                )
+                            )
+                            metric(
+                                "samples",
+                                "\(health.imuSampleCount)"
+                            )
+                        }
+
+                        VStack(spacing: 6) {
+                            metric(
+                                "IMU",
+                                health.recentMedianIMUHz.map {
+                                    String(format: "%.1f Hz", $0)
+                                } ?? "warming up"
+                            )
+                            metric(
+                                "gap",
+                                String(
+                                    format: "%.0f ms",
+                                    health.maxIMUGapMS
+                                )
+                            )
+                            metric(
+                                "samples",
+                                "\(health.imuSampleCount)"
+                            )
+                        }
                     }
 
                     if let battery = health.watchBatteryLevel {
@@ -326,19 +366,61 @@ struct PhoneContentView: View {
                 .foregroundStyle(.secondary)
             Text(value)
                 .font(.system(.caption, design: .monospaced))
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func readinessRow(_ title: String, value: Bool, detail: String) -> some View {
-        HStack {
-            Image(systemName: value ? "checkmark.circle.fill" : "exclamationmark.circle")
-                .foregroundStyle(value ? .green : .yellow)
-            Text(title)
-            Spacer()
-            Text(detail)
-                .foregroundStyle(.secondary)
+    private func readinessRow(
+        _ title: String,
+        value: Bool,
+        detail: String
+    ) -> some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) {
+                readinessIcon(value)
+                Text(title)
+                Spacer(minLength: 8)
+                Text(detail)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            HStack(alignment: .top, spacing: 8) {
+                readinessIcon(value)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                    Text(detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+            }
         }
+    }
+
+    private func readinessIcon(_ value: Bool) -> some View {
+        Image(
+            systemName: value
+                ? "checkmark.circle.fill"
+                : "exclamationmark.circle"
+        )
+        .foregroundStyle(value ? .green : .yellow)
+    }
+
+    private var heroFont: Font {
+        horizontalSizeClass == .compact
+            ? .title2.bold()
+            : .largeTitle.bold()
+    }
+
+    private var pagePadding: CGFloat {
+        horizontalSizeClass == .compact ? 12 : 20
+    }
+
+    private var sectionSpacing: CGFloat {
+        horizontalSizeClass == .compact ? 12 : 16
     }
 
     private func protocolRow(_ number: String, _ text: String) -> some View {
