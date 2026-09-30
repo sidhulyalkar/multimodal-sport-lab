@@ -34,9 +34,11 @@ receipts.
 
 ## Apple toolchain baseline
 
-The current package graph pins MetaWear at a revision that declares
-`swift-tools-version: 6.1`. Xcode 16.2 ships an older SwiftPM toolchain and
-cannot resolve it.
+The shared `MotionOSAppleCapture` package declares
+`swift-tools-version: 6.0`, so its targets compile in Swift 6 language mode
+rather than inheriting the older Swift 5 package default. The current package
+graph also pins MetaWear at a revision that declares `swift-tools-version: 6.1`.
+Xcode 16.2 ships an older SwiftPM toolchain and cannot resolve that graph.
 
 - **Absolute package-resolution minimum:** Xcode 16.3.
 - **Recommended physical MotionOS toolchain in 2026:** Xcode 26 or newer.
