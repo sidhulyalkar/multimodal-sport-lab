@@ -19,6 +19,20 @@ struct WatchLiveCaptureHealth: Equatable, Sendable {
     let watchBatteryLevel: Double?
 }
 
+struct WatchPresence: Equatable, Sendable {
+    let receivedAt: Date
+    let sourceSentAt: Date?
+    let bundleID: String
+    let appVersion: String
+    let appBuild: String
+    let watchSystemVersion: String
+    let captureState: String
+    let captureOrigin: String
+    let healthAuthorization: String
+    let watchBatteryLevel: Double?
+}
+
+
 @MainActor
 final class PhoneSessionCoordinator: NSObject, ObservableObject {
     enum State: String {
@@ -38,6 +52,7 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
     @Published private(set) var watchAppInstalled = false
     @Published private(set) var watchReachable = false
     @Published private(set) var watchCaptureHealth: WatchLiveCaptureHealth?
+    @Published private(set) var watchPresence: WatchPresence?
     @Published private(set) var iPhoneBatteryLevel: Double?
     @Published private(set) var iPhoneAvailableStorageBytes: Int64?
     @Published private(set) var errorMessage: String?
@@ -81,6 +96,22 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
             }
         }
 
+        transport.onApplicationContextReceived = { [weak self] context in
+            guard let self else { return }
+            Task { @MainActor in
+                self.ingestWatchPresence(context)
+                self.refreshWatchState()
+            }
+        }
+
+        transport.onUserInfoReceived = { [weak self] userInfo in
+            guard let self else { return }
+            Task { @MainActor in
+                self.ingestWatchPresence(userInfo)
+                self.refreshWatchState()
+            }
+        }
+
         transport.onMessageReceived = { [weak self] message in
             guard let self else { return }
             Task { @MainActor in
@@ -95,14 +126,21 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
         let session = transport.session
         let activated = session.activationState == .activated
 
-        // WCSession pairing/install properties are only defined after
-        // activation. A reachable counterpart is also direct evidence that
-        // the Watch app is installed and running, even if installation-state
-        // propagation is briefly stale after a development install.
+        if activated {
+            ingestWatchPresence(session.receivedApplicationContext)
+        }
+
+        // WCSession's install bit can lag a development install. A current
+        // MotionOS presence packet or live reachability is stronger evidence
+        // that the counterpart app exists on the active paired Watch.
         watchPaired = activated && session.isPaired
         watchReachable = activated && session.isReachable
         watchAppInstalled = activated
-            && (session.isWatchAppInstalled || session.isReachable)
+            && (
+                session.isWatchAppInstalled
+                    || watchPresence != nil
+                    || session.isReachable
+            )
         refreshHostReadiness()
     }
 
@@ -151,9 +189,22 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
         )
     }
 
+    func watchPresenceAge(
+        at date: Date = Date()
+    ) -> TimeInterval? {
+        guard let watchPresence else { return nil }
+        return max(0, date.timeIntervalSince(watchPresence.receivedAt))
+    }
+
     private func ingestWatchMessage(
         _ message: [String: Any]
     ) {
+        if message["motionos_message"] as? String == "watch_presence_v1" {
+            ingestWatchPresence(message)
+            refreshWatchState()
+            return
+        }
+
         guard message["motionos_message"] as? String
                 == "watch_capture_health_v1",
               let sessionID = message["session_id"] as? String,
@@ -197,6 +248,37 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
             watchBatteryLevel: Self.double(
                 message["watch_battery_level_fraction"]
             )
+        )
+    }
+
+    private func ingestWatchPresence(
+        _ message: [String: Any]
+    ) {
+        guard message["motionos_message"] as? String == "watch_presence_v1",
+              let bundleID = message["bundle_id"] as? String,
+              bundleID == "com.sidhulyalkar.motionos.watchkitapp"
+        else {
+            return
+        }
+
+        let sentAt = Self.double(message["sent_at_unix_s"]).map {
+            Date(timeIntervalSince1970: $0)
+        }
+
+        watchPresence = WatchPresence(
+            receivedAt: Date(),
+            sourceSentAt: sentAt,
+            bundleID: bundleID,
+            appVersion: message["app_version"] as? String ?? "unknown",
+            appBuild: message["app_build"] as? String ?? "unknown",
+            watchSystemVersion:
+                message["watch_system_version"] as? String ?? "unknown",
+            captureState: message["capture_state"] as? String ?? "unknown",
+            captureOrigin: message["capture_origin"] as? String ?? "unknown",
+            healthAuthorization:
+                message["health_authorization"] as? String ?? "unknown",
+            watchBatteryLevel:
+                Self.double(message["watch_battery_level_fraction"])
         )
     }
 
