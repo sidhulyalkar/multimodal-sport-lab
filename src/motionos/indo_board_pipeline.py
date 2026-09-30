@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
 
 from .aruco_tracking import track_board_markers
 from .board_marker_correspondences import (
