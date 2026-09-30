@@ -98,6 +98,13 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
             }
         }
 
+        transport.onUserInfoReceived = { [weak self] userInfo in
+            guard let self else { return }
+            Task { @MainActor in
+                self.ingestWatchMessage(userInfo)
+            }
+        }
+
         refreshWatchState()
     }
 
