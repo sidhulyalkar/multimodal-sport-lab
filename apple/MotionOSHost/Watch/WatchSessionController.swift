@@ -38,12 +38,17 @@ final class WatchSessionController: ObservableObject {
     @Published private(set) var startedAt: Date?
     @Published private(set) var lastTransferredURL: URL?
     @Published private(set) var errorMessage: String?
+    /// Operator diagnostics for late, foreign, or stale events that were not
+    /// journaled. Not raw evidence.
+    @Published private(set) var captureRejections = CaptureRejectionCounts()
 
     private let motion = WatchMotionRecorder()
     private let workout = WatchWorkoutRecorder()
     private let transport = WatchConnectivityTransport()
 
-    private var pipeline: WatchCapturePipeline?
+    private var journal: CaptureSessionJournal?
+    private var admission = CaptureEventAdmission()
+    private var staleMotionRejectionBaseline: UInt64 = 0
     private var finalized = false
     private var heartRateSequence: UInt64 = 0
     private var closedJournalURL: URL?
@@ -145,17 +150,21 @@ final class WatchSessionController: ObservableObject {
         lastTransferredURL = nil
         imuHealth = SampleTimingHealth()
         lastTelemetrySentAt = .distantPast
+        admission = CaptureEventAdmission()
+        captureRejections = admission.rejections
+        staleMotionRejectionBaseline = motion.staleCallbackRejectionCount
 
         let id = Self.makeSessionID()
         sessionID = id
 
         do {
             let url = try Self.makeJournalURL(sessionID: id)
-            let pipeline = try WatchCapturePipeline(
+            let journal = try CaptureSessionJournal(
                 sessionID: id,
-                journalURL: url
+                url: url
             )
-            self.pipeline = pipeline
+            self.journal = journal
+            admission.begin(sessionID: id)
 
             let requestedMotionHz = 50.0
             let device = WKInterfaceDevice.current()
@@ -200,7 +209,12 @@ final class WatchSessionController: ObservableObject {
                 deviceTimeNS: MonotonicClock.nowNS(),
                 payload: watchMetadata
             )
-            eventCount = try await pipeline.append(metadataEvent)
+            guard case .appended(let count) =
+                    try await journal.append(metadataEvent)
+            else {
+                throw CaptureStartError.metadataNotJournaled
+            }
+            eventCount = count
 
             try motion.start(
                 sessionID: id,
@@ -262,14 +276,43 @@ final class WatchSessionController: ObservableObject {
     }
 
     private func record(_ event: SensorEnvelope) async {
-        guard let pipeline,
-              event.sessionID == pipeline.sessionID
-        else {
+        guard let journal = admittedJournal(sessionID: event.sessionID) else {
             return
         }
+        await append(event, to: journal)
+    }
 
+    /// The shutdown and cross-session boundary. Runs synchronously on the main
+    /// actor, so once finalization begins no later callback reaches the
+    /// journal. Rejections are counted, never treated as capture failures.
+    private func admittedJournal(
+        sessionID eventSessionID: String
+    ) -> CaptureSessionJournal? {
+        guard admission.admit(sessionID: eventSessionID) == nil else {
+            refreshCaptureRejections()
+            return nil
+        }
+        guard let journal else {
+            admission.recordRejection(.noActiveSession)
+            refreshCaptureRejections()
+            return nil
+        }
+        return journal
+    }
+
+    private func append(
+        _ event: SensorEnvelope,
+        to journal: CaptureSessionJournal
+    ) async {
         do {
-            let count = try await pipeline.append(event)
+            let outcome = try await journal.append(event)
+            guard case .appended(let count) = outcome else {
+                if case .rejected(let rejection) = outcome {
+                    admission.recordRejection(rejection)
+                    refreshCaptureRejections()
+                }
+                return
+            }
 
             if event.stream == "/body/watch/imu" {
                 imuHealth.observe(timestampNS: event.deviceTimeNS)
@@ -286,7 +329,8 @@ final class WatchSessionController: ObservableObject {
                 publishCaptureHealthIfNeeded()
             }
 
-            if count.isMultiple(of: 25) {
+            // finalizeAndTransfer() publishes the authoritative closed count.
+            if admission.isCapturing, count.isMultiple(of: 25) {
                 eventCount = count
             }
         } catch {
@@ -298,10 +342,17 @@ final class WatchSessionController: ObservableObject {
         bpm: Double,
         timestamp: UInt64
     ) async {
+        guard let id = sessionID else {
+            admission.recordRejection(.noActiveSession)
+            refreshCaptureRejections()
+            return
+        }
+        // Admit before allocating a sequence so rejected late samples do not
+        // consume one.
+        guard let journal = admittedJournal(sessionID: id) else { return }
+
         heartRateBPM = bpm
         heartRateEventCount += 1
-        guard let id = sessionID else { return }
-
         let event = SensorEnvelope(
             sessionID: id,
             deviceID: "apple-watch",
@@ -313,7 +364,7 @@ final class WatchSessionController: ObservableObject {
             payload: ["bpm": .number(bpm)]
         )
         heartRateSequence += 1
-        await record(event)
+        await append(event, to: journal)
     }
 
     private func finalizeAndTransfer() async {
@@ -321,9 +372,17 @@ final class WatchSessionController: ObservableObject {
         finalized = true
         motion.stop()
 
+        // Shutdown boundary: before the first await, stop admitting events and
+        // detach the journal. Appends admitted earlier are drained by close().
+        admission.beginFinalizing()
+        let journal = self.journal
+        self.journal = nil
+
         let shouldPreserveFailure = state == .failed
 
-        guard let pipeline else {
+        guard let journal else {
+            admission.finish()
+            refreshCaptureRejections()
             if !shouldPreserveFailure {
                 state = .idle
             }
@@ -331,13 +390,14 @@ final class WatchSessionController: ObservableObject {
         }
 
         do {
-            eventCount = try await pipeline.close()
-            let journalURL = pipeline.journalURL
-            let id = pipeline.sessionID
+            eventCount = try await journal.close()
+            admission.finish()
+            refreshCaptureRejections()
+            let journalURL = journal.url
+            let id = journal.sessionID
 
             closedJournalURL = journalURL
             closedJournalEvidence = try FileEvidence.digest(journalURL)
-            self.pipeline = nil
 
             if shouldPreserveFailure {
                 return
@@ -349,8 +409,18 @@ final class WatchSessionController: ObservableObject {
                 sessionID: id
             )
         } catch {
+            admission.finish()
+            refreshCaptureRejections()
             fail(error)
         }
+    }
+
+    private func refreshCaptureRejections() {
+        admission.setStaleMotionGenerationCount(
+            motion.staleCallbackRejectionCount
+                &- staleMotionRejectionBaseline
+        )
+        captureRejections = admission.rejections
     }
 
     private func queueTransfer(
@@ -466,6 +536,7 @@ final class WatchSessionController: ObservableObject {
         watchBatteryLevel = battery >= 0
             ? Double(battery)
             : nil
+        refreshCaptureRejections()
 
         var message: [String: Any] = [
             "motionos_message": "watch_capture_health_v1",
@@ -475,6 +546,15 @@ final class WatchSessionController: ObservableObject {
             "hr_event_count": heartRateEventCount,
             "max_imu_gap_ms": maxIMUGapMS,
             "non_monotonic_imu_count": nonMonotonicIMUCount,
+            // Additive diagnostics; older receivers ignore unknown keys.
+            "rejected_after_shutdown_count":
+                captureRejections.afterShutdown,
+            "rejected_session_mismatch_count":
+                captureRejections.sessionMismatch,
+            "rejected_no_session_count":
+                captureRejections.noActiveSession,
+            "rejected_stale_motion_count":
+                captureRejections.staleMotionGeneration,
         ]
         if let observedIMUHz {
             message["observed_imu_hz"] = observedIMUHz
@@ -516,6 +596,14 @@ final class WatchSessionController: ObservableObject {
     private func fail(_ error: Error) {
         errorMessage = error.localizedDescription
         state = .failed
+    }
+
+    private enum CaptureStartError: LocalizedError {
+        case metadataNotJournaled
+
+        var errorDescription: String? {
+            "The Watch metadata event was not written to the new journal."
+        }
     }
 
     private static func makeSessionID() -> String {
