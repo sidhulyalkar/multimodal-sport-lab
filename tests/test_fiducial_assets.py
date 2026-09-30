@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-import motionos.fiducial_assets as fiducial_assets
+from motionos import fiducial_assets
 from motionos.provenance import sha256_file
 from motionos.world_geometry import load_calibration_board
 
