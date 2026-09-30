@@ -109,6 +109,30 @@ public struct CameraCalibration: Codable, Sendable, Equatable {
         case sourceArtifactSHA256 = "source_artifact_sha256"
     }
 
+    public init(
+        calibrationID: String,
+        cameraSourceID: String,
+        imageWidthPixels: Int,
+        imageHeightPixels: Int,
+        intrinsicsRowMajor: [Double],
+        distortionModel: String,
+        distortionCoefficients: [Double],
+        worldFromCameraRowMajor: [Double],
+        reprojectionRMSPixels: Double,
+        sourceArtifactSHA256: String? = nil
+    ) {
+        self.calibrationID = calibrationID
+        self.cameraSourceID = cameraSourceID
+        self.imageWidthPixels = imageWidthPixels
+        self.imageHeightPixels = imageHeightPixels
+        self.intrinsicsRowMajor = intrinsicsRowMajor
+        self.distortionModel = distortionModel
+        self.distortionCoefficients = distortionCoefficients
+        self.worldFromCameraRowMajor = worldFromCameraRowMajor
+        self.reprojectionRMSPixels = reprojectionRMSPixels
+        self.sourceArtifactSHA256 = sourceArtifactSHA256
+    }
+
     public var isStructurallyValid: Bool {
         imageWidthPixels > 0
             && imageHeightPixels > 0
@@ -158,6 +182,26 @@ public struct VisionObservation: Codable, Sendable, Equatable {
         case modelIdentifier = "model_identifier"
         case joints
     }
+
+    public init(
+        sourceID: String,
+        frameSequence: UInt64,
+        frameSourceTimeNS: UInt64,
+        mappedSessionTimeNS: UInt64? = nil,
+        timingUncertaintyNS: UInt64? = nil,
+        coordinateFrame: String,
+        modelIdentifier: String,
+        joints: [String: VisionJointObservation]
+    ) {
+        self.sourceID = sourceID
+        self.frameSequence = frameSequence
+        self.frameSourceTimeNS = frameSourceTimeNS
+        self.mappedSessionTimeNS = mappedSessionTimeNS
+        self.timingUncertaintyNS = timingUncertaintyNS
+        self.coordinateFrame = coordinateFrame
+        self.modelIdentifier = modelIdentifier
+        self.joints = joints
+    }
 }
 
 public enum SyncLandmarkKind: String, Codable, Sendable, Equatable {
@@ -185,6 +229,22 @@ public struct SyncLandmark: Codable, Sendable, Equatable, Identifiable {
         case createdAtUnixMS = "created_at_unix_ms"
         case note
     }
+
+    public init(
+        landmarkID: String,
+        sessionID: String,
+        kind: SyncLandmarkKind,
+        hostMonotonicTimeNS: UInt64,
+        createdAtUnixMS: UInt64,
+        note: String? = nil
+    ) {
+        self.landmarkID = landmarkID
+        self.sessionID = sessionID
+        self.kind = kind
+        self.hostMonotonicTimeNS = hostMonotonicTimeNS
+        self.createdAtUnixMS = createdAtUnixMS
+        self.note = note
+    }
 }
 
 public struct VisionSessionManifest: Codable, Sendable, Equatable {
@@ -195,6 +255,7 @@ public struct VisionSessionManifest: Codable, Sendable, Equatable {
     public let createdAtUTC: String
     public let cameraSources: [CameraSource]
     public let syncLandmarks: [SyncLandmark]
+    public let coachingCondition: CoachingCondition
     public let claimBoundary: String
 
     enum CodingKeys: String, CodingKey {
@@ -205,6 +266,7 @@ public struct VisionSessionManifest: Codable, Sendable, Equatable {
         case createdAtUTC = "created_at_utc"
         case cameraSources = "camera_sources"
         case syncLandmarks = "sync_landmarks"
+        case coachingCondition = "coaching_condition"
         case claimBoundary = "claim_boundary"
     }
 
@@ -216,6 +278,7 @@ public struct VisionSessionManifest: Codable, Sendable, Equatable {
         createdAtUTC: String,
         cameraSources: [CameraSource],
         syncLandmarks: [SyncLandmark],
+        coachingCondition: CoachingCondition = .feedbackDisabled,
         claimBoundary: String = "Camera and wearable streams retain native timing until explicit calibration; derived biomechanics carry uncertainty."
     ) {
         self.schemaVersion = schemaVersion
@@ -225,8 +288,14 @@ public struct VisionSessionManifest: Codable, Sendable, Equatable {
         self.createdAtUTC = createdAtUTC
         self.cameraSources = cameraSources
         self.syncLandmarks = syncLandmarks
+        self.coachingCondition = coachingCondition
         self.claimBoundary = claimBoundary
     }
+}
+
+public enum CoachingCondition: String, Codable, Sendable, Equatable, CaseIterable {
+    case feedbackDisabled = "feedback_disabled"
+    case feedbackEnabled = "feedback_enabled"
 }
 
 public enum MetricDirection: String, Codable, Sendable, Equatable {
@@ -254,6 +323,26 @@ public struct IndoBoardMetricSnapshot: Codable, Sendable, Equatable {
         case confidence
         case sessionTimeNS = "session_time_ns"
         case uncertainty
+    }
+
+    public init(
+        sessionID: String,
+        metricID: String,
+        value: Double,
+        unit: String,
+        direction: MetricDirection,
+        confidence: Double,
+        sessionTimeNS: UInt64? = nil,
+        uncertainty: Double? = nil
+    ) {
+        self.sessionID = sessionID
+        self.metricID = metricID
+        self.value = value
+        self.unit = unit
+        self.direction = direction
+        self.confidence = confidence
+        self.sessionTimeNS = sessionTimeNS
+        self.uncertainty = uncertainty
     }
 }
 
@@ -290,8 +379,35 @@ public struct CoachingCue: Codable, Sendable, Equatable, Identifiable {
         case validForMS = "valid_for_ms"
     }
 
+    public init(
+        cueID: String,
+        sessionID: String,
+        metricID: String,
+        value: Double? = nil,
+        unit: String? = nil,
+        message: String,
+        kind: CoachingCueKind,
+        confidence: Double,
+        issuedAtUnixMS: UInt64,
+        validForMS: UInt64
+    ) {
+        self.cueID = cueID
+        self.sessionID = sessionID
+        self.metricID = metricID
+        self.value = value
+        self.unit = unit
+        self.message = message
+        self.kind = kind
+        self.confidence = confidence
+        self.issuedAtUnixMS = issuedAtUnixMS
+        self.validForMS = validForMS
+    }
+
     public var expiresAtUnixMS: UInt64 {
-        issuedAtUnixMS &+ validForMS
+        guard UInt64.max - issuedAtUnixMS >= validForMS else {
+            return UInt64.max
+        }
+        return issuedAtUnixMS + validForMS
     }
 
     public func isEligibleForLiveDelivery(
