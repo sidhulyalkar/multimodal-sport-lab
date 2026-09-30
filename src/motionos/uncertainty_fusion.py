@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
 from collections.abc import Iterable
+from dataclasses import dataclass
 
 Vector3 = tuple[float, float, float]
 
