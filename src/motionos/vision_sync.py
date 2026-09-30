@@ -71,6 +71,7 @@ def estimate_external_camera_clock(
     cue_search_before_ms: float = 250.0,
     cue_search_after_ms: float = 2500.0,
     minimum_peak_separation_ms: float = 500.0,
+    peak_refinement_window_ms: float = 200.0,
     maximum_candidates: int = 12,
     maximum_abs_drift_ppm: float = 5000.0,
     maximum_residual_ms: float = 150.0,
@@ -102,12 +103,18 @@ def estimate_external_camera_clock(
         cue_host_times_ns,
         search_before_ns=round(cue_search_before_ms * 1e6),
         search_after_ns=round(cue_search_after_ms * 1e6),
+        refinement_window_ns=round(
+            peak_refinement_window_ms * 1e6
+        ),
     )
 
     external_candidates = _candidate_peaks(
         external_series,
         minimum_separation_ns=round(
             minimum_peak_separation_ms * 1e6
+        ),
+        refinement_window_ns=round(
+            peak_refinement_window_ms * 1e6
         ),
         maximum_candidates=maximum_candidates,
     )
@@ -294,6 +301,7 @@ def _peaks_near_cues(
     *,
     search_before_ns: int,
     search_after_ns: int,
+    refinement_window_ns: int,
 ) -> tuple[MotionPeak, ...]:
     selected: list[MotionPeak] = []
     used_times: set[int] = set()
@@ -310,9 +318,14 @@ def _peaks_near_cues(
             raise ValueError(
                 "no iPhone pose-motion peak was found near a sync cue"
             )
-        peak = max(candidates, key=lambda item: item.score)
+        raw_peak = max(candidates, key=lambda item: item.score)
+        peak = _refine_motion_peak(
+            series,
+            raw_peak,
+            window_ns=refinement_window_ns,
+        )
         selected.append(peak)
-        used_times.add(peak.time_ns)
+        used_times.add(raw_peak.time_ns)
 
     if any(
         later.time_ns <= earlier.time_ns
@@ -324,10 +337,42 @@ def _peaks_near_cues(
     return tuple(selected)
 
 
+def _refine_motion_peak(
+    series: tuple[MotionPeak, ...],
+    peak: MotionPeak,
+    *,
+    window_ns: int,
+) -> MotionPeak:
+    if window_ns <= 0:
+        return peak
+
+    local = [
+        item
+        for item in series
+        if abs(item.time_ns - peak.time_ns) <= window_ns
+        and item.score >= 0.5 * peak.score
+    ]
+    if not local:
+        return peak
+
+    total_weight = sum(item.score for item in local)
+    if total_weight <= 0:
+        return peak
+    refined_time = round(
+        sum(item.time_ns * item.score for item in local)
+        / total_weight
+    )
+    return MotionPeak(
+        time_ns=refined_time,
+        score=max(item.score for item in local),
+    )
+
+
 def _candidate_peaks(
     series: tuple[MotionPeak, ...],
     *,
     minimum_separation_ns: int,
+    refinement_window_ns: int,
     maximum_candidates: int,
 ) -> tuple[MotionPeak, ...]:
     local: list[MotionPeak] = []
@@ -346,11 +391,16 @@ def _candidate_peaks(
             local.append(item)
 
     selected: list[MotionPeak] = []
-    for candidate in sorted(
+    for raw_candidate in sorted(
         local,
         key=lambda item: item.score,
         reverse=True,
     ):
+        candidate = _refine_motion_peak(
+            series,
+            raw_candidate,
+            window_ns=refinement_window_ns,
+        )
         if all(
             abs(candidate.time_ns - existing.time_ns)
             >= minimum_separation_ns
