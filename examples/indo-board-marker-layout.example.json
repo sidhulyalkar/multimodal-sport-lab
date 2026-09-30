@@ -4,10 +4,28 @@
   "frame_convention": "+X rider-right, +Y board-up, +Z board-forward; origin at board deck center",
   "marker_dictionary": "DICT_4X4_50",
   "markers_m": {
-    "21": [-0.16, 0.0, 0.30],
-    "22": [0.16, 0.0, 0.30],
-    "23": [-0.16, 0.0, -0.30],
-    "24": [0.16, 0.0, -0.30]
+    "21": [
+      -0.16,
+      0,
+      0.3
+    ],
+    "22": [
+      0.16,
+      0,
+      0.3
+    ],
+    "23": [
+      -0.16,
+      0,
+      -0.3
+    ],
+    "24": [
+      0.16,
+      0,
+      -0.3
+    ]
   },
-  "notes": "Example coordinates only. Measure the physical centers of the four printed ArUco markers after mounting them to the actual Indo Board, then freeze that measured layout before qualification."
+  "notes": "Example coordinates only. Measure the physical centers of the four printed ArUco markers after mounting them to the actual Indo Board, then freeze that measured layout before qualification.",
+  "marker_size_m": 0.05,
+  "marker_asset_receipt_sha256": "REPLACE_WITH_ARUCO_BUILD_RECEIPT_SHA256"
 }
