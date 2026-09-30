@@ -15,6 +15,7 @@ dependencies = []
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "ruff>=0.6"]
 mcap = ["mcap>=1.2"]
+vision = ["opencv-contrib-python-headless>=4.10,<5"]
 
 [project.scripts]
 motionos = "motionos.cli:main"
