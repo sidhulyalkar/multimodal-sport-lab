@@ -281,18 +281,60 @@ The cue itself only defines the search window for the iPhone physical-motion
 peak. The cross-camera landmark is the actual whole-body impulse detected in
 both pose streams, avoiding human response latency as the camera offset.
 
-### 4. Run the complete reconstruction
+### 4. Preflight, then run the complete reconstruction
 
 Copy and fill `examples/indo-board-pipeline-spec.example.json`. The
-`rig_receipt` must be a passing, current-session rig receipt. The
-`wrist_fusion` standard deviations and acceleration-rate bound are mandatory
-empirical/predeclared inputs; do not copy arbitrary uncertainty values.
+`rig_receipt` must be a passing, current-session rig receipt. The iPhone and
+Action 4 entries each require the exact video, pose/frame journal, and metadata
+file generated for that capture. The `wrist_fusion` standard deviations and
+acceleration-rate bound are mandatory empirical/predeclared inputs; do not copy
+arbitrary uncertainty values.
+
+Run the fail-fast check before creating derived evidence:
+
+```bash
+motionos validate-indo-board-vision-spec indo-board-pipeline.json
+```
+
+Preflight rejects the run before an output directory is created if any of the
+following are wrong:
+
+- required evidence files are missing;
+- fewer than three whole-body synchronization landmarks were sealed;
+- the vision session is not an Indo Board multiview-calibration session;
+- a camera journal ID is absent from the passing rig receipt;
+- the iPhone MOV or frame journal hash does not match
+  `camera-metadata.json`;
+- the Action 4 video, pose journal, or derived metadata is not hash-bound to the
+  sealed `vision_session.json`;
+- a confidence fraction is outside `[0, 1]`;
+- a timing, residual, uncertainty, or rate bound is non-positive/non-finite;
+- the marker-frame stride is not a positive integer.
+
+Only after preflight passes:
 
 ```bash
 motionos process-indo-board-vision \
   indo-board-pipeline.json \
   results/indo-board-session-001
 ```
+
+If an expensive run is interrupted after some stages have completed, rerun the
+same command with `--resume`:
+
+```bash
+motionos process-indo-board-vision \
+  indo-board-pipeline.json \
+  results/indo-board-session-001 \
+  --resume
+```
+
+Resume is deliberately conservative. `pipeline-state.json` records the exact
+spec hash, implementation version, hashes of the sealed authoritative inputs,
+and hashes of each completed stage. An intermediate is reused only when all of
+those still match. Changing the spec, Watch journal, rig receipt, camera
+metadata, marker layout, or a derived artifact invalidates reuse rather than
+silently mixing evidence.
 
 The command produces, in order:
 
@@ -315,7 +357,7 @@ duplicate-safe longitudinal profile update
         ↓
 secondary Watch ↔ vision wrist-acceleration fusion
         ↓
-hash-linked pipeline receipt
+hash-linked pipeline receipt + resumable stage ledger
 ```
 
 The secondary Watch fusion does not overwrite the five camera/board technique
