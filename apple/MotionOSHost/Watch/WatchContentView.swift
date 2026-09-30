@@ -90,7 +90,7 @@ struct WatchContentView: View {
             )
 
             readinessRow(
-                title: "Health",
+                title: "Workout",
                 value: controller.healthAuthorizationLabel,
                 symbol: "heart.fill",
                 ready: controller.healthAccessReady
@@ -104,7 +104,7 @@ struct WatchContentView: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
-            } else {
+            } else if controller.canStartCapture {
                 Button {
                     Task { await controller.startLocalSensorCheck() }
                 } label: {
@@ -116,7 +116,7 @@ struct WatchContentView: View {
 
             Text(
                 controller.companionAppInstalled || controller.phoneReachable
-                    ? "Ready for capture from the paired iPhone."
+                    ? "Ready for capture from the paired iPhone. Heart rate appears when read access is available."
                     : "Sensor Check can validate Watch capture while the iPhone link is being diagnosed."
             )
             .font(.caption2)
