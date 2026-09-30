@@ -36,7 +36,7 @@ def build_indo_board_samples(
     minimum_modeled_mass_coverage: float = 0.75,
     maximum_board_fit_residual_m: float = 0.03,
 ) -> tuple[tuple[IndoBoardSample, ...], dict[str, object]]:
-    skeleton_frames = _skeleton_frames(
+    skeleton_frames = load_skeleton_frames(
         skeleton_geometry_path,
         skeleton_correspondences_path,
     )
@@ -255,7 +255,7 @@ def estimate_center_of_mass(
     )
 
 
-def _skeleton_frames(
+def load_skeleton_frames(
     geometry_path: str | Path,
     correspondences_path: str | Path,
 ) -> tuple[SkeletonFrame, ...]:
