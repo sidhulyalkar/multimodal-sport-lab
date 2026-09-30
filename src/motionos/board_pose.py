@@ -24,7 +24,7 @@ class BoardMarkerLayout:
             raise ValueError("board frame convention is required")
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "BoardMarkerLayout":
+    def from_dict(cls, data: dict[str, Any]) -> BoardMarkerLayout:
         raw = data.get("markers_m")
         if not isinstance(raw, dict):
             raise TypeError("markers_m must be an object")
