@@ -63,7 +63,7 @@ struct PhoneContentView: View {
             readinessRow(
                 "Watch app",
                 value: coordinator.watchAppInstalled,
-                detail: coordinator.watchPresence != nil
+                detail: coordinator.hasRecentWatchPresence()
                     ? "handshake confirmed"
                     : (coordinator.watchAppInstalled ? "installed" : "not installed")
             )
