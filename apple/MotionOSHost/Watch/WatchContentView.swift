@@ -2,231 +2,558 @@ import SwiftUI
 
 struct WatchContentView: View {
     @EnvironmentObject private var controller: WatchSessionController
+    @State private var confirmStop = false
 
     var body: some View {
-        VStack(spacing: 10) {
-            Text("MotionOS")
-                .font(.headline)
+        ScrollView {
+            VStack(spacing: 10) {
+                brandHeader
 
-            statusView
+                if isCaptureActive {
+                    captureDashboard
+                } else {
+                    readinessCard
+                    stateCard
+                }
 
-            if controller.state == .running || controller.state == .paused {
-                metrics
-                controls
-            } else if controller.state == .idle {
-                Button("Enable Health") {
+                if controller.captureRejections.total > 0 {
+                    rejectionDiagnostics
+                }
+
+                if let error = controller.errorMessage {
+                    errorCard(error)
+                }
+
+                buildFooter
+            }
+            .padding(.horizontal, 5)
+            .padding(.bottom, 8)
+        }
+        .confirmationDialog(
+            "End this capture?",
+            isPresented: $confirmStop,
+            titleVisibility: .visible
+        ) {
+            Button("End Capture", role: .destructive) {
+                controller.stop()
+            }
+            Button("Keep Recording", role: .cancel) {}
+        } message: {
+            Text("MotionOS will seal the Watch journal before transfer.")
+        }
+    }
+
+    private var brandHeader: some View {
+        HStack(spacing: 8) {
+            ZStack {
+                Circle()
+                    .fill(statusColor.opacity(0.18))
+                    .frame(width: 34, height: 34)
+                Image(systemName: statusSymbol)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(statusColor)
+            }
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text("MotionOS")
+                    .font(.headline)
+                Text(statusText)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(statusColor)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var readinessCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("READY")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Circle()
+                    .fill(readinessColor)
+                    .frame(width: 7, height: 7)
+            }
+
+            readinessRow(
+                title: "iPhone",
+                value: controller.phoneLinkLabel,
+                symbol: controller.phoneReachable
+                    ? "iphone.radiowaves.left.and.right"
+                    : "iphone",
+                ready: controller.companionAppInstalled
+                    || controller.phoneReachable
+            )
+
+            readinessRow(
+                title: "Health",
+                value: controller.healthAuthorizationLabel,
+                symbol: "heart.fill",
+                ready: controller.healthAccessReady
+            )
+
+            if !controller.healthAccessReady {
+                Button {
                     Task { await controller.requestAuthorization() }
+                } label: {
+                    Label("Enable Health", systemImage: "heart.text.square")
+                        .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
-
-                Text("Start P0 from the paired iPhone.")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            } else if controller.state == .journalReady {
-                Label("Journal safe on Watch", systemImage: "internaldrive.fill")
-                    .foregroundStyle(.yellow)
-                Button("Retry Transfer") {
-                    controller.retryTransfer()
-                }
-                .buttonStyle(.borderedProminent)
-            } else if controller.state == .transferQueued {
-                Label("Transfer queued", systemImage: "arrow.up.doc.fill")
-                    .foregroundStyle(.yellow)
-                Text("Journal remains safe locally.")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            } else if controller.state == .transportComplete {
-                Label("Sent to iPhone", systemImage: "iphone.and.arrow.forward")
-                    .foregroundStyle(.yellow)
-                Text("Waiting for hash-verified receipt.")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                Button("Retry if needed") {
-                    controller.retryTransfer()
+            } else {
+                Button {
+                    Task { await controller.startLocalSensorCheck() }
+                } label: {
+                    Label("Run Sensor Check", systemImage: "waveform.path.ecg")
+                        .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
-            } else if controller.state == .transferred {
-                Label("Verified on iPhone", systemImage: "checkmark.seal.fill")
-                    .foregroundStyle(.green)
-                Text(controller.sessionID ?? "")
-                    .font(.system(size: 8, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-            }
-
-            if controller.captureRejections.total > 0 {
-                rejectionDiagnostics
-            }
-
-            if let error = controller.errorMessage {
-                Text(error)
-                    .font(.caption2)
-                    .foregroundStyle(.red)
-                    .lineLimit(3)
-            }
-        }
-        .padding(.horizontal, 6)
-    }
-
-    @ViewBuilder
-    private var statusView: some View {
-        HStack(spacing: 5) {
-            Circle()
-                .fill(statusColor)
-                .frame(width: 7, height: 7)
-            Text(controller.state.rawValue.uppercased())
-                .font(.caption2.weight(.semibold))
-        }
-    }
-
-    /// Operator diagnostics only: events that were not journaled because they
-    /// arrived after shutdown, for another session, or from a stale motion
-    /// generation.
-    private var rejectionDiagnostics: some View {
-        let rejections = controller.captureRejections
-        let late = rejections.afterShutdown
-        let foreign = rejections.sessionMismatch &+ rejections.noActiveSession
-        let stale = rejections.staleMotionGeneration
-        return Text("not journaled: \(late) late · \(foreign) foreign · \(stale) stale")
-        .font(.system(.caption2, design: .monospaced))
-        .foregroundStyle(.secondary)
-        .multilineTextAlignment(.center)
-    }
-
-    private var metrics: some View {
-        VStack(spacing: 4) {
-            HStack(spacing: 8) {
-                if let bpm = controller.heartRateBPM {
-                    Text("\(Int(bpm.rounded())) BPM")
-                        .font(
-                            .system(.caption, design: .rounded)
-                                .weight(.semibold)
-                        )
-                } else {
-                    Text("HR …")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                if let hz = controller.recentMedianIMUHz {
-                    Text(String(format: "%.1f Hz", hz))
-                        .font(
-                            .system(.caption, design: .monospaced)
-                                .weight(.semibold)
-                        )
-                } else {
-                    Text("Hz …")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
             }
 
             Text(
-                "\(controller.imuSampleCount) IMU · "
-                    + "\(controller.heartRateEventCount) HR"
+                controller.companionAppInstalled || controller.phoneReachable
+                    ? "Ready for capture from the paired iPhone."
+                    : "Sensor Check can validate Watch capture while the iPhone link is being diagnosed."
             )
             .font(.caption2)
             .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        .panelStyle()
+    }
 
-            Text(
-                String(
-                    format: "max gap %.0f ms",
-                    controller.maxIMUGapMS
-                )
+    @ViewBuilder
+    private var stateCard: some View {
+        switch controller.state {
+        case .idle:
+            EmptyView()
+
+        case .authorizing:
+            progressPanel(
+                title: "Authorizing Health",
+                detail: "Complete the Health permission sheet on this Watch.",
+                symbol: "heart.text.square"
             )
-            .font(.system(.caption2, design: .monospaced))
-            .foregroundStyle(
-                controller.nonMonotonicIMUCount == 0
-                    ? Color.secondary
-                    : Color.red
+
+        case .starting:
+            progressPanel(
+                title: "Starting capture",
+                detail: "Opening the workout, journal, and motion stream.",
+                symbol: "waveform.path.ecg"
             )
 
-            if let battery = controller.watchBatteryLevel {
-                Text(
-                    String(format: "battery %.0f%%", battery * 100)
-                )
-                .font(.system(.caption2, design: .monospaced))
-                .foregroundStyle(
-                    battery >= 0.20
-                        ? Color.secondary
-                        : Color.yellow
-                )
-            }
+        case .ending:
+            progressPanel(
+                title: "Sealing journal",
+                detail: "Finishing accepted samples before the file closes.",
+                symbol: "lock.doc"
+            )
 
-            if let cue = controller.guidedCueTitle {
-                Label(cue, systemImage: "list.clipboard")
-                    .font(.caption2.weight(.semibold))
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
-            }
+        case .journalReady:
+            transferPanel(
+                title: "Journal safe",
+                detail: "The evidence file is sealed on this Watch.",
+                symbol: "internaldrive.fill",
+                action: "Retry Transfer"
+            )
 
-            if let start = controller.startedAt {
-                TimelineView(.periodic(from: .now, by: 1)) { context in
-                    HStack {
-                        Text(duration(from: start, to: context.date))
-                        if let last = controller.lastIMUSampleReceivedAt {
-                            let age = max(
-                                0,
-                                context.date.timeIntervalSince(last)
-                            )
-                            Text(
-                                age < 2
-                                    ? "LIVE"
-                                    : String(format: "STALE %.0fs", age)
-                            )
-                            .foregroundStyle(age < 2 ? .green : .red)
-                        }
-                    }
-                    .font(.system(.caption2, design: .monospaced))
+        case .transferQueued:
+            progressPanel(
+                title: "Transfer queued",
+                detail: "The sealed journal remains safe locally.",
+                symbol: "arrow.up.doc.fill"
+            )
+
+        case .transportComplete:
+            transferPanel(
+                title: "Sent to iPhone",
+                detail: "Waiting for the iPhone to verify the file hash.",
+                symbol: "iphone.and.arrow.forward",
+                action: "Retry if needed"
+            )
+
+        case .transferred:
+            VStack(alignment: .leading, spacing: 7) {
+                Label("Verified on iPhone", systemImage: "checkmark.seal.fill")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.green)
+                if let sessionID = controller.sessionID {
+                    Text(sessionID)
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
                 }
             }
+            .panelStyle()
+
+        case .failed:
+            EmptyView()
+
+        case .running, .paused:
+            EmptyView()
         }
     }
 
-    private var controls: some View {
-        HStack {
-            if controller.state == .running {
-                Button {
-                    controller.pause()
-                } label: {
-                    Image(systemName: "pause.fill")
-                }
-            } else {
-                Button {
-                    controller.resume()
-                } label: {
-                    Image(systemName: "play.fill")
+    private var captureDashboard: some View {
+        VStack(spacing: 9) {
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                VStack(spacing: 2) {
+                    Text(
+                        controller.startedAt.map {
+                            duration(from: $0, to: context.date)
+                        } ?? "00:00"
+                    )
+                    .font(.system(size: 30, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+
+                    HStack(spacing: 5) {
+                        Circle()
+                            .fill(captureLiveColor(at: context.date))
+                            .frame(width: 6, height: 6)
+                        Text(captureLiveLabel(at: context.date))
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(captureLiveColor(at: context.date))
+
+                        Text("·")
+                            .foregroundStyle(.tertiary)
+
+                        Text(controller.captureOrigin.rawValue)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
 
-            Button(role: .destructive) {
-                controller.stop()
-            } label: {
-                Image(systemName: "stop.fill")
+            HStack(spacing: 6) {
+                metricTile(
+                    title: "HEART",
+                    value: controller.heartRateBPM.map {
+                        "\(Int($0.rounded()))"
+                    } ?? "—",
+                    unit: "BPM"
+                )
+
+                metricTile(
+                    title: "MOTION",
+                    value: controller.recentMedianIMUHz.map {
+                        String(format: "%.1f", $0)
+                    } ?? "—",
+                    unit: "Hz"
+                )
+            }
+
+            HStack(spacing: 6) {
+                metricTile(
+                    title: "SAMPLES",
+                    value: "\(controller.imuSampleCount)",
+                    unit: "IMU"
+                )
+
+                metricTile(
+                    title: "MAX GAP",
+                    value: String(format: "%.0f", controller.maxIMUGapMS),
+                    unit: "ms"
+                )
+            }
+
+            HStack(spacing: 6) {
+                statusChip(
+                    controller.phoneReachable ? "iPhone live" : "iPhone background",
+                    symbol: controller.phoneReachable
+                        ? "iphone.radiowaves.left.and.right"
+                        : "iphone",
+                    color: controller.phoneReachable ? .green : .secondary
+                )
+
+                if let battery = controller.watchBatteryLevel {
+                    statusChip(
+                        String(format: "%.0f%%", battery * 100),
+                        symbol: battery >= 0.20
+                            ? "battery.100percent"
+                            : "battery.25percent",
+                        color: battery >= 0.20 ? .secondary : .yellow
+                    )
+                }
+            }
+
+            if let cue = controller.guidedCueTitle {
+                Label(cue, systemImage: "list.clipboard.fill")
+                    .font(.caption2.weight(.semibold))
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+                    .padding(7)
+                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 10))
+            }
+
+            HStack(spacing: 7) {
+                Button {
+                    if controller.state == .running {
+                        controller.pause()
+                    } else {
+                        controller.resume()
+                    }
+                } label: {
+                    Image(
+                        systemName: controller.state == .running
+                            ? "pause.fill"
+                            : "play.fill"
+                    )
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+
+                Button {
+                    confirmStop = true
+                } label: {
+                    Image(systemName: "stop.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.red)
             }
         }
-        .buttonStyle(.bordered)
+        .panelStyle()
+    }
+
+    private var rejectionDiagnostics: some View {
+        let value = controller.captureRejections
+        return VStack(alignment: .leading, spacing: 3) {
+            Label("Capture diagnostics", systemImage: "waveform.badge.exclamationmark")
+                .font(.caption2.weight(.semibold))
+            Text(
+                "\(value.afterShutdown) late · "
+                    + "\(value.sessionMismatch &+ value.noActiveSession) foreign · "
+                    + "\(value.staleMotionGeneration) stale"
+            )
+            .font(.system(.caption2, design: .monospaced))
+            .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .panelStyle()
+    }
+
+    private func errorCard(_ message: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Label("Capture issue", systemImage: "exclamationmark.triangle.fill")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.red)
+            Text(message)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .panelStyle()
+    }
+
+    private func progressPanel(
+        title: String,
+        detail: String,
+        symbol: String
+    ) -> some View {
+        VStack(spacing: 7) {
+            Image(systemName: symbol)
+                .font(.title3)
+                .foregroundStyle(statusColor)
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+            Text(detail)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity)
+        .panelStyle()
+    }
+
+    private func transferPanel(
+        title: String,
+        detail: String,
+        symbol: String,
+        action: String
+    ) -> some View {
+        VStack(spacing: 7) {
+            Image(systemName: symbol)
+                .font(.title3)
+                .foregroundStyle(.yellow)
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+            Text(detail)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            Button(action) {
+                controller.retryTransfer()
+            }
+            .buttonStyle(.bordered)
+        }
+        .frame(maxWidth: .infinity)
+        .panelStyle()
+    }
+
+    private func readinessRow(
+        title: String,
+        value: String,
+        symbol: String,
+        ready: Bool
+    ) -> some View {
+        HStack(spacing: 7) {
+            Image(systemName: symbol)
+                .foregroundStyle(ready ? .green : .secondary)
+                .frame(width: 18)
+            Text(title)
+                .font(.caption)
+            Spacer(minLength: 4)
+            Text(value)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(ready ? .green : .secondary)
+                .lineLimit(1)
+        }
+    }
+
+    private func metricTile(
+        title: String,
+        value: String,
+        unit: String
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(title)
+                .font(.system(size: 8, weight: .bold))
+                .foregroundStyle(.secondary)
+            HStack(alignment: .firstTextBaseline, spacing: 2) {
+                Text(value)
+                    .font(.system(.title3, design: .rounded).weight(.semibold))
+                    .monospacedDigit()
+                    .minimumScaleFactor(0.75)
+                    .lineLimit(1)
+                Text(unit)
+                    .font(.system(size: 8, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(7)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary, in: RoundedRectangle(cornerRadius: 11))
+    }
+
+    private func statusChip(
+        _ title: String,
+        symbol: String,
+        color: Color
+    ) -> some View {
+        Label(title, systemImage: symbol)
+            .font(.system(size: 9, weight: .semibold))
+            .foregroundStyle(color)
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
+            .frame(maxWidth: .infinity)
+    }
+
+    private var buildFooter: some View {
+        Text("MotionOS · evidence-first capture")
+            .font(.system(size: 8))
+            .foregroundStyle(.tertiary)
+            .padding(.top, 2)
+    }
+
+    private var isCaptureActive: Bool {
+        controller.state == .running || controller.state == .paused
+    }
+
+    private var statusText: String {
+        switch controller.state {
+        case .idle:
+            controller.healthAccessReady ? "READY" : "SETUP"
+        case .authorizing:
+            "HEALTH"
+        case .starting:
+            "STARTING"
+        case .running:
+            "RECORDING"
+        case .paused:
+            "PAUSED"
+        case .ending:
+            "FINISHING"
+        case .journalReady:
+            "SAFE"
+        case .transferQueued:
+            "QUEUED"
+        case .transportComplete:
+            "VERIFYING"
+        case .transferred:
+            "VERIFIED"
+        case .failed:
+            "CHECK"
+        }
+    }
+
+    private var statusSymbol: String {
+        switch controller.state {
+        case .running:
+            "waveform.path.ecg"
+        case .paused:
+            "pause.fill"
+        case .transferred:
+            "checkmark.seal.fill"
+        case .failed:
+            "exclamationmark.triangle.fill"
+        case .journalReady, .transferQueued, .transportComplete:
+            "arrow.up.doc.fill"
+        default:
+            "figure.run"
+        }
     }
 
     private var statusColor: Color {
         switch controller.state {
-        case .running: .green
-        case .paused, .starting, .ending, .authorizing,
-                .transferQueued, .transportComplete:
-            .yellow
-        case .transferred:
+        case .running, .transferred:
             .green
+        case .paused, .starting, .ending, .authorizing,
+                .journalReady, .transferQueued, .transportComplete:
+            .yellow
         case .failed:
             .red
         default:
-            .gray
+            .secondary
         }
+    }
+
+    private var readinessColor: Color {
+        controller.healthAccessReady
+            && (controller.companionAppInstalled || controller.phoneReachable)
+            ? .green
+            : .yellow
+    }
+
+    private func captureLiveColor(at date: Date) -> Color {
+        guard let last = controller.lastIMUSampleReceivedAt else {
+            return .yellow
+        }
+        return date.timeIntervalSince(last) < 2 ? .green : .red
+    }
+
+    private func captureLiveLabel(at date: Date) -> String {
+        guard let last = controller.lastIMUSampleReceivedAt else {
+            return "WARMING UP"
+        }
+        let age = max(0, date.timeIntervalSince(last))
+        return age < 2 ? "LIVE" : String(format: "STALE %.0fs", age)
     }
 
     private func duration(from start: Date, to end: Date) -> String {
         let seconds = max(0, Int(end.timeIntervalSince(start)))
         return String(format: "%02d:%02d", seconds / 60, seconds % 60)
+    }
+}
+
+private extension View {
+    func panelStyle() -> some View {
+        padding(10)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
     }
 }
