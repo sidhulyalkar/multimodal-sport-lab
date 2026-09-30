@@ -106,6 +106,13 @@ open MotionOSHost.xcodeproj
 
 XcodeGen has a currently open Xcode 26 issue that embeds modern single-target watch apps in the legacy `Watch/` location. The project spec contains a guarded post-generation patch to place Watch content in `PlugIns/` instead. Remove this workaround when upstream fixes the issue.
 
+## Watch app install metadata
+
+MotionOS uses the modern single-target watchOS app architecture. The generated
+Watch Info.plist declares `WKApplication=true`, alongside the companion bundle
+identifier. Physical watchOS installation rejects a single-target app bundle
+that lacks the application marker even when simulator builds succeed.
+
 ## HealthKit capability policy
 
 The generated project intentionally enables the base HealthKit entitlement on
