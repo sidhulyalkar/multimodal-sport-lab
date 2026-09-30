@@ -7,7 +7,6 @@ from pathlib import Path
 
 from .board_pose import estimate_board_pose, load_board_marker_layout
 
-
 _POINT_PATTERN = re.compile(
     r"^board-marker-(?P<marker>\d+)-ref-(?P<time>\d+)$"
 )
