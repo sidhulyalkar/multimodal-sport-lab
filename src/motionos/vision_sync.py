@@ -190,7 +190,7 @@ def write_external_camera_sync(
     external_pose_journal_path: str | Path,
     output_path: str | Path,
     *,
-    iphone_source_id: str = "iphone-rear",
+    iphone_source_id: str | None = None,
     external_source_id: str = "dji-action4",
 ) -> ExternalCameraSyncResult:
     manifest_raw = json.loads(
