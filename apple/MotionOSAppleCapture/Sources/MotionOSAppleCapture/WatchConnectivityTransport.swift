@@ -10,6 +10,7 @@ public final class WatchConnectivityTransport: NSObject, WCSessionDelegate {
     )?
     public var onUserInfoReceived: (([String: Any]) -> Void)?
     public var onMessageReceived: (([String: Any]) -> Void)?
+    public var onApplicationContextReceived: (([String: Any]) -> Void)?
     public var onStateChanged: (() -> Void)?
 
     public override init() {
@@ -36,6 +37,19 @@ public final class WatchConnectivityTransport: NSObject, WCSessionDelegate {
     ) -> WCSessionUserInfoTransfer? {
         guard session.activationState == .activated else { return nil }
         return session.transferUserInfo(userInfo)
+    }
+
+    @discardableResult
+    public func updateApplicationContext(
+        _ context: [String: Any]
+    ) -> Bool {
+        guard session.activationState == .activated else { return false }
+        do {
+            try session.updateApplicationContext(context)
+            return true
+        } catch {
+            return false
+        }
     }
 
     @discardableResult
@@ -123,6 +137,13 @@ public final class WatchConnectivityTransport: NSObject, WCSessionDelegate {
         didReceiveMessage message: [String: Any]
     ) {
         onMessageReceived?(message)
+    }
+
+    public func session(
+        _ session: WCSession,
+        didReceiveApplicationContext applicationContext: [String: Any]
+    ) {
+        onApplicationContextReceived?(applicationContext)
     }
 
     #if os(iOS)
