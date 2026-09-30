@@ -13,6 +13,13 @@ final class VisionLabController: ObservableObject {
         case failed
     }
 
+    enum ExternalPosePhase: String {
+        case idle
+        case processing
+        case ready
+        case failed
+    }
+
     @Published private(set) var phase: Phase = .idle
     @Published private(set) var sessionID: String?
     @Published private(set) var createdAtUTC: String?
@@ -20,11 +27,16 @@ final class VisionLabController: ObservableObject {
     @Published var coachingCondition: CoachingCondition = .feedbackDisabled
     @Published private(set) var syncLandmarks: [SyncLandmark] = []
     @Published private(set) var mediaArtifacts: [CapturedMediaArtifact] = []
+    @Published private(set) var derivedArtifacts: [DerivedEvidenceArtifact] = []
+    @Published private(set) var action4PosePhase: ExternalPosePhase = .idle
+    @Published private(set) var action4PoseFrameCount: UInt64 = 0
+    @Published private(set) var action4PoseCount: UInt64 = 0
     @Published private(set) var manifestURL: URL?
     @Published private(set) var flashGeneration: UInt64 = 0
     @Published private(set) var errorMessage: String?
 
     private let syncCueEmitter = SyncCueEmitter()
+    private let externalPoseProcessor = ExternalVideoPose2DProcessor()
 
     let cameraSources = [
         CameraSource(
@@ -54,6 +66,7 @@ final class VisionLabController: ObservableObject {
                 "timecode",
                 "wide_fov",
                 "manual_import",
+                "offline_vision_pose2d",
             ]
         ),
     ]
@@ -67,6 +80,10 @@ final class VisionLabController: ObservableObject {
         action4RecordingConfirmed = false
         syncLandmarks = []
         mediaArtifacts = []
+        derivedArtifacts = []
+        action4PosePhase = .idle
+        action4PoseFrameCount = 0
+        action4PoseCount = 0
         manifestURL = nil
         errorMessage = nil
         return id
@@ -155,6 +172,15 @@ final class VisionLabController: ObservableObject {
             with: ""
         )
 
+        let derivedDirectory = sessionDirectory
+            .appendingPathComponent("derived", isDirectory: true)
+            .appendingPathComponent("dji-action4", isDirectory: true)
+        try? FileManager.default.removeItem(at: derivedDirectory)
+        derivedArtifacts.removeAll { $0.sourceID == "dji-action4" }
+        action4PosePhase = .idle
+        action4PoseFrameCount = 0
+        action4PoseCount = 0
+
         mediaArtifacts.removeAll { $0.sourceID == "dji-action4" }
         mediaArtifacts.append(
             CapturedMediaArtifact(
@@ -166,6 +192,94 @@ final class VisionLabController: ObservableObject {
                 importedAtUTC: ISO8601DateFormatter().string(from: Date())
             )
         )
+    }
+
+    func processAction4Pose2D() async {
+        guard let sessionID,
+              let source = mediaArtifacts.first(
+                where: { $0.sourceID == "dji-action4" }
+              )
+        else {
+            fail(VisionLabError.action4MediaMissing)
+            return
+        }
+
+        action4PosePhase = .processing
+        errorMessage = nil
+
+        do {
+            let sessionDirectory = try makeSessionDirectory(
+                sessionID: sessionID
+            )
+            let sourceURL = sessionDirectory.appendingPathComponent(
+                source.relativePath
+            )
+            let outputDirectory = sessionDirectory
+                .appendingPathComponent("derived", isDirectory: true)
+                .appendingPathComponent("dji-action4", isDirectory: true)
+
+            let result = try await externalPoseProcessor.process(
+                videoURL: sourceURL,
+                sessionID: sessionID,
+                outputDirectory: outputDirectory
+            )
+
+            let journalEvidence = try FileEvidence.digest(
+                result.journalURL
+            )
+            let metadataEvidence = try FileEvidence.digest(
+                result.metadataURL
+            )
+            let generatedAt = ISO8601DateFormatter().string(
+                from: Date()
+            )
+
+            derivedArtifacts.removeAll {
+                $0.sourceID == "dji-action4"
+                    && (
+                        $0.kind == "pose2d_journal"
+                            || $0.kind == "pose2d_metadata"
+                    )
+            }
+            derivedArtifacts.append(
+                DerivedEvidenceArtifact(
+                    artifactID: "action4-pose2d-journal",
+                    sourceID: "dji-action4",
+                    kind: "pose2d_journal",
+                    relativePath: Self.relativePath(
+                        result.journalURL,
+                        under: sessionDirectory
+                    ),
+                    sha256: journalEvidence.sha256,
+                    byteCount: journalEvidence.byteCount,
+                    generatedAtUTC: generatedAt,
+                    sourceMediaSHA256: source.sha256
+                )
+            )
+            derivedArtifacts.append(
+                DerivedEvidenceArtifact(
+                    artifactID: "action4-pose2d-metadata",
+                    sourceID: "dji-action4",
+                    kind: "pose2d_metadata",
+                    relativePath: Self.relativePath(
+                        result.metadataURL,
+                        under: sessionDirectory
+                    ),
+                    sha256: metadataEvidence.sha256,
+                    byteCount: metadataEvidence.byteCount,
+                    generatedAtUTC: generatedAt,
+                    sourceMediaSHA256: source.sha256
+                )
+            )
+
+            action4PoseFrameCount = result.frameCount
+            action4PoseCount = result.poseCount
+            action4PosePhase = .ready
+            _ = try sealSession()
+        } catch {
+            action4PosePhase = .failed
+            errorMessage = error.localizedDescription
+        }
     }
 
     @discardableResult
@@ -186,6 +300,7 @@ final class VisionLabController: ObservableObject {
             cameraSources: cameraSources,
             syncLandmarks: syncLandmarks,
             mediaArtifacts: mediaArtifacts,
+            derivedArtifacts: derivedArtifacts,
             coachingCondition: coachingCondition
         )
         let encoder = JSONEncoder()
@@ -225,6 +340,16 @@ final class VisionLabController: ObservableObject {
         return directory
     }
 
+    private static func relativePath(
+        _ url: URL,
+        under root: URL
+    ) -> String {
+        url.path.replacingOccurrences(
+            of: root.path + "/",
+            with: ""
+        )
+    }
+
     private static func makeSessionID() -> String {
         let stamp = ISO8601DateFormatter()
             .string(from: Date())
@@ -239,6 +364,7 @@ final class VisionLabController: ObservableObject {
     enum VisionLabError: LocalizedError {
         case sessionNotArmed
         case action4NotConfirmed
+        case action4MediaMissing
 
         var errorDescription: String? {
             switch self {
@@ -246,6 +372,8 @@ final class VisionLabController: ObservableObject {
                 "Arm an Indo Board vision session first."
             case .action4NotConfirmed:
                 "Confirm the Action 4 is recording before coordinated capture."
+            case .action4MediaMissing:
+                "Import the original Action 4 movie before extracting 2D pose."
             }
         }
     }
