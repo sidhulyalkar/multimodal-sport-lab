@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 
 from .aruco_tracking import track_board_markers
@@ -539,6 +540,8 @@ def _positive(
         value = float(raw)
     except (TypeError, ValueError) as exc:
         raise ValueError(f"{key} must be numeric") from exc
+    if not math.isfinite(value):
+        raise ValueError(f"{key} must be finite")
     if allow_zero:
         if value < 0:
             raise ValueError(f"{key} must be non-negative")
