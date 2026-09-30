@@ -26,7 +26,7 @@ def fit_embedded_host_clock(
         raw = event.payload.get("host_monotonic_time_ns")
         if raw is None:
             continue
-        host_time_ns = int(round(float(raw)))
+        host_time_ns = round(float(raw))
         if host_time_ns < 0:
             continue
         anchors.append(
@@ -112,8 +112,8 @@ def _parse_pose2d_events(
             continue
 
         payload = event.payload
-        width = int(round(float(payload["image_width_px"])))
-        height = int(round(float(payload["image_height_px"])))
+        width = round(float(payload["image_width_px"]))
+        height = round(float(payload["image_height_px"]))
         if width <= 0 or height <= 0:
             raise ValueError("pose2d image dimensions must be positive")
         if payload.get("joint_coordinate_frame") != (
@@ -147,11 +147,11 @@ def _parse_pose2d_events(
         observations.append(
             VisionObservation(
                 source_id=source_id,
-                frame_sequence=int(
-                    round(float(payload["source_frame_sequence"]))
+                frame_sequence=round(
+                    float(payload["source_frame_sequence"])
                 ),
-                frame_source_time_ns=int(
-                    round(float(payload["source_frame_pts_ns"]))
+                frame_source_time_ns=round(
+                    float(payload["source_frame_pts_ns"])
                 ),
                 mapped_session_time_ns=None,
                 timing_uncertainty_ns=None,
