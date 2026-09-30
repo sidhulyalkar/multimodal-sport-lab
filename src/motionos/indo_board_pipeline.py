@@ -589,12 +589,33 @@ def validate_indo_board_pipeline_spec(
         for camera in cameras
         if isinstance(camera, dict) and camera.get("camera_id") is not None
     }
+    expected_iphone_source_id = _validate_iphone_evidence_chain(
+        manifest,
+        video_path=required_paths["iphone.video"],
+        journal_path=required_paths["iphone.journal"],
+        metadata_path=required_paths["iphone.metadata"],
+    )
+    expected_action4_source_id = _validate_action4_evidence_chain(
+        manifest,
+        video_path=required_paths["action4.video"],
+        journal_path=required_paths["action4.journal"],
+        metadata_path=required_paths["action4.metadata"],
+    )
+
     iphone_source_id = infer_pose2d_source_id(
         required_paths["iphone.journal"]
     )
     action4_source_id = infer_pose2d_source_id(
         required_paths["action4.journal"]
     )
+    if iphone_source_id != expected_iphone_source_id:
+        raise ValueError(
+            "iPhone pose journal camera ID does not match sealed metadata"
+        )
+    if action4_source_id != expected_action4_source_id:
+        raise ValueError(
+            "Action4 pose journal camera ID does not match sealed metadata"
+        )
     if iphone_source_id == action4_source_id:
         raise ValueError(
             "iPhone and Action4 journals must have distinct camera IDs"
@@ -608,21 +629,6 @@ def validate_indo_board_pipeline_spec(
             "camera-rig receipt does not contain journal camera IDs: "
             + ", ".join(sorted(missing_camera_ids))
         )
-
-    _validate_iphone_evidence_chain(
-        manifest,
-        video_path=required_paths["iphone.video"],
-        journal_path=required_paths["iphone.journal"],
-        metadata_path=required_paths["iphone.metadata"],
-        source_id=iphone_source_id,
-    )
-    _validate_action4_evidence_chain(
-        manifest,
-        video_path=required_paths["action4.video"],
-        journal_path=required_paths["action4.journal"],
-        metadata_path=required_paths["action4.metadata"],
-        source_id=action4_source_id,
-    )
 
     thresholds = _mapping(spec, "thresholds")
     _positive(
@@ -839,8 +845,7 @@ def _validate_iphone_evidence_chain(
     video_path: Path,
     journal_path: Path,
     metadata_path: Path,
-    source_id: str,
-) -> None:
+) -> str:
     metadata = _json_object(metadata_path)
     if metadata.get("schema_version") != "motionos.camera.v1":
         raise ValueError("unsupported iPhone camera metadata schema")
@@ -852,9 +857,10 @@ def _validate_iphone_evidence_chain(
     camera = metadata.get("camera")
     if not isinstance(camera, dict):
         raise TypeError("iPhone camera metadata.camera must be an object")
-    if str(camera.get("unique_id", "")) != source_id:
+    source_id = str(camera.get("unique_id", ""))
+    if not source_id:
         raise ValueError(
-            "iPhone camera metadata unique_id does not match pose journal"
+            "iPhone camera metadata requires a non-empty unique_id"
         )
 
     provenance = metadata.get("provenance")
@@ -874,6 +880,7 @@ def _validate_iphone_evidence_chain(
         raise ValueError(
             "iPhone journal hash does not match sealed camera metadata"
         )
+    return source_id
 
 
 def _validate_action4_evidence_chain(
@@ -882,8 +889,7 @@ def _validate_action4_evidence_chain(
     video_path: Path,
     journal_path: Path,
     metadata_path: Path,
-    source_id: str,
-) -> None:
+) -> str:
     metadata = _json_object(metadata_path)
     if metadata.get("schema_version") != (
         "motionos.external-video-pose2d.v1"
@@ -893,9 +899,10 @@ def _validate_action4_evidence_chain(
         raise ValueError(
             "Action4 metadata session_id does not match vision session"
         )
-    if str(metadata.get("source_id", "")) != source_id:
+    source_id = str(metadata.get("source_id", ""))
+    if not source_id:
         raise ValueError(
-            "Action4 metadata source_id does not match pose journal"
+            "Action4 metadata requires a non-empty source_id"
         )
 
     source_video = metadata.get("source_video")
@@ -947,6 +954,7 @@ def _validate_action4_evidence_chain(
         raise ValueError(
             "Action4 pose metadata is not bound to the sealed vision session"
         )
+    return source_id
 
 
 def _positive_required(
