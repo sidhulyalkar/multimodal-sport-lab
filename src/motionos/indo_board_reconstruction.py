@@ -9,7 +9,6 @@ from pathlib import Path
 
 from .indo_board import IndoBoardSample
 
-
 _SKELETON_POINT = re.compile(r"^(?P<joint>.+)-ref-(?P<time>\d+)$")
 
 
