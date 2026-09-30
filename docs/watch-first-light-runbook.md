@@ -103,6 +103,17 @@ When the phone is available, confirm:
 An identical retransmission should be idempotent. Different bytes for the same
 session ID must fail closed.
 
+Export/share the recovered `watch.jsonl` and run the deliberately
+non-qualifying smoke analyzer:
+
+```bash
+bash scripts/process_watch_smoke.sh /path/to/watch.jsonl data/watch-smoke 60 --require-hr
+```
+
+A passing `watch-smoke-v1` report confirms only that the short Watch capture
+had coherent IMU timing/sequence continuity and, with `--require-hr`, at least
+one integrity-clean HR event. It must never be reported as P0.
+
 ## 6. Phone-launched smoke
 
 Only after the Watch-local Sensor Check works:
