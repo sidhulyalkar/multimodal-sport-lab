@@ -1,12 +1,13 @@
 {
   "schema_version": "motionos.board-marker-layout.v1",
-  "layout_id": "indo-board-four-corner-v1",
+  "layout_id": "indo-board-four-marker-v1",
   "frame_convention": "+X rider-right, +Y board-up, +Z board-forward; origin at board deck center",
+  "marker_dictionary": "DICT_4X4_50",
   "markers_m": {
-    "deck-front-left": [-0.16, 0.0, 0.30],
-    "deck-front-right": [0.16, 0.0, 0.30],
-    "deck-rear-left": [-0.16, 0.0, -0.30],
-    "deck-rear-right": [0.16, 0.0, -0.30]
+    "21": [-0.16, 0.0, 0.30],
+    "22": [0.16, 0.0, 0.30],
+    "23": [-0.16, 0.0, -0.30],
+    "24": [0.16, 0.0, -0.30]
   },
-  "notes": "Example coordinates only. Measure the actual marker centers on the physical board before qualification and freeze the resulting layout."
+  "notes": "Example coordinates only. Measure the physical centers of the four printed ArUco markers after mounting them to the actual Indo Board, then freeze that measured layout before qualification."
 }
