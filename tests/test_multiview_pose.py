@@ -1,6 +1,9 @@
 import pytest
 
-from motionos.multiview_pose import build_skeleton_correspondences
+from motionos.multiview_pose import (
+    build_skeleton_correspondences,
+    build_skeleton_sequence_correspondences,
+)
 from motionos.vision_contract import (
     VisionJointObservation,
     VisionObservation,
@@ -72,3 +75,28 @@ def test_frame_timing_gate_fails_closed():
                 _frame("dji-action4", 1_050_000_000, 1010.0),
             ]
         )
+
+
+def test_sequence_correspondences_accumulate_synchronized_pairs():
+    first_pair = (
+        _frame("iphone-rear", 1_000_000_000, 850.0),
+        _frame("dji-action4", 1_006_000_000, 1010.0),
+    )
+    second_pair = (
+        _frame("iphone-rear", 2_000_000_000, 860.0),
+        _frame("dji-action4", 2_004_000_000, 1000.0),
+    )
+
+    document = build_skeleton_sequence_correspondences(
+        [first_pair, second_pair],
+        rig_id="indo-two-camera-v1",
+        rig_receipt_sha256="b" * 64,
+    )
+
+    assert document["pair_count"] == 2
+    assert document["accepted_joint_count"] == 4
+    assert len(document["points"]) == 4
+    assert len({
+        point["point_id"]
+        for point in document["points"]
+    }) == 4
