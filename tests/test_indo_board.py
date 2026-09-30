@@ -1,4 +1,7 @@
 import math
+from dataclasses import replace
+
+import pytest
 
 from motionos.indo_board import (
     IndoBoardSample,
@@ -55,18 +58,8 @@ def test_indo_board_report_derives_five_metrics_without_overclaiming():
 
 def test_quality_gate_rejects_bad_timing_and_low_pose_confidence():
     samples = _session()
-    samples[0] = IndoBoardSample(
-        **{
-            **samples[0].__dict__,
-            "pose_confidence": 0.1,
-        }
-    )
-    samples[1] = IndoBoardSample(
-        **{
-            **samples[1].__dict__,
-            "timing_uncertainty_ms": 100.0,
-        }
-    )
+    samples[0] = replace(samples[0], pose_confidence=0.1)
+    samples[1] = replace(samples[1], timing_uncertainty_ms=100.0)
 
     report = analyze_indo_board(samples)
 
@@ -90,4 +83,4 @@ def test_longitudinal_baseline_tracks_mean_variance_and_best():
     assert baseline.sample_count == 3
     assert baseline.mean == 0.5
     assert baseline.best_value == 0.4
-    assert baseline.sample_standard_deviation == 0.1
+    assert baseline.sample_standard_deviation == pytest.approx(0.1)
