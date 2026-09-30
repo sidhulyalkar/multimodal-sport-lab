@@ -10,7 +10,6 @@ from typing import Any
 
 from .world_geometry import load_calibration_board
 
-
 CHARUCO_CALIBRATION_SPEC_SCHEMA_VERSION = (
     "motionos.charuco-calibration-spec.v1"
 )
