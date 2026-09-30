@@ -25,6 +25,7 @@ from .camera import (
     import_camera_evidence,
     write_camera_capture_receipt,
 )
+from .charuco_calibration import calibrate_charuco_from_spec
 from .clock_sync import write_clock_sync
 from .clock_uncertainty import (
     analyze_clock_uncertainty,
@@ -37,12 +38,14 @@ from .data_governance import (
     validate_public_export_manifest,
 )
 from .equipment_cli import calibrate_equipment_mount_file
+from .external_camera import import_external_camera_evidence
 from .experiments import (
     build_experiment_manifest,
     build_grouped_split,
     verify_experiment_manifest,
     verify_grouped_split,
 )
+from .indo_board_pipeline import process_indo_board_pipeline
 from .insole import (
     import_opengo_text_export,
     write_p2_capture_receipt,
@@ -63,6 +66,8 @@ from .replay import replay_frames
 from .session import SessionReader
 from .simulate import simulate_session
 from .validate import validate_m0_session
+from .vision_clock import build_vision_clock_bundle
+from .vision_sync import write_external_camera_sync
 from .world_geometry import (
     build_camera_rig_receipt,
     triangulate_multiview,
@@ -475,6 +480,70 @@ def _parser() -> argparse.ArgumentParser:
     triangulate.add_argument("correspondences")
     triangulate.add_argument("output")
     triangulate.add_argument("--measurements-output")
+
+    charuco = sub.add_parser(
+        "calibrate-charuco",
+        help=(
+            "solve a provenance-bound ChArUco camera calibration "
+            "using the optional vision dependency"
+        ),
+    )
+    charuco.add_argument("spec")
+    charuco.add_argument("output")
+
+    external_camera = sub.add_parser(
+        "import-external-camera",
+        help=(
+            "import an external-camera frame/2D-pose journal as a "
+            "MotionOS calibration session"
+        ),
+    )
+    external_camera.add_argument("journal")
+    external_camera.add_argument("video")
+    external_camera.add_argument("metadata")
+    external_camera.add_argument("--out", default="data")
+    external_camera.add_argument("--source-id", default="dji-action4")
+    external_camera.add_argument("--session-id")
+    external_camera.add_argument(
+        "--sport",
+        default="indo-board-calibration",
+    )
+
+    external_sync = sub.add_parser(
+        "sync-external-camera",
+        help=(
+            "fit an external-camera affine clock from repeated physical "
+            "2D-pose impulse landmarks"
+        ),
+    )
+    external_sync.add_argument("vision_session")
+    external_sync.add_argument("iphone_journal")
+    external_sync.add_argument("external_journal")
+    external_sync.add_argument("output")
+
+    vision_clock = sub.add_parser(
+        "build-vision-clock-bundle",
+        help=(
+            "compose Watch, iPhone-camera, and external-camera clocks "
+            "onto canonical Watch time"
+        ),
+    )
+    vision_clock.add_argument("vision_session")
+    vision_clock.add_argument("watch_journal")
+    vision_clock.add_argument("iphone_journal")
+    vision_clock.add_argument("external_sync")
+    vision_clock.add_argument("output")
+
+    indo_pipeline = sub.add_parser(
+        "process-indo-board-vision",
+        help=(
+            "run the complete post-session Indo Board M0-Vision pipeline "
+            "against a passing current-session camera rig"
+        ),
+    )
+    indo_pipeline.add_argument("spec")
+    indo_pipeline.add_argument("output_directory")
+
     return parser
 
 
@@ -926,6 +995,56 @@ def main(argv: list[str] | None = None) -> int:
             args.correspondences,
             args.output,
             measurements_output_path=args.measurements_output,
+        )
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+
+    if args.command == "calibrate-charuco":
+        result = calibrate_charuco_from_spec(
+            args.spec,
+            args.output,
+        )
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+
+    if args.command == "import-external-camera":
+        path = import_external_camera_evidence(
+            args.journal,
+            args.video,
+            args.metadata,
+            args.out,
+            source_id=args.source_id,
+            session_id=args.session_id,
+            sport=args.sport,
+        )
+        print(path)
+        return 0
+
+    if args.command == "sync-external-camera":
+        result = write_external_camera_sync(
+            args.vision_session,
+            args.iphone_journal,
+            args.external_journal,
+            args.output,
+        )
+        print(json.dumps(result.to_dict(), indent=2, sort_keys=True))
+        return 0
+
+    if args.command == "build-vision-clock-bundle":
+        result = build_vision_clock_bundle(
+            args.vision_session,
+            args.watch_journal,
+            args.iphone_journal,
+            args.external_sync,
+            args.output,
+        )
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+
+    if args.command == "process-indo-board-vision":
+        result = process_indo_board_pipeline(
+            args.spec,
+            args.output_directory,
         )
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0
