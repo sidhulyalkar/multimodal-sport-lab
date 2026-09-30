@@ -68,10 +68,14 @@ struct PhoneContentView: View {
                     : (coordinator.watchAppInstalled ? "installed" : "not installed")
             )
             if let presence = coordinator.watchPresence {
+                let current = coordinator.hasRecentWatchPresence()
+                let age = coordinator.watchPresenceAge() ?? 0
                 readinessRow(
                     "Watch handshake",
-                    value: true,
-                    detail: "v\(presence.appVersion) · b\(presence.appBuild)"
+                    value: current,
+                    detail: current
+                        ? "v\(presence.appVersion) · b\(presence.appBuild)"
+                        : String(format: "stale %.0fm", age / 60)
                 )
             } else {
                 readinessRow(
