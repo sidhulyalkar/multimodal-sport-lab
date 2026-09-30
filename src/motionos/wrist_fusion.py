@@ -319,6 +319,4 @@ def _canonical(name: str) -> str:
         for character in name.lower()
         if character.isalnum()
     )
-    if value.endswith("joint"):
-        value = value[:-5]
-    return value
+    return value.removesuffix("joint")
