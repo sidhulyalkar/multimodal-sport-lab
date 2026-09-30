@@ -187,6 +187,17 @@ EOF
   exit 1
 fi
 
+echo "-- Verifying generated Watch app metadata"
+WATCH_INFO="$HERE/Watch/Info.plist"
+if [[ ! -f "$WATCH_INFO" ]]; then
+  echo "Generated Watch Info.plist is missing: $WATCH_INFO" >&2
+  exit 1
+fi
+if [[ "$(/usr/libexec/PlistBuddy -c 'Print :WKApplication' "$WATCH_INFO" 2>/dev/null || true)" != "true" ]]; then
+  echo "Generated Watch app must declare WKApplication=true for the single-target watchOS app." >&2
+  exit 1
+fi
+
 echo "-- Verifying generated schemes"
 xcodebuild -list -project "$PROJECT"
 
