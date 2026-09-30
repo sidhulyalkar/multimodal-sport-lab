@@ -142,7 +142,7 @@ def test_pipeline_preflight_accepts_matching_camera_contract(tmp_path):
 
 
 def test_pipeline_preflight_rejects_camera_id_not_in_rig(tmp_path):
-    spec, document, rig = _fixture(tmp_path)
+    spec, _document, rig = _fixture(tmp_path)
     raw_rig = json.loads(rig.read_text(encoding="utf-8"))
     raw_rig["cameras"][0]["camera_id"] = "different-iphone"
     rig.write_text(json.dumps(raw_rig), encoding="utf-8")
