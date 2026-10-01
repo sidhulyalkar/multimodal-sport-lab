@@ -419,7 +419,8 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         _ acknowledgment: SessionSyncAcknowledgment,
         fieldRun: FieldRunCoordinator
     ) {
-        guard phase == .running,
+        guard (phase == .running || phase == .finishing),
+              fieldRun.phase == .running,
               acknowledgment.runID == fieldRun.runID,
               acknowledgment.watchSessionID == activeWatchSessionID,
               acknowledgment.cueID == pendingCueID
