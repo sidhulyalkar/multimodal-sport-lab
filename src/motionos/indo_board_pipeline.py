@@ -12,6 +12,7 @@ from .board_marker_correspondences import (
 )
 from .board_pose_series import build_board_pose_series
 from .indo_board import analyze_indo_board
+from .indo_board_plan import validate_indo_board_qualification_plan
 from .indo_board_qualification import (
     build_indo_board_qualification_receipt,
     validate_qualification_contract,
@@ -75,6 +76,10 @@ def process_indo_board_pipeline(
     fusion_calibration_receipt = _resolve(
         base,
         spec["wrist_fusion_calibration_receipt"],
+    )
+    qualification_plan = _resolve(
+        base,
+        spec["qualification_plan"],
     )
     thresholds = _mapping(spec, "thresholds")
     fusion = _mapping(spec, "wrist_fusion")
@@ -534,6 +539,8 @@ def process_indo_board_pipeline(
         "rig_receipt_sha256": sha256_file(rig_receipt),
         "wrist_fusion_calibration_receipt_sha256":
             sha256_file(fusion_calibration_receipt),
+        "qualification_plan_sha256":
+            sha256_file(qualification_plan),
         "pose_pair_count": pose_pair_count,
         "marker_pair_count": marker_pair_count,
         "metric_count": len(metrics.metrics),
@@ -596,6 +603,14 @@ def validate_indo_board_pipeline_spec(
             base,
             spec["wrist_fusion_calibration_receipt"],
         ),
+        "qualification_plan": _resolve(
+            base,
+            spec["qualification_plan"],
+        ),
+        "qualification_plan": _resolve(
+            base,
+            spec["qualification_plan"],
+        ),
     }
     iphone = _mapping(spec, "iphone")
     action4 = _mapping(spec, "action4")
@@ -619,6 +634,10 @@ def validate_indo_board_pipeline_spec(
             "pipeline input files are missing: " + ", ".join(missing)
         )
 
+    qualification_plan = validate_indo_board_qualification_plan(
+        required_paths["qualification_plan"]
+    )
+
     _validate_board_marker_asset_chain(
         layout_path=required_paths["board_marker_layout"],
         receipt_path=required_paths["board_marker_asset_receipt"],
@@ -635,14 +654,27 @@ def validate_indo_board_pipeline_spec(
         raise ValueError(
             "vision session capture_mode must be 'multiview_calibration'"
         )
+    protocol = _mapping(qualification_plan, "protocol")
+    minimum_sync_landmarks = int(
+        protocol["minimum_sync_landmarks"]
+    )
+    if manifest.coaching_condition != str(
+        protocol["coaching_condition"]
+    ):
+        raise ValueError(
+            "vision session coaching_condition does not match "
+            "the frozen qualification plan"
+        )
+
     sealed_sync_landmarks = [
         landmark
         for landmark in manifest.sync_landmarks
         if landmark.kind == "whole_body_impulse"
     ]
-    if len(sealed_sync_landmarks) < 3:
+    if len(sealed_sync_landmarks) < minimum_sync_landmarks:
         raise ValueError(
-            "vision session requires at least three whole-body sync landmarks"
+            "vision session has fewer whole-body sync landmarks "
+            "than the frozen qualification plan requires"
         )
     landmark_ids = [
         landmark.landmark_id
@@ -803,6 +835,15 @@ def validate_indo_board_pipeline_spec(
 
     qualification = _mapping(spec, "qualification")
     validate_qualification_contract(qualification)
+
+    _validate_pipeline_matches_qualification_plan(
+        plan=qualification_plan,
+        required_paths=required_paths,
+        thresholds=thresholds,
+        fusion=fusion,
+        qualification=qualification,
+        rig_id=str(rig.get("rig_id", "")),
+    )
 
     profile = _resolve(base, spec["longitudinal_profile"])
     if profile.exists() and not profile.is_file():
@@ -1208,6 +1249,55 @@ def _validate_action4_evidence_chain(
             "Action4 pose metadata is not bound to the sealed vision session"
         )
     return source_id
+
+
+def _validate_pipeline_matches_qualification_plan(
+    *,
+    plan: dict[str, object],
+    required_paths: dict[str, Path],
+    thresholds: dict[str, object],
+    fusion: dict[str, object],
+    qualification: dict[str, object],
+    rig_id: str,
+) -> None:
+    if str(plan.get("rig_id", "")) != rig_id:
+        raise ValueError(
+            "camera rig ID does not match the frozen qualification plan"
+        )
+
+    evidence = _mapping(plan, "evidence")
+    path_by_evidence_key = {
+        "rig_receipt": required_paths["rig_receipt"],
+        "board_marker_layout":
+            required_paths["board_marker_layout"],
+        "board_marker_asset_receipt":
+            required_paths["board_marker_asset_receipt"],
+        "wrist_fusion_calibration_receipt":
+            required_paths["wrist_fusion_calibration_receipt"],
+    }
+    for key, path in path_by_evidence_key.items():
+        entry = evidence.get(key)
+        if not isinstance(entry, dict):
+            raise TypeError(
+                f"qualification plan evidence.{key} must be an object"
+            )
+        if str(entry.get("sha256", "")) != sha256_file(path):
+            raise ValueError(
+                f"{key} does not match the frozen qualification plan"
+            )
+
+    if thresholds != _mapping(plan, "thresholds"):
+        raise ValueError(
+            "analysis thresholds do not match the frozen qualification plan"
+        )
+    if fusion != _mapping(plan, "wrist_fusion"):
+        raise ValueError(
+            "wrist_fusion does not match the frozen qualification plan"
+        )
+    if qualification != _mapping(plan, "qualification"):
+        raise ValueError(
+            "qualification gates do not match the frozen qualification plan"
+        )
 
 
 def _validate_wrist_fusion_calibration_chain(
