@@ -531,7 +531,9 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
         }
     }
 
-    func startP0() async {
+    func startP0(
+        locationType: HKWorkoutSessionLocationType = .outdoor
+    ) async {
         errorMessage = nil
         refreshWatchState()
 
@@ -546,7 +548,7 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
 
         let configuration = HKWorkoutConfiguration()
         configuration.activityType = .other
-        configuration.locationType = .outdoor
+        configuration.locationType = locationType
 
         state = .launchingWatch
         do {
