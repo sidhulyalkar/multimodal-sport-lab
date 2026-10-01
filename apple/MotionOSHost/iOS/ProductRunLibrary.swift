@@ -7,6 +7,8 @@ struct ProductRunRecord: Identifiable, Equatable, Sendable {
     let runID: String
     let protocolKind: String
     let protocolVersion: String
+    let captureMode: String?
+    let productManifestURL: URL?
     let startedAt: Date?
     let sealedAt: Date?
     let completedBlockIDs: [String]
@@ -173,6 +175,20 @@ final class ProductRunLibrary: ObservableObject {
                 productManifest = nil
             }
 
+            let manifestURL = directory.appendingPathComponent(
+                "product-session.json"
+            )
+            let productManifest: ProductSessionManifest?
+            if manager.fileExists(atPath: manifestURL.path),
+               let manifestData = try? Data(contentsOf: manifestURL) {
+                productManifest = try? decoder.decode(
+                    ProductSessionManifest.self,
+                    from: manifestData
+                )
+            } else {
+                productManifest = nil
+            }
+
             let startReadiness = stringMap(
                 metadata["start_readiness"]
             )
@@ -278,8 +294,8 @@ final class ProductRunLibrary: ObservableObject {
 
             let completed = metadata["completed_block_ids"]
                 as? [String] ?? []
-            let syncLabels = metadata["sync_cue_labels"]
-                as? [String] ?? []
+            let syncLabels = productManifest?.syncReceipts.map(\.label)
+                ?? (metadata["sync_cue_labels"] as? [String] ?? [])
             let failureCount = int(
                 metadata["failure_note_count"]
             ) ?? 0
@@ -293,6 +309,11 @@ final class ProductRunLibrary: ObservableObject {
                 protocolVersion:
                     metadata["protocol_version"] as? String
                         ?? "unknown",
+                captureMode: productManifest?.captureMode,
+                productManifestURL:
+                    manager.fileExists(atPath: manifestURL.path)
+                        ? manifestURL
+                        : nil,
                 startedAt: date(
                     metadata["started_at_utc"],
                     formatter: formatter
