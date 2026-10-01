@@ -11,6 +11,9 @@ struct PhoneContentView: View {
                     header
                     SensorSourceStrip()
                     LiveTelemetryDeck()
+                    if inbox.latestSessionID != nil {
+                        SessionLensCard()
+                    }
                     controls
                     readiness
                     GuidedP0Card()
@@ -395,10 +398,18 @@ struct PhoneContentView: View {
                     .foregroundStyle(.secondary)
                 }
 
-                if let hostURL = inbox.latestHostMetadataURL {
+                if let hostURL = inbox.latestHostMetadataURL,
+                   let summaryURL = inbox.latestSessionSummaryURL {
+                    ShareLink(items: [url, hostURL, summaryURL]) {
+                        Label(
+                            "Share evidence + derived summary",
+                            systemImage: "square.and.arrow.up"
+                        )
+                    }
+                } else if let hostURL = inbox.latestHostMetadataURL {
                     ShareLink(items: [url, hostURL]) {
                         Label(
-                            "Share P0 evidence files",
+                            "Share evidence files",
                             systemImage: "square.and.arrow.up"
                         )
                     }
