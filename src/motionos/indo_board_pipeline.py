@@ -607,10 +607,6 @@ def validate_indo_board_pipeline_spec(
             base,
             spec["qualification_plan"],
         ),
-        "qualification_plan": _resolve(
-            base,
-            spec["qualification_plan"],
-        ),
     }
     iphone = _mapping(spec, "iphone")
     action4 = _mapping(spec, "action4")
@@ -1064,6 +1060,10 @@ def _pipeline_state_input_hashes(
         "wrist_fusion_calibration_receipt": _resolve(
             base,
             spec["wrist_fusion_calibration_receipt"],
+        ),
+        "qualification_plan": _resolve(
+            base,
+            spec["qualification_plan"],
         ),
     }
     return {
