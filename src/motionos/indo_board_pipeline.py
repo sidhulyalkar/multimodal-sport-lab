@@ -14,6 +14,7 @@ from .board_pose_series import build_board_pose_series
 from .indo_board import analyze_indo_board
 from .indo_board_acquisition import (
     ACQUISITION_PROFILE_ID,
+    evaluate_indo_board_acquisition,
     require_indo_board_acquisition,
 )
 from .indo_board_plan import validate_indo_board_qualification_plan
@@ -100,6 +101,24 @@ def process_indo_board_pipeline(
     )
     marker_frame_stride = int(
         thresholds.get("marker_frame_stride", 1)
+    )
+
+    acquisition_path = output / "indo-board-acquisition-receipt.json"
+    acquisition_receipt = evaluate_indo_board_acquisition(
+        vision_session,
+        _resolve(base, iphone["metadata"]),
+        _resolve(base, action4["metadata"]),
+        output_path=acquisition_path,
+    )
+    if acquisition_receipt["passed"] is not True:
+        raise ValueError(
+            "scored acquisition profile failed after preflight"
+        )
+    _record_stage(
+        state,
+        state_path,
+        "indo_board_acquisition",
+        acquisition_path,
     )
 
     manifest = VisionSessionManifest.from_dict(
@@ -519,6 +538,7 @@ def process_indo_board_pipeline(
         )
 
     artifacts = [
+        acquisition_path,
         external_sync_path,
         clock_bundle_path,
         skeleton_correspondences,
@@ -546,6 +566,7 @@ def process_indo_board_pipeline(
         "qualification_plan_sha256":
             sha256_file(qualification_plan),
         "acquisition_profile_id": ACQUISITION_PROFILE_ID,
+        "acquisition_receipt_sha256": sha256_file(acquisition_path),
         "pose_pair_count": pose_pair_count,
         "marker_pair_count": marker_pair_count,
         "metric_count": len(metrics.metrics),
