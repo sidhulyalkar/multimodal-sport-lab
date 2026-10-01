@@ -884,7 +884,9 @@ struct IndoBoardSessionView: View {
                     ProductRunDetailView(run: run)
                 } label: {
                     Label(
-                        "Review Complete Session",
+                        session.outcome == .aborted
+                            ? "Review Preserved Attempt"
+                            : "Review Complete Session",
                         systemImage: "chart.xyaxis.line"
                     )
                     .frame(maxWidth: .infinity)
@@ -1023,6 +1025,42 @@ struct IndoBoardSessionView: View {
                 )
                 .font(.caption)
                 .foregroundStyle(.green)
+            }
+
+            Divider()
+
+            if session.externalCameraConfirmed
+                && session.externalVideoEvidence == nil {
+                Button {
+                    session.reset()
+                    runLibrary.refresh()
+                } label: {
+                    Label(
+                        "Start Another Without Action 4",
+                        systemImage: "arrow.counterclockwise"
+                    )
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+
+                Text(
+                    "The current run stays preserved in Sessions with its "
+                        + "planned Action 4 source marked incomplete."
+                )
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            } else {
+                Button {
+                    session.reset()
+                    runLibrary.refresh()
+                } label: {
+                    Label(
+                        "Prepare Another Session",
+                        systemImage: "arrow.counterclockwise"
+                    )
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
             }
         }
         .cardStyle()
