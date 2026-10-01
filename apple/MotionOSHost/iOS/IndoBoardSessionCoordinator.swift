@@ -3,6 +3,19 @@ import Foundation
 import MotionOSAppleCapture
 import UIKit
 
+private enum ExternalVideoImportError: LocalizedError {
+    case conflictingExistingEvidence(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .conflictingExistingEvidence(let filename):
+            "This run already contains a different external movie named "
+                + filename
+                + ". MotionOS will not overwrite sealed evidence."
+        }
+    }
+}
+
 @MainActor
 final class IndoBoardSessionCoordinator: ObservableObject {
     enum CaptureMode: String, CaseIterable, Identifiable, Sendable {
@@ -571,15 +584,29 @@ final class IndoBoardSessionCoordinator: ObservableObject {
                     "original-" + safeName
                 )
 
-                if manager.fileExists(atPath: destination.path) {
-                    try manager.removeItem(at: destination)
-                }
-                try manager.copyItem(
-                    at: sourceURL,
-                    to: destination
+                let sourceDigest = try FileEvidence.digest(
+                    sourceURL
                 )
 
+                if manager.fileExists(atPath: destination.path) {
+                    let existingDigest = try FileEvidence.digest(
+                        destination
+                    )
+                    guard existingDigest == sourceDigest else {
+                        throw ExternalVideoImportError
+                            .conflictingExistingEvidence(safeName)
+                    }
+                } else {
+                    try manager.copyItem(
+                        at: sourceURL,
+                        to: destination
+                    )
+                }
+
                 let digest = try FileEvidence.digest(destination)
+                guard digest == sourceDigest else {
+                    throw CocoaError(.fileReadCorruptFile)
+                }
                 let metadataURL = directory.appendingPathComponent(
                     "external-camera-metadata.json"
                 )
@@ -704,6 +731,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         cueReceipts = []
         pendingCueID = nil
         externalVideoEvidence = nil
+        externalCameraConfirmed = false
         productManifestURL = nil
         errorMessage = nil
     }
@@ -1096,7 +1124,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
             cameraJournalSHA256: cameraBundle?.journalSHA256,
             cameraMetadataSHA256: cameraBundle?.metadataSHA256,
             syncReceipts: receipts,
-            externalCameraExpected: requiresExternalCamera,
+            externalCameraExpected: externalCameraConfirmed,
             externalCameraImported: externalVideoEvidence != nil,
             externalCameraSHA256: externalVideoEvidence?.sha256,
             operatorEvidenceSealed: fieldRun.phase == .sealed,
