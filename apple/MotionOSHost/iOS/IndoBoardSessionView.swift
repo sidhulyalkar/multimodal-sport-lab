@@ -618,8 +618,8 @@ struct IndoBoardSessionView: View {
                 .font(.system(.caption, design: .monospaced))
                 .foregroundStyle(
                     session.cueReceipts.count >= 3
-                        ? .green
-                        : .secondary
+                        ? Color.green
+                        : Color.secondary
                 )
             }
 
@@ -637,8 +637,8 @@ struct IndoBoardSessionView: View {
             .font(.caption2)
             .foregroundStyle(
                 session.pendingCueID == nil
-                    ? .secondary
-                    : .yellow
+                    ? Color.secondary
+                    : Color.yellow
             )
         }
         .padding(12)
