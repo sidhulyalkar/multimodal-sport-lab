@@ -32,7 +32,7 @@ Use the release-candidate branch after its CI is green:
 
 ```bash
 cd ~/Documents/Projects/multimodal-sport-lab
-git switch product/motionos-m0-release-candidate
+git switch product/motionos-m0-release-candidate-v2
 git pull --ff-only
 open apple/MotionOSHost/MotionOSHost.xcodeproj
 ```
@@ -88,7 +88,8 @@ Do not begin if a tripod or phone position creates a fall hazard.
 
 ## Gate 3 · Complete 120 second session
 
-Press **Start Complete Session**.
+Press **Start Complete Session**. The complete-session path is hands-free after
+start unless you intentionally finish early.
 
 MotionOS should:
 
@@ -99,7 +100,7 @@ MotionOS should:
 5. advance the shared Indo Board protocol automatically;
 6. send protocol instructions to the Watch;
 7. generate three journal-backed sync opportunities;
-8. stop and seal all available evidence at the end.
+8. automatically stop and seal all available evidence at the 120 s target.
 
 The current product protocol is:
 
