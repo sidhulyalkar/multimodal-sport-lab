@@ -114,6 +114,47 @@ final class MotionOSAppleCaptureTests: XCTestCase {
     }
 
 
+    func testWatchMotionDerivationUsesUserAccelerationChannels() throws {
+        let gravity = 9.80665
+        let derived = try XCTUnwrap(
+            WatchMotionDerivation.derive(
+                payload: [
+                    "ax": .number(gravity * 4),
+                    "ay": .number(0),
+                    "az": .number(0),
+                    "user_ax": .number(gravity * 0.3),
+                    "user_ay": .number(gravity * 0.4),
+                    "user_az": .number(0),
+                    "gx": .number(1),
+                    "gy": .number(2),
+                    "gz": .number(2),
+                ]
+            )
+        )
+
+        XCTAssertEqual(derived.userAccelerationG, 0.5, accuracy: 1e-9)
+        XCTAssertEqual(derived.rotationRateRadS, 3.0, accuracy: 1e-9)
+    }
+
+    func testWatchMotionDerivationFallsBackForLegacyTotalAcceleration() throws {
+        let gravity = 9.80665
+        let derived = try XCTUnwrap(
+            WatchMotionDerivation.derive(
+                payload: [
+                    "ax": .number(gravity * 1.2),
+                    "ay": .number(0),
+                    "az": .number(0),
+                    "gx": .number(0),
+                    "gy": .number(0),
+                    "gz": .number(0),
+                ]
+            )
+        )
+
+        XCTAssertEqual(derived.userAccelerationG, 0.2, accuracy: 1e-9)
+        XCTAssertEqual(derived.rotationRateRadS, 0, accuracy: 1e-9)
+    }
+
     func testSampleTimingHealthTracksRateMedianAndGap() {
         var health = SampleTimingHealth(recentWindowSize: 4)
         for timestamp in [
