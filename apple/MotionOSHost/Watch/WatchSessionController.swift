@@ -80,6 +80,8 @@ final class WatchSessionController: ObservableObject {
     private var heartRateSequence: UInt64 = 0
     private var sessionSyncSequence: UInt64 = 0
     private var productCueTitle: String?
+    private var linkedProductRunID: String?
+    private var rejectedProductControlCount: UInt64 = 0
     private var closedJournalURL: URL?
     private var closedJournalEvidence: FileEvidenceDigest?
     private var imuHealth = SampleTimingHealth()
@@ -267,6 +269,8 @@ final class WatchSessionController: ObservableObject {
         heartRateSequence = 0
         sessionSyncSequence = 0
         productCueTitle = nil
+        linkedProductRunID = nil
+        rejectedProductControlCount = 0
         finalized = false
         closedJournalURL = nil
         closedJournalEvidence = nil
@@ -625,24 +629,31 @@ final class WatchSessionController: ObservableObject {
         let preservingCaptureFailure = state == .failed
         let priorError = errorMessage
 
+        var transferMetadata: [String: Any] = [
+            "session_id": sessionID,
+            "schema_version": "motionos.m0.v1",
+            "stream": "/body/watch",
+            "journal_sha256": evidence.sha256,
+            "journal_byte_count": evidence.byteCount,
+            "capture_origin": captureOrigin.rawValue,
+            "rejected_after_shutdown_count":
+                captureRejections.afterShutdown,
+            "rejected_session_mismatch_count":
+                captureRejections.sessionMismatch,
+            "rejected_no_session_count":
+                captureRejections.noActiveSession,
+            "rejected_stale_motion_count":
+                captureRejections.staleMotionGeneration,
+            "rejected_product_control_count":
+                rejectedProductControlCount,
+        ]
+        if let linkedProductRunID {
+            transferMetadata["product_run_id"] = linkedProductRunID
+        }
+
         let transfer = transport.transferJournal(
             journalURL,
-            metadata: [
-                "session_id": sessionID,
-                "schema_version": "motionos.m0.v1",
-                "stream": "/body/watch",
-                "journal_sha256": evidence.sha256,
-                "journal_byte_count": evidence.byteCount,
-                "capture_origin": captureOrigin.rawValue,
-                "rejected_after_shutdown_count":
-                    captureRejections.afterShutdown,
-                "rejected_session_mismatch_count":
-                    captureRejections.sessionMismatch,
-                "rejected_no_session_count":
-                    captureRejections.noActiveSession,
-                "rejected_stale_motion_count":
-                    captureRejections.staleMotionGeneration,
-            ]
+            metadata: transferMetadata
         )
 
         if transfer != nil {
@@ -710,6 +721,8 @@ final class WatchSessionController: ObservableObject {
 
         case "session_protocol_cue_v1":
             guard state == .running || state == .paused,
+                  let runID = message["run_id"] as? String,
+                  bindProductRunID(runID),
                   let title = message["step_title"] as? String
             else {
                 return
@@ -719,7 +732,10 @@ final class WatchSessionController: ObservableObject {
             WKInterfaceDevice.current().play(.notification)
 
         case "session_stop_request_v1":
-            guard state == .running || state == .paused else {
+            guard state == .running || state == .paused,
+                  let runID = message["run_id"] as? String,
+                  bindProductRunID(runID)
+            else {
                 return
             }
             productCueTitle = nil
@@ -730,6 +746,7 @@ final class WatchSessionController: ObservableObject {
         case "session_sync_cue_v1":
             guard state == .running || state == .paused,
                   let runID = message["run_id"] as? String,
+                  bindProductRunID(runID),
                   let cueID = message["cue_id"] as? String,
                   let label = message["label"] as? String,
                   let watchSessionID = sessionID
@@ -789,6 +806,27 @@ final class WatchSessionController: ObservableObject {
         default:
             return
         }
+    }
+
+    @discardableResult
+    private func bindProductRunID(
+        _ runID: String
+    ) -> Bool {
+        guard !runID.isEmpty else {
+            rejectedProductControlCount &+= 1
+            return false
+        }
+
+        if let linkedProductRunID {
+            guard linkedProductRunID == runID else {
+                rejectedProductControlCount &+= 1
+                return false
+            }
+            return true
+        }
+
+        linkedProductRunID = runID
+        return true
     }
 
     private func handleUserInfo(
