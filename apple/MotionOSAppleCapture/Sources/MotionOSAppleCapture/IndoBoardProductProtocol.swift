@@ -104,7 +104,7 @@ public enum IndoBoardProductProtocol {
             startSeconds: 10,
             preferredSeconds: 12,
             endSeconds: 20,
-            instruction: "Send START sync, then make one sharp arm gesture while keeping the board near neutral."
+            instruction: "When the Watch cues START sync, make one sharp arm gesture while keeping the board near neutral."
         ),
         .init(
             id: "sync-middle",
@@ -112,7 +112,7 @@ public enum IndoBoardProductProtocol {
             startSeconds: 45,
             preferredSeconds: 50,
             endSeconds: 60,
-            instruction: "Send MIDDLE sync, then make one sharp arm gesture while keeping the board near neutral."
+            instruction: "When the Watch cues MIDDLE sync, make one sharp arm gesture while keeping the board near neutral."
         ),
         .init(
             id: "sync-end",
@@ -120,7 +120,7 @@ public enum IndoBoardProductProtocol {
             startSeconds: 105,
             preferredSeconds: 110,
             endSeconds: 120,
-            instruction: "Send END sync, then make one sharp arm gesture while keeping the board near neutral."
+            instruction: "When the Watch cues END sync, make one sharp arm gesture while keeping the board near neutral."
         ),
     ]
 
