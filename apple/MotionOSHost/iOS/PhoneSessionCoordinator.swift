@@ -521,6 +521,11 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
             phoneBatteryFraction: iPhoneBatteryLevel,
             receivedAt: receivedAt
         )
+
+        if let completed = systemsLabTracker.latestCompleted,
+           completed.journalReceivedAt != nil {
+            persistSystemsLabReport(completed)
+        }
         refreshSystemsLabReports()
     }
 
