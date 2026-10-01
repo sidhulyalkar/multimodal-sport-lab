@@ -273,6 +273,15 @@ struct IndoBoardSessionView: View {
             )
 
             readinessRow(
+                title: "Watch capture",
+                detail: session.watchCaptureAvailable(phone)
+                    ? "available for this session"
+                    : "another capture is active",
+                ready: session.watchCaptureAvailable(phone),
+                symbol: "record.circle"
+            )
+
+            readinessRow(
                 title: "iPhone camera",
                 detail: cameraDetail,
                 ready: (
@@ -1271,6 +1280,7 @@ struct IndoBoardSessionView: View {
         phone.watchPaired
             && phone.watchAppInstalled
             && phone.watchReachable
+            && session.watchCaptureAvailable(phone)
             && (
                 camera.phase == .ready
                     || camera.phase == .evidenceReady
