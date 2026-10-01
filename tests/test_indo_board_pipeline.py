@@ -1,8 +1,11 @@
 import json
+from types import SimpleNamespace
 
 import pytest
 
 import motionos.indo_board_pipeline as pipeline_module
+from motionos.clock import ClockModel
+from motionos.indo_board import IndoBoardSample
 from motionos.indo_board_pipeline import (
     process_indo_board_pipeline,
     validate_indo_board_pipeline_spec,
@@ -611,3 +614,299 @@ def test_pipeline_state_invalidates_when_authoritative_input_changes(
         "geometry",
         artifact,
     )
+
+
+
+@pytest.mark.parametrize("qualification_passed", [False, True])
+def test_pipeline_qualification_controls_longitudinal_promotion(
+    tmp_path,
+    monkeypatch,
+    qualification_passed,
+):
+    spec, document, _rig = _fixture(tmp_path)
+    output = tmp_path / "derived"
+
+    def write_json(path, document):
+        path.write_text(
+            json.dumps(document),
+            encoding="utf-8",
+        )
+
+    def fake_external_sync(*args):
+        output_path = args[-1]
+        write_json(
+            output_path,
+            {
+                "schema_version": "motionos.external-camera-sync.v1",
+            },
+        )
+
+    def fake_clock_bundle(*args):
+        output_path = args[-1]
+        write_json(
+            output_path,
+            {
+                "schema_version": "motionos.vision-clock-bundle.v1",
+            },
+        )
+        return {}
+
+    clock = ClockModel(
+        slope=1.0,
+        intercept_ns=0.0,
+        residual_rms_ns=1_000_000.0,
+        observations_used=3,
+    )
+    monkeypatch.setattr(
+        pipeline_module,
+        "write_external_camera_sync",
+        fake_external_sync,
+    )
+    monkeypatch.setattr(
+        pipeline_module,
+        "build_vision_clock_bundle",
+        fake_clock_bundle,
+    )
+    monkeypatch.setattr(
+        pipeline_module,
+        "load_clock_from_bundle",
+        lambda *args: clock,
+    )
+    monkeypatch.setattr(
+        pipeline_module,
+        "load_pose2d_journal",
+        lambda path, source_id, clock_model: SimpleNamespace(
+            source_id=source_id,
+            observations=(object(), object()),
+        ),
+    )
+    monkeypatch.setattr(
+        pipeline_module,
+        "pair_pose_observations",
+        lambda *args, **kwargs: ((object(), object()),),
+    )
+
+    def fake_skeleton_correspondences(
+        pairs,
+        output_path,
+        **kwargs,
+    ):
+        write_json(
+            output_path,
+            {
+                "schema_version":
+                    "motionos.multiview-correspondences.v1",
+                "pair_count": len(tuple(pairs)),
+            },
+        )
+
+    monkeypatch.setattr(
+        pipeline_module,
+        "write_skeleton_sequence_correspondences",
+        fake_skeleton_correspondences,
+    )
+
+    def fake_triangulate(_rig, _correspondences, output_path):
+        write_json(
+            output_path,
+            {
+                "schema_version":
+                    "motionos.multiview-geometry-report.v1",
+            },
+        )
+        return {}
+
+    monkeypatch.setattr(
+        pipeline_module,
+        "triangulate_multiview",
+        fake_triangulate,
+    )
+
+    def fake_track(
+        _video,
+        _journal,
+        _layout,
+        output_path,
+        **kwargs,
+    ):
+        write_json(
+            output_path,
+            {
+                "schema_version":
+                    "motionos.board-marker-observations.v1",
+            },
+        )
+        return {}
+
+    monkeypatch.setattr(
+        pipeline_module,
+        "track_board_markers",
+        fake_track,
+    )
+    monkeypatch.setattr(
+        pipeline_module,
+        "load_marker_frames",
+        lambda *args, **kwargs: (object(),),
+    )
+    monkeypatch.setattr(
+        pipeline_module,
+        "pair_marker_frames",
+        lambda *args, **kwargs: ((object(), object()),),
+    )
+
+    def fake_board_correspondences(
+        pairs,
+        output_path,
+        **kwargs,
+    ):
+        write_json(
+            output_path,
+            {
+                "schema_version":
+                    "motionos.multiview-correspondences.v1",
+                "pair_count": len(tuple(pairs)),
+            },
+        )
+
+    monkeypatch.setattr(
+        pipeline_module,
+        "write_board_marker_correspondences",
+        fake_board_correspondences,
+    )
+
+    def fake_board_pose(
+        _geometry,
+        _layout,
+        output_path,
+        **kwargs,
+    ):
+        write_json(
+            output_path,
+            {
+                "schema_version": "motionos.board-pose-series.v1",
+            },
+        )
+        return {}
+
+    monkeypatch.setattr(
+        pipeline_module,
+        "build_board_pose_series",
+        fake_board_pose,
+    )
+
+    samples = tuple(
+        IndoBoardSample(
+            time_s=index * 0.1,
+            com_x_m=0.01 * ((index % 3) - 1),
+            com_y_m=0.9,
+            com_z_m=0.005 * ((index % 5) - 2),
+            board_roll_deg=float((index % 4) - 2),
+            board_pitch_deg=0.5,
+            left_knee_flexion_deg=30.0,
+            right_knee_flexion_deg=32.0,
+            pose_confidence=0.95,
+            timing_uncertainty_ms=2.0,
+            reprojection_rms_px=0.5,
+        )
+        for index in range(40)
+    )
+    monkeypatch.setattr(
+        pipeline_module,
+        "build_indo_board_samples",
+        lambda *args, **kwargs: (
+            samples,
+            {
+                "schema_version":
+                    "motionos.indo-board-reconstruction.v1",
+                "sample_count": len(samples),
+                "rejected_sample_count": 0,
+                "rejected_samples": [],
+                "modeled_mass_coverage": {
+                    "minimum": 1.0,
+                    "median": 1.0,
+                    "maximum": 1.0,
+                },
+            },
+        ),
+    )
+
+    def fake_wrist(*args, **kwargs):
+        output_path = args[3]
+        report = {
+            "schema_version":
+                "motionos.wrist-acceleration-fusion.v1",
+            "sample_count": 20,
+            "watch_minus_vision_rms_m_s2": 0.2,
+        }
+        write_json(output_path, report)
+        return report
+
+    monkeypatch.setattr(
+        pipeline_module,
+        "build_wrist_acceleration_fusion",
+        fake_wrist,
+    )
+
+    def fake_quality(*, output_path, **kwargs):
+        report = {
+            "schema_version":
+                "motionos.indo-board-quality-report.v1",
+            "session_id": "vision-s1",
+            "summary": {
+                "pose_frame_pairs": 1,
+                "board_frame_pairs": 1,
+                "board_pose_count": 1,
+                "board_pose_rejected_count": 0,
+                "reconstruction_sample_count": len(samples),
+                "metric_input_sample_count": len(samples),
+                "metric_accepted_sample_count": len(samples),
+                "metric_rejected_sample_count": 0,
+                "metric_accepted_fraction": 1.0,
+                "wrist_fusion_sample_count": 20,
+            },
+            "attention_flags": [],
+        }
+        write_json(output_path, report)
+        return report
+
+    monkeypatch.setattr(
+        pipeline_module,
+        "build_indo_board_quality_report",
+        fake_quality,
+    )
+
+    def fake_qualification(
+        _quality_path,
+        _qualification,
+        output_path,
+    ):
+        receipt = {
+            "schema_version":
+                "motionos.indo-board-qualification-receipt.v1",
+            "session_id": "vision-s1",
+            "passed": qualification_passed,
+            "failed_gate_ids": (
+                [] if qualification_passed else ["fixture_gate"]
+            ),
+            "longitudinal_update_permitted":
+                qualification_passed,
+        }
+        write_json(output_path, receipt)
+        return receipt
+
+    monkeypatch.setattr(
+        pipeline_module,
+        "build_indo_board_qualification_receipt",
+        fake_qualification,
+    )
+
+    receipt = process_indo_board_pipeline(spec, output)
+    profile = tmp_path / document["longitudinal_profile"]
+
+    assert receipt["qualification_passed"] is qualification_passed
+    assert receipt["longitudinal_updated"] is qualification_passed
+    assert profile.exists() is qualification_passed
+    assert (
+        output / "indo-board-qualification-receipt.json"
+    ).is_file()
+    assert (output / "indo-board-report.json").is_file()
