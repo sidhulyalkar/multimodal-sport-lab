@@ -38,6 +38,20 @@ struct DeviceHubView: View {
                 }
             }
 
+            Section("Qualification") {
+                NavigationLink {
+                    SystemsLabView()
+                } label: {
+                    DeviceRow(
+                        title: "Systems Lab",
+                        detail: "Sensing, preview, power, and transfer evidence",
+                        symbol: "waveform.path.ecg.rectangle",
+                        status: qualificationStatus,
+                        tint: qualificationTint
+                    )
+                }
+            }
+
             Section("Optional sources") {
                 NavigationLink {
                     CameraDeviceDetailView()
@@ -113,6 +127,31 @@ struct DeviceHubView: View {
             return "Low storage · free space before capture"
         }
         return "Coordinates capture and stores sessions"
+    }
+
+    private var qualificationStatus: String {
+        if let report = phone.systemsLabCurrentReport,
+           report.endedAt == nil {
+            return "RUNNING"
+        }
+        if phone.systemsLabLatestCompletedReport?.journalReceivedAt != nil {
+            return "VERIFIED"
+        }
+        if phone.systemsLabLatestCompletedReport != nil {
+            return "SAVED"
+        }
+        return "READY"
+    }
+
+    private var qualificationTint: Color {
+        switch qualificationStatus {
+        case "RUNNING":
+            return .green
+        case "VERIFIED":
+            return .blue
+        default:
+            return .secondary
+        }
     }
 
     private var cameraStatus: DeviceStatus {
