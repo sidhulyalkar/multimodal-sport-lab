@@ -30,6 +30,7 @@ public struct TimedSyncWindow: Codable, Equatable, Identifiable, Sendable {
     public let id: String
     public let label: String
     public let startSeconds: Double
+    public let preferredSeconds: Double
     public let endSeconds: Double
     public let instruction: String
 
@@ -37,12 +38,14 @@ public struct TimedSyncWindow: Codable, Equatable, Identifiable, Sendable {
         id: String,
         label: String,
         startSeconds: Double,
+        preferredSeconds: Double,
         endSeconds: Double,
         instruction: String
     ) {
         self.id = id
         self.label = label
         self.startSeconds = startSeconds
+        self.preferredSeconds = preferredSeconds
         self.endSeconds = endSeconds
         self.instruction = instruction
     }
@@ -99,6 +102,7 @@ public enum IndoBoardProductProtocol {
             id: "sync-start",
             label: "start",
             startSeconds: 10,
+            preferredSeconds: 12,
             endSeconds: 20,
             instruction: "Send START sync, then make one sharp arm gesture while keeping the board near neutral."
         ),
@@ -106,6 +110,7 @@ public enum IndoBoardProductProtocol {
             id: "sync-middle",
             label: "middle",
             startSeconds: 45,
+            preferredSeconds: 50,
             endSeconds: 60,
             instruction: "Send MIDDLE sync, then make one sharp arm gesture while keeping the board near neutral."
         ),
@@ -113,6 +118,7 @@ public enum IndoBoardProductProtocol {
             id: "sync-end",
             label: "end",
             startSeconds: 105,
+            preferredSeconds: 110,
             endSeconds: 120,
             instruction: "Send END sync, then make one sharp arm gesture while keeping the board near neutral."
         ),
@@ -174,7 +180,8 @@ public enum IndoBoardProductProtocol {
 
         for sync in syncWindows {
             guard sync.startSeconds >= 0,
-                  sync.endSeconds >= sync.startSeconds,
+                  sync.preferredSeconds >= sync.startSeconds,
+                  sync.endSeconds >= sync.preferredSeconds,
                   sync.endSeconds <= targetDurationSeconds
             else {
                 return false
