@@ -9,6 +9,7 @@ struct MotionOSiOSApp: App {
     @StateObject private var guidedP0 = GuidedP0Controller()
     @StateObject private var indoBoardSession =
         IndoBoardSessionCoordinator()
+    @StateObject private var runLibrary = ProductRunLibrary()
 
     var body: some Scene {
         WindowGroup {
@@ -20,6 +21,7 @@ struct MotionOSiOSApp: App {
                 .environmentObject(fieldRun)
                 .environmentObject(guidedP0)
                 .environmentObject(indoBoardSession)
+                .environmentObject(runLibrary)
         }
     }
 }
