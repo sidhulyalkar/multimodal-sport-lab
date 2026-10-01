@@ -6,6 +6,10 @@ import pytest
 import motionos.indo_board_pipeline as pipeline_module
 from motionos.clock import ClockModel
 from motionos.indo_board import IndoBoardSample
+from motionos.indo_board_acquisition import (
+    ACQUISITION_PROFILE_ID,
+    ACTION4_CONFIRMATION_CAPABILITY,
+)
 from motionos.indo_board_pipeline import (
     process_indo_board_pipeline,
     validate_indo_board_pipeline_spec,
@@ -148,7 +152,20 @@ def _fixture(tmp_path):
             {
                 "schema_version": "motionos.camera.v1",
                 "session_id": "vision-s1",
-                "camera": {"unique_id": "iphone-camera-id"},
+                "camera": {
+                    "unique_id": "iphone-camera-id",
+                    "format_width": 1920,
+                    "format_height": 1080,
+                    "requested_frame_rate": 30.0,
+                    "configured_frame_rate": 30.0,
+                    "frame_rate_locked": True,
+                    "video_stabilization_supported": True,
+                    "preferred_video_stabilization_mode": "off",
+                    "stabilization_locked_off": True,
+                },
+                "pose": {
+                    "stride_delivered_frames": 3,
+                },
                 "provenance": {
                     "camera_mov_sha256": iphone_video_hash,
                     "camera_frames_jsonl_sha256":
@@ -168,6 +185,10 @@ def _fixture(tmp_path):
                     "motionos.external-video-pose2d.v1",
                 "session_id": "vision-s1",
                 "source_id": "dji-action4",
+                "image_width_px": 3840,
+                "image_height_px": 2160,
+                "pose_stride_frames": 1,
+                "effective_frame_rate_fps": 59.94,
                 "source_video": {
                     "filename": action_video.name,
                     "sha256": action_video_hash,
@@ -187,7 +208,38 @@ def _fixture(tmp_path):
                 "sport": "indo_board",
                 "capture_mode": "multiview_calibration",
                 "created_at_utc": "2026-09-30T23:00:00Z",
-                "camera_sources": [],
+                "camera_sources": [
+                    {
+                        "source_id": "iphone-camera-id",
+                        "display_name": "iPhone rear camera",
+                        "kind": "built_in",
+                        "clock_domain": "avcapture-pts",
+                        "timestamp_basis":
+                            "avcapture_presentation_timestamp",
+                        "supports_live_frames": True,
+                        "supports_remote_control": True,
+                        "capabilities": [
+                            "live_preview",
+                            "vision_pose",
+                            "camera_intrinsics",
+                        ],
+                    },
+                    {
+                        "source_id": "dji-action4",
+                        "display_name": "DJI Osmo Action 4",
+                        "kind": "external_recorded",
+                        "clock_domain": "action4-video-pts",
+                        "timestamp_basis": "container_video_pts",
+                        "supports_live_frames": False,
+                        "supports_remote_control": False,
+                        "capabilities": [
+                            "4k",
+                            "manual_import",
+                            "offline_vision_pose2d",
+                            ACTION4_CONFIRMATION_CAPABILITY,
+                        ],
+                    },
+                ],
                 "sync_landmarks": landmarks,
                 "media_artifacts": [
                     {
@@ -327,6 +379,7 @@ def _fixture(tmp_path):
                     "motionos.indo-board-qualification-plan.v1",
                 "plan_id": "indo-board-plan-s1",
                 "frozen_before_scored_capture": True,
+                "acquisition_profile_id": ACQUISITION_PROFILE_ID,
                 "evidence": {
                     "rig_receipt": {
                         "filename": rig.name,
