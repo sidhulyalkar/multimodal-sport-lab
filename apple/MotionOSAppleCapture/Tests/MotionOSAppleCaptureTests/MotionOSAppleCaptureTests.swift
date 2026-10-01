@@ -273,6 +273,18 @@ final class MotionOSAppleCaptureTests: XCTestCase {
         )
     }
 
+    func testIndoBoardProductProtocolCompletionThreshold() {
+        XCTAssertFalse(
+            IndoBoardProductProtocol.reachedTarget(at: 119.999)
+        )
+        XCTAssertTrue(
+            IndoBoardProductProtocol.reachedTarget(at: 120.0)
+        )
+        XCTAssertTrue(
+            IndoBoardProductProtocol.reachedTarget(at: 121.0)
+        )
+    }
+
     func testIndoBoardProductProtocolFindsActiveBlock() {
         XCTAssertEqual(
             IndoBoardProductProtocol.activeBlock(at: 60)?.id,
