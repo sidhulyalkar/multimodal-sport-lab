@@ -87,6 +87,8 @@ final class WatchSessionController: ObservableObject {
     private var closedJournalEvidence: FileEvidenceDigest?
     private var imuHealth = SampleTimingHealth()
     private var lastTelemetrySentAt = Date.distantPast
+    private var lastTransferQueueAttemptAt = Date.distantPast
+    private let automaticTransferRetryInterval: TimeInterval = 15
 
     private init() {
         workout.onHeartRateBPM = { [weak self] bpm, timestamp in
@@ -279,6 +281,7 @@ final class WatchSessionController: ObservableObject {
         lastTransferredURL = nil
         imuHealth = SampleTimingHealth()
         lastTelemetrySentAt = .distantPast
+        lastTransferQueueAttemptAt = .distantPast
         admission = CaptureEventAdmission()
         captureRejections = admission.rejections
         staleMotionRejectionBaseline = motion.staleCallbackRejectionCount
@@ -418,6 +421,14 @@ final class WatchSessionController: ObservableObject {
 
         healthAuthorizationStatus = workout.workoutAuthorizationStatus
         publishPresence()
+
+        if connectivityActivated,
+           state == .journalReady,
+           hasRecoverableJournal,
+           Date().timeIntervalSince(lastTransferQueueAttemptAt)
+                >= automaticTransferRetryInterval {
+            retryTransfer()
+        }
     }
 
     @discardableResult
@@ -622,6 +633,8 @@ final class WatchSessionController: ObservableObject {
         journalURL: URL,
         sessionID: String
     ) {
+        lastTransferQueueAttemptAt = Date()
+
         guard let evidence = closedJournalEvidence else {
             errorMessage = "Closed Watch journal has no verified digest."
             state = .journalReady
@@ -714,6 +727,9 @@ final class WatchSessionController: ObservableObject {
         }
 
         switch type {
+        case "watch_presence_request_v1":
+            publishPresence()
+
         case "guided_protocol_cue_v1":
             guard let title = message["step_title"] as? String else {
                 return
