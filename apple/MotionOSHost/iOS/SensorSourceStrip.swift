@@ -85,23 +85,17 @@ struct SensorSourceStrip: View {
     }
 
     private var watchDetail: String {
-        if phone.state == .running {
+        if phone.state == .running || phone.state == .paused {
             return "Recording"
         }
-        if phone.watchReachable {
-            return "Live link"
-        }
-        if phone.hasRecentWatchPresence() {
-            return "Handshake"
-        }
-        if phone.watchAppInstalled {
-            return "Installed"
-        }
-        return "Offline"
+        return phone.watchConnectionDetail
     }
 
     private var watchColor: Color {
-        phone.watchAppInstalled ? .green : .yellow
+        if phone.watchConnectionReady {
+            return .green
+        }
+        return phone.watchPaired ? .yellow : .secondary
     }
 
     private var podColor: Color {
