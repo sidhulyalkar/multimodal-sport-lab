@@ -20,37 +20,17 @@ struct FieldProtocolDefinition: Equatable, Sendable {
 
     static let indoBoardM0 = FieldProtocolDefinition(
         kind: .indoBoard,
-        protocolVersion: "motionos.indo-board-product-session.v1",
+        protocolVersion: IndoBoardProductProtocol.protocolID,
         title: "Indo Board · Complete Session",
         subtitle: "Two-minute balance session with repeatable neutral, free-balance, and recovery blocks.",
         runIDPrefix: "m0-indo-board",
-        blocks: [
-            .init(
-                id: "neutral-settle",
-                label: "Neutral settle",
-                instruction: "Settle into a comfortable neutral balance for about 10 seconds."
-            ),
-            .init(
-                id: "free-balance-a",
-                label: "Natural free balance",
-                instruction: "Balance naturally for about 25 seconds without chasing a target."
-            ),
-            .init(
-                id: "tilt-recover",
-                label: "Tilt + recover",
-                instruction: "Perform five comfortable controlled tilt-and-recover cycles, alternating directions and returning to neutral."
-            ),
-            .init(
-                id: "free-balance-b",
-                label: "Free balance repeat",
-                instruction: "Return to natural free balance for about 15 seconds."
-            ),
-            .init(
-                id: "neutral-finish",
-                label: "Neutral finish",
-                instruction: "Finish near neutral with minimal voluntary motion for about 10 seconds."
-            ),
-        ]
+        blocks: IndoBoardProductProtocol.blocks.map {
+            FieldProtocolBlock(
+                id: $0.id,
+                label: $0.title,
+                instruction: $0.instruction
+            )
+        }
     )
 
     static let longboardM0 = FieldProtocolDefinition(
