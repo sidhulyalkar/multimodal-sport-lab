@@ -401,6 +401,14 @@ point to this exact plan, and preflight rejects any threshold, evidence hash,
 feedback condition, fusion parameter, or synchronization requirement that has
 drifted from it.
 
+You can inspect the frozen state before capture without mutating anything:
+
+```bash
+motionos indo-board-status indo-board-qualification-plan.json
+```
+
+At this point the expected next action is to capture the scored session.
+
 ### 6. Capture the scored Indo Board trial
 
 Now capture the session whose performance will actually be interpreted.
@@ -437,6 +445,17 @@ Run the fail-fast check before creating derived evidence:
 motionos validate-indo-board-vision-spec indo-board-pipeline.json
 ```
 
+Then ask MotionOS for the operator-level state:
+
+```bash
+motionos indo-board-status \
+  indo-board-qualification-plan.json \
+  --pipeline indo-board-pipeline.json
+```
+
+A valid result here means the scored evidence and analysis configuration still
+match the frozen pre-capture plan. It does not yet mean the session qualified.
+
 Preflight rejects the run before an output directory is created if any of the
 following are wrong:
 
@@ -468,6 +487,19 @@ motionos process-indo-board-vision \
   indo-board-pipeline.json \
   results/indo-board-session-001
 ```
+
+After processing, summarize the entire chain in one read-only command:
+
+```bash
+motionos indo-board-status \
+  indo-board-qualification-plan.json \
+  --pipeline indo-board-pipeline.json \
+  --results results/indo-board-session-001
+```
+
+The status output surfaces the final qualification result, any failed gate IDs,
+quality attention flags, whether the longitudinal baseline was newly updated,
+and the next concrete operator action.
 
 If an expensive run is interrupted after some stages have completed, rerun the
 same command with `--resume`:
