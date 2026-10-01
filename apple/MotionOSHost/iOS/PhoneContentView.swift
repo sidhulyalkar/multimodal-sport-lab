@@ -30,6 +30,17 @@ struct PhoneContentView: View {
             }
 
             NavigationStack {
+                BodyIntelligenceView()
+            }
+            .tag(MotionOSTab.body)
+            .tabItem {
+                Label(
+                    "Body",
+                    systemImage: "figure.stand"
+                )
+            }
+
+            NavigationStack {
                 SessionLibraryView()
             }
             .tag(MotionOSTab.sessions)
