@@ -43,6 +43,21 @@ public final class WatchConnectivityTransport: NSObject, WCSessionDelegate {
     }
 
     @discardableResult
+    public func cancelJournalTransfers(
+        sessionID: String
+    ) -> Int {
+        guard session.activationState == .activated else { return 0 }
+
+        let matches = session.outstandingFileTransfers.filter {
+            $0.file.metadata?["session_id"] as? String == sessionID
+        }
+        for transfer in matches {
+            transfer.cancel()
+        }
+        return matches.count
+    }
+
+    @discardableResult
     public func queueUserInfo(
         _ userInfo: [String: Any]
     ) -> WCSessionUserInfoTransfer? {
