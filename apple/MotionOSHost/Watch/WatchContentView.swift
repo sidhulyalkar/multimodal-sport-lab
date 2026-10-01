@@ -47,8 +47,22 @@ struct WatchContentView: View {
         HStack(spacing: 8) {
             ZStack {
                 Circle()
-                    .fill(statusColor.opacity(0.18))
-                    .frame(width: 34, height: 34)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                statusColor.opacity(0.28),
+                                Color.cyan.opacity(0.12)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 36, height: 36)
+
+                Circle()
+                    .stroke(statusColor.opacity(0.24), lineWidth: 1)
+                    .frame(width: 36, height: 36)
+
                 Image(systemName: statusSymbol)
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(statusColor)
@@ -239,6 +253,12 @@ struct WatchContentView: View {
                 }
             }
 
+            WatchMotionTrace(
+                points: controller.visualTelemetryHistory,
+                currentDeltaG: controller.motionDeltaG,
+                currentRotationRate: controller.rotationRateRadS
+            )
+
             HStack(spacing: 6) {
                 metricTile(
                     title: "HEART",
@@ -249,7 +269,7 @@ struct WatchContentView: View {
                 )
 
                 metricTile(
-                    title: "MOTION",
+                    title: "IMU RATE",
                     value: controller.recentMedianIMUHz.map {
                         String(format: "%.1f", $0)
                     } ?? "—",
@@ -582,6 +602,20 @@ struct WatchContentView: View {
 private extension View {
     func panelStyle() -> some View {
         padding(10)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
+            .background(
+                LinearGradient(
+                    colors: [
+                        Color.white.opacity(0.085),
+                        Color.white.opacity(0.035)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ),
+                in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(Color.white.opacity(0.06), lineWidth: 1)
+            }
     }
 }
