@@ -834,15 +834,19 @@ final class IndoBoardSessionCoordinator: ObservableObject {
             }
         }
 
-        for sync in IndoBoardProductProtocol.syncWindows {
-            autoCue(
-                sync.label,
-                elapsed: elapsed,
-                target: sync.preferredSeconds,
-                windowEnd: sync.endSeconds,
-                phone: phone,
-                fieldRun: fieldRun
-            )
+        if !IndoBoardProductProtocol.reachedTarget(
+            at: elapsed
+        ) {
+            for sync in IndoBoardProductProtocol.syncWindows {
+                autoCue(
+                    sync.label,
+                    elapsed: elapsed,
+                    target: sync.preferredSeconds,
+                    windowEnd: sync.endSeconds,
+                    phone: phone,
+                    fieldRun: fieldRun
+                )
+            }
         }
     }
 
