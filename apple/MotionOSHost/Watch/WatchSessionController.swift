@@ -733,7 +733,7 @@ final class WatchSessionController: ObservableObject {
             productCueInstruction =
                 message["instruction"] as? String
             guidedCueTitle = title
-            WKInterfaceDevice.current().play(.notification)
+            WKInterfaceDevice.current().play(.click)
 
         case "session_stop_request_v1":
             guard state == .running || state == .paused,
@@ -784,7 +784,11 @@ final class WatchSessionController: ObservableObject {
                 }
 
                 self.guidedCueTitle = "SYNC · MOVE NOW"
-                WKInterfaceDevice.current().play(.notification)
+                WKInterfaceDevice.current().play(.directionUp)
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(180))
+                    WKInterfaceDevice.current().play(.click)
+                }
 
                 let acknowledgment: [String: Any] = [
                     "motionos_message": "session_sync_cue_ack_v1",
