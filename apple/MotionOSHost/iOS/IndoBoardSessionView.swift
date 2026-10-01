@@ -1,0 +1,960 @@
+import SwiftUI
+
+struct IndoBoardSessionView: View {
+    @EnvironmentObject private var phone: PhoneSessionCoordinator
+    @EnvironmentObject private var camera: CameraCaptureController
+    @EnvironmentObject private var pod: EquipmentPodController
+    @EnvironmentObject private var fieldRun: FieldRunCoordinator
+    @EnvironmentObject private var session: IndoBoardSessionCoordinator
+
+    var body: some View {
+        ScrollView {
+            LazyVStack(spacing: MotionOSDesign.pageSpacing) {
+                hero
+                sourcePreflight
+                sessionControl
+
+                if session.phase == .running
+                    || session.phase == .finishing {
+                    liveProtocol
+                }
+
+                if session.phase == .sealed {
+                    sealedSummary
+                }
+
+                if let error = session.errorMessage
+                    ?? fieldRun.errorMessage
+                    ?? camera.errorMessage {
+                    errorCard(error)
+                }
+
+                methodology
+            }
+            .motionOSPageWidth()
+            .padding(.horizontal, MotionOSDesign.pageHorizontalPadding)
+            .padding(.top, 10)
+            .padding(.bottom, 36)
+        }
+        .background {
+            MotionOSPageBackground()
+        }
+        .navigationTitle("Indo Board")
+        .navigationBarTitleDisplayMode(.inline)
+        .task {
+            phone.refreshWatchState()
+            phone.refreshHostReadiness()
+            fieldRun.protocolKind == .indoBoard
+                ? ()
+                : session.reset()
+        }
+        .onChange(
+            of: phone.lastSessionSyncAcknowledgment
+        ) { _, acknowledgment in
+            guard let acknowledgment else { return }
+            session.acknowledge(
+                acknowledgment,
+                fieldRun: fieldRun
+            )
+        }
+    }
+
+    private var hero: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top, spacing: 13) {
+                ZStack {
+                    RoundedRectangle(
+                        cornerRadius: 16,
+                        style: .continuous
+                    )
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.indigo.opacity(0.92),
+                                Color.cyan.opacity(0.78),
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 56, height: 56)
+
+                    Image(systemName: "figure.surfing")
+                        .font(.title2.weight(.semibold))
+                        .foregroundStyle(.white)
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Indo Board Session")
+                        .font(.title2.weight(.bold))
+                    Text("M0 · 2 minute movement capture")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer(minLength: 8)
+
+                MotionOSStatusBadge(
+                    title: phaseLabel,
+                    systemImage: phaseSymbol,
+                    color: phaseColor
+                )
+            }
+
+            Text(
+                "Record Apple Watch motion + physiology, iPhone video, "
+                    + "operator protocol events, and journal-backed sync cues "
+                    + "as one coordinated product session."
+            )
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 8) {
+                featurePill("Watch", "applewatch")
+                featurePill("iPhone Vision", "video.fill")
+                featurePill("120 s", "timer")
+            }
+        }
+        .cardStyle()
+    }
+
+    private var sourcePreflight: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            MotionOSSectionHeader(
+                title: "Session preflight",
+                subtitle: preflightSubtitle,
+                systemImage: "checklist.checked",
+                accent: preflightReady ? .green : .yellow
+            )
+
+            Divider()
+
+            readinessRow(
+                title: "Apple Watch",
+                detail: watchDetail,
+                ready: phone.watchPaired && phone.watchAppInstalled,
+                symbol: "applewatch"
+            )
+
+            readinessRow(
+                title: "Live Watch link",
+                detail: phone.watchReachable
+                    ? "reachable"
+                    : "open MotionOS on Watch",
+                ready: phone.watchReachable,
+                symbol: "dot.radiowaves.left.and.right"
+            )
+
+            readinessRow(
+                title: "iPhone camera",
+                detail: camera.phase.rawValue,
+                ready: camera.phase == .ready
+                    || camera.phase == .evidenceReady
+                    || camera.phase == .recording,
+                symbol: "camera.fill"
+            )
+
+            readinessRow(
+                title: "Battery",
+                detail: phone.iPhoneBatteryLevel.map {
+                    String(format: "%.0f%%", $0 * 100)
+                } ?? "unknown",
+                ready: (phone.iPhoneBatteryLevel ?? 0) >= 0.20,
+                symbol: "battery.100percent"
+            )
+
+            readinessRow(
+                title: "Storage",
+                detail: phone.iPhoneAvailableStorageBytes.map {
+                    ByteCountFormatter.string(
+                        fromByteCount: $0,
+                        countStyle: .file
+                    )
+                } ?? "unknown",
+                ready: (phone.iPhoneAvailableStorageBytes ?? 0)
+                    >= 5_000_000_000,
+                symbol: "internaldrive"
+            )
+
+            Toggle(
+                isOn: $session.externalCameraConfirmed
+            ) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("External camera recording")
+                        .font(.subheadline.weight(.medium))
+                    Text(
+                        "Optional enrichment. Start the Action 4 manually "
+                            + "before capture if you want the richer "
+                            + "multiview dataset."
+                    )
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                }
+            }
+            .disabled(
+                session.phase == .running
+                    || session.phase == .starting
+                    || session.phase == .finishing
+            )
+
+            HStack(spacing: 8) {
+                Button {
+                    Task {
+                        await session.prepare(
+                            phone: phone,
+                            camera: camera
+                        )
+                    }
+                } label: {
+                    Label(
+                        "Run Preflight",
+                        systemImage: "arrow.clockwise"
+                    )
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+
+                if camera.phase == .ready
+                    || camera.phase == .evidenceReady {
+                    NavigationLink {
+                        CameraCaptureCard()
+                    } label: {
+                        Label(
+                            "Camera",
+                            systemImage: "camera"
+                        )
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+        }
+        .cardStyle()
+    }
+
+    @ViewBuilder
+    private var sessionControl: some View {
+        VStack(alignment: .leading, spacing: 13) {
+            MotionOSSectionHeader(
+                title: controlTitle,
+                subtitle: controlSubtitle,
+                systemImage: controlSymbol,
+                accent: phaseColor
+            )
+
+            switch session.phase {
+            case .idle, .failed:
+                Button {
+                    Task {
+                        await session.prepare(
+                            phone: phone,
+                            camera: camera
+                        )
+                    }
+                } label: {
+                    Label(
+                        "Prepare Session",
+                        systemImage: "wand.and.stars"
+                    )
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+
+            case .preparing:
+                progressRow(
+                    "Checking Watch, camera, battery, and storage"
+                )
+
+            case .ready:
+                Button {
+                    Task {
+                        await session.start(
+                            phone: phone,
+                            camera: camera,
+                            fieldRun: fieldRun,
+                            pod: pod
+                        )
+                    }
+                } label: {
+                    HStack {
+                        Image(systemName: "record.circle.fill")
+                        Text("Start Complete Session")
+                            .fontWeight(.semibold)
+                        Spacer()
+                        Text("2:00")
+                            .font(.system(.body, design: .monospaced))
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .disabled(!preflightReady)
+
+                Text(
+                    "MotionOS starts the Watch workout first, waits for the "
+                        + "mirrored running state, then starts iPhone video "
+                        + "and seals the operator protocol around the same run."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            case .starting:
+                progressRow(
+                    "Starting Watch first, then camera and protocol evidence"
+                )
+
+            case .running:
+                runningControl
+
+            case .finishing:
+                progressRow(
+                    "Stopping Watch, sealing video, and closing operator evidence"
+                )
+
+            case .sealed:
+                Label(
+                    "Session evidence sealed",
+                    systemImage: "checkmark.seal.fill"
+                )
+                .font(.headline)
+                .foregroundStyle(.green)
+
+                Button {
+                    session.reset()
+                } label: {
+                    Label(
+                        "Ready Another Session",
+                        systemImage: "arrow.counterclockwise"
+                    )
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+        .cardStyle()
+    }
+
+    private var runningControl: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            let elapsed = session.startedAt.map {
+                max(0, context.date.timeIntervalSince($0))
+            } ?? 0
+            let fraction = min(
+                1,
+                elapsed
+                    / IndoBoardSessionCoordinator
+                        .targetDurationSeconds
+            )
+
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .center, spacing: 14) {
+                    ZStack {
+                        Circle()
+                            .stroke(
+                                Color.primary.opacity(0.08),
+                                lineWidth: 7
+                            )
+                        Circle()
+                            .trim(from: 0, to: fraction)
+                            .stroke(
+                                LinearGradient(
+                                    colors: [.indigo, .cyan],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                style: StrokeStyle(
+                                    lineWidth: 7,
+                                    lineCap: .round
+                                )
+                            )
+                            .rotationEffect(.degrees(-90))
+
+                        VStack(spacing: 0) {
+                            Text(duration(elapsed))
+                                .font(
+                                    .system(
+                                        .title3,
+                                        design: .rounded,
+                                        weight: .bold
+                                    )
+                                )
+                                .monospacedDigit()
+                            Text("/ 2:00")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .frame(width: 92, height: 92)
+
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("NOW")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(.secondary)
+                        Text(session.instruction(at: elapsed))
+                            .font(.headline)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        if let health = phone.watchCaptureHealth {
+                            HStack(spacing: 10) {
+                                liveMetric(
+                                    health.recentMedianIMUHz.map {
+                                        String(format: "%.1f Hz", $0)
+                                    } ?? "warming",
+                                    symbol: "waveform.path"
+                                )
+                                liveMetric(
+                                    health.heartRateBPM.map {
+                                        "(Int($0.rounded())) bpm"
+                                    } ?? "HR —",
+                                    symbol: "heart.fill"
+                                )
+                            }
+                        }
+                    }
+                }
+
+                syncCueRow
+
+                Button(role: .destructive) {
+                    Task {
+                        await session.finish(
+                            phone: phone,
+                            camera: camera,
+                            fieldRun: fieldRun,
+                            pod: pod
+                        )
+                    }
+                } label: {
+                    Label(
+                        elapsed >= 110
+                            ? "Finish & Seal Session"
+                            : "Finish Early & Seal",
+                        systemImage: "stop.circle.fill"
+                    )
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+    }
+
+    private var syncCueRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("JOURNAL-BACKED SYNC")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text(
+                    "(session.cueReceipts.count)/3"
+                )
+                .font(.system(.caption, design: .monospaced))
+                .foregroundStyle(
+                    session.cueReceipts.count >= 3
+                        ? .green
+                        : .secondary
+                )
+            }
+
+            HStack(spacing: 7) {
+                syncButton(
+                    "start",
+                    title: "Start",
+                    suggestedWindow: 10...20
+                )
+                syncButton(
+                    "middle",
+                    title: "Middle",
+                    suggestedWindow: 45...60
+                )
+                syncButton(
+                    "end",
+                    title: "End",
+                    suggestedWindow: 105...125
+                )
+            }
+
+            Text(
+                session.pendingCueID == nil
+                    ? "After each cue, make one quick, unmistakable arm gesture while keeping the board near neutral."
+                    : "Waiting for the Watch to journal and acknowledge the cue…"
+            )
+            .font(.caption2)
+            .foregroundStyle(
+                session.pendingCueID == nil
+                    ? .secondary
+                    : .yellow
+            )
+        }
+        .padding(12)
+        .background(
+            Color.cyan.opacity(0.055),
+            in: RoundedRectangle(
+                cornerRadius: 16,
+                style: .continuous
+            )
+        )
+    }
+
+    private func syncButton(
+        _ label: String,
+        title: String,
+        suggestedWindow: ClosedRange<TimeInterval>
+    ) -> some View {
+        let acknowledged =
+            session.acknowledgedCueLabels.contains(label)
+        let elapsed = session.elapsedSeconds
+        let suggested = suggestedWindow.contains(elapsed)
+
+        return Button {
+            _ = session.emitSyncCue(
+                label: label,
+                phone: phone,
+                fieldRun: fieldRun
+            )
+        } label: {
+            VStack(spacing: 4) {
+                Image(
+                    systemName: acknowledged
+                        ? "checkmark.circle.fill"
+                        : "waveform.path"
+                )
+                Text(title)
+                    .font(.caption.weight(.semibold))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 7)
+        }
+        .buttonStyle(.bordered)
+        .tint(
+            acknowledged
+                ? .green
+                : (suggested ? .cyan : .secondary)
+        )
+        .disabled(
+            acknowledged
+                || session.pendingCueID != nil
+                || !phone.watchReachable
+        )
+    }
+
+    private var liveProtocol: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            MotionOSSectionHeader(
+                title: "Protocol",
+                subtitle: "Repeatable blocks for useful product feedback and later comparison",
+                systemImage: "list.number",
+                accent: .indigo
+            )
+
+            ForEach(
+                Array(
+                    fieldRun.protocolBlocks.enumerated()
+                ),
+                id: \.element.id
+            ) { index, block in
+                protocolRow(
+                    index: index + 1,
+                    block: block
+                )
+            }
+
+            Text(
+                "The operator block timestamps document what you intended "
+                    + "to do. Watch/device clocks remain the measurement "
+                    + "authority."
+            )
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+        }
+        .cardStyle()
+    }
+
+    private func protocolRow(
+        index: Int,
+        block: FieldProtocolBlock
+    ) -> some View {
+        let complete =
+            fieldRun.completedBlockIDs.contains(block.id)
+        let active = fieldRun.activeBlockID == block.id
+
+        return HStack(alignment: .top, spacing: 10) {
+            ZStack {
+                Circle()
+                    .fill(
+                        complete
+                            ? Color.green.opacity(0.14)
+                            : active
+                                ? Color.cyan.opacity(0.14)
+                                : Color.primary.opacity(0.05)
+                    )
+                    .frame(width: 30, height: 30)
+
+                if complete {
+                    Image(systemName: "checkmark")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.green)
+                } else {
+                    Text("\(index)")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(
+                            active ? .cyan : .secondary
+                        )
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(block.label)
+                    .font(.subheadline.weight(.semibold))
+                Text(block.instruction)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 6)
+
+            if session.phase == .running {
+                if complete {
+                    Text("DONE")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.green)
+                } else if active {
+                    Button("Done") {
+                        fieldRun.completeBlock(block.id)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                } else {
+                    Button("Start") {
+                        fieldRun.startBlock(block.id)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var sealedSummary: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            MotionOSSectionHeader(
+                title: "Capture sealed",
+                subtitle: "Raw sources remain independent and hashable",
+                systemImage: "checkmark.seal.fill",
+                accent: .green
+            )
+
+            if let bundle = fieldRun.evidenceBundle {
+                Label(
+                    bundle.directory.lastPathComponent,
+                    systemImage: "doc.text"
+                )
+                .font(.system(.caption, design: .monospaced))
+                .foregroundStyle(.secondary)
+
+                ShareLink(
+                    items: [
+                        bundle.journalURL,
+                        bundle.metadataURL,
+                    ]
+                ) {
+                    Label(
+                        "Share operator evidence",
+                        systemImage: "square.and.arrow.up"
+                    )
+                }
+            }
+
+            if let cameraBundle = camera.evidenceBundle {
+                ShareLink(
+                    items: [
+                        cameraBundle.videoURL,
+                        cameraBundle.journalURL,
+                        cameraBundle.metadataURL,
+                    ]
+                ) {
+                    Label(
+                        "Share camera evidence",
+                        systemImage: "video"
+                    )
+                }
+            }
+
+            if session.cueReceipts.count < 3 {
+                Label(
+                    "Only \(session.cueReceipts.count)/3 sync cues were Watch-acknowledged.",
+                    systemImage: "exclamationmark.triangle.fill"
+                )
+                .font(.caption)
+                .foregroundStyle(.yellow)
+            } else {
+                Label(
+                    "3/3 sync cues were journaled on Watch",
+                    systemImage: "checkmark.shield.fill"
+                )
+                .font(.caption)
+                .foregroundStyle(.green)
+            }
+        }
+        .cardStyle()
+    }
+
+    private var methodology: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(
+                "Measurement boundary",
+                systemImage: "scope"
+            )
+            .font(.subheadline.weight(.semibold))
+
+            Text(
+                "This product session records and preserves raw Watch, "
+                    + "camera, and operator evidence. Live movement values "
+                    + "are derived observability signals. Camera-rich "
+                    + "biomechanics metrics remain gated on calibration and "
+                    + "post-session quality checks."
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+
+            Label(
+                "Use a clear area and stable support or spotter for early Indo Board runs.",
+                systemImage: "figure.stand"
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+        .cardStyle()
+    }
+
+    private func featurePill(
+        _ title: String,
+        _ symbol: String
+    ) -> some View {
+        Label(title, systemImage: symbol)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 6)
+            .background(
+                Color.primary.opacity(0.045),
+                in: Capsule()
+            )
+    }
+
+    private func readinessRow(
+        title: String,
+        detail: String,
+        ready: Bool,
+        symbol: String
+    ) -> some View {
+        HStack(spacing: 9) {
+            ZStack {
+                Circle()
+                    .fill(
+                        (ready ? Color.green : Color.yellow)
+                            .opacity(0.10)
+                    )
+                    .frame(width: 30, height: 30)
+                Image(systemName: symbol)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(
+                        ready ? .green : .yellow
+                    )
+            }
+
+            Text(title)
+                .font(.subheadline)
+
+            Spacer(minLength: 6)
+
+            Text(detail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.trailing)
+        }
+    }
+
+    private func progressRow(
+        _ title: String
+    ) -> some View {
+        HStack(spacing: 10) {
+            ProgressView()
+            Text(title)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func liveMetric(
+        _ value: String,
+        symbol: String
+    ) -> some View {
+        Label(value, systemImage: symbol)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.secondary)
+    }
+
+    private func errorCard(
+        _ message: String
+    ) -> some View {
+        Label {
+            Text(message)
+                .font(.footnote)
+                .fixedSize(horizontal: false, vertical: true)
+        } icon: {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.red)
+        }
+        .cardStyle()
+    }
+
+    private var watchDetail: String {
+        if phone.watchReachable {
+            return "connected"
+        }
+        if phone.hasRecentWatchPresence() {
+            return "handshake seen"
+        }
+        if phone.watchAppInstalled {
+            return "installed"
+        }
+        return "not ready"
+    }
+
+    private var preflightReady: Bool {
+        phone.watchPaired
+            && phone.watchAppInstalled
+            && phone.watchReachable
+            && (
+                camera.phase == .ready
+                    || camera.phase == .evidenceReady
+            )
+            && (phone.iPhoneBatteryLevel ?? 0) >= 0.20
+            && (phone.iPhoneAvailableStorageBytes ?? 0)
+                >= 5_000_000_000
+    }
+
+    private var preflightSubtitle: String {
+        preflightReady
+            ? "Required sources are ready for a coordinated run"
+            : "Resolve the yellow items before starting"
+    }
+
+    private var phaseLabel: String {
+        switch session.phase {
+        case .idle:
+            "NEW"
+        case .preparing:
+            "CHECKING"
+        case .ready:
+            "READY"
+        case .starting:
+            "STARTING"
+        case .running:
+            "RECORDING"
+        case .finishing:
+            "SEALING"
+        case .sealed:
+            "SEALED"
+        case .failed:
+            "CHECK"
+        }
+    }
+
+    private var phaseSymbol: String {
+        switch session.phase {
+        case .running:
+            "record.circle.fill"
+        case .sealed:
+            "checkmark.seal.fill"
+        case .failed:
+            "exclamationmark.triangle.fill"
+        case .preparing, .starting, .finishing:
+            "clock.fill"
+        default:
+            "figure.surfing"
+        }
+    }
+
+    private var phaseColor: Color {
+        switch session.phase {
+        case .running:
+            .red
+        case .ready, .sealed:
+            .green
+        case .preparing, .starting, .finishing:
+            .yellow
+        case .failed:
+            .red
+        case .idle:
+            .indigo
+        }
+    }
+
+    private var controlTitle: String {
+        switch session.phase {
+        case .idle, .failed:
+            "Prepare capture"
+        case .preparing:
+            "Running preflight"
+        case .ready:
+            "Ready to record"
+        case .starting:
+            "Starting sources"
+        case .running:
+            "Session live"
+        case .finishing:
+            "Sealing evidence"
+        case .sealed:
+            "Session complete"
+        }
+    }
+
+    private var controlSubtitle: String {
+        switch session.phase {
+        case .idle, .failed:
+            "One workflow coordinates the sources without merging their native clocks"
+        case .preparing:
+            "MotionOS is checking required capture conditions"
+        case .ready:
+            "Watch first, camera second, protocol evidence third"
+        case .starting:
+            "Waiting for the Watch workout before video capture begins"
+        case .running:
+            "Follow the protocol and collect three journal-backed sync cues"
+        case .finishing:
+            "Each source closes into its own durable evidence artifact"
+        case .sealed:
+            "Review the recovered Watch session in Sessions when transfer completes"
+        }
+    }
+
+    private var controlSymbol: String {
+        switch session.phase {
+        case .running:
+            "waveform.path.ecg"
+        case .sealed:
+            "checkmark.seal.fill"
+        case .failed:
+            "exclamationmark.triangle.fill"
+        default:
+            "record.circle"
+        }
+    }
+
+    private func duration(
+        _ seconds: TimeInterval
+    ) -> String {
+        let value = max(0, Int(seconds.rounded(.down)))
+        return String(
+            format: "%02d:%02d",
+            value / 60,
+            value % 60
+        )
+    }
+}
