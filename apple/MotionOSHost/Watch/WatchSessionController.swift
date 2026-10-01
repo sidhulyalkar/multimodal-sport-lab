@@ -196,7 +196,7 @@ final class WatchSessionController: ObservableObject {
             return "Connected"
         }
         if phonePresenceConfirmed {
-            return "Handshake seen"
+            return "Background ready"
         }
         if companionAppInstalled {
             return "Companion ready"
