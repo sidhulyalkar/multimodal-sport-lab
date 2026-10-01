@@ -105,6 +105,15 @@ struct ProductRunDetailView: View {
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
 
+            if let captureMode = run.captureMode {
+                Label(
+                    captureMode,
+                    systemImage: "slider.horizontal.3"
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+
             HStack(spacing: 8) {
                 MotionOSStatusBadge(
                     title: run.captureModeLabel,
@@ -456,6 +465,7 @@ struct ProductRunDetailView: View {
         [
             Optional(run.operatorJournalURL),
             Optional(run.operatorMetadataURL),
+            run.productManifestURL,
             run.watchJournalURL,
             run.watchSummaryURL,
             run.cameraVideoURL,
