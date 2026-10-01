@@ -429,6 +429,32 @@ Watch↔vision disagreement as separate dimensions. `attention_flags` identify
 which dimensions deserve inspection; they are not a quality score or a claim of
 ground-truth accuracy.
 
+The pipeline then applies the **predeclared** `qualification` section from the
+pipeline spec and writes
+`motionos.indo-board-qualification-receipt.v1`. Qualification is intentionally
+a set of dimensioned gates rather than a composite score. The current contract
+can gate:
+
+- minimum synchronized pose and board-frame pairs;
+- minimum rigid board-pose and accepted metric sample counts;
+- minimum metric accepted-sample fraction;
+- external, iPhone→Watch, and Action4→Watch clock residual RMS;
+- skeleton and board-marker reprojection RMS;
+- board rigid-fit p95 residual and p95 scale error;
+- board-pose and reconstruction rejection fractions;
+- Watch↔vision wrist-acceleration disagreement;
+- explicit required metric availability.
+
+Freeze these thresholds **before** looking at the scored run. The example spec
+uses placeholders where an empirical/predeclared bound is required rather than
+silently inventing a favorable limit.
+
+A session updates the persistent longitudinal profile only when the
+qualification receipt has `passed=true`. Failed sessions keep all raw and
+derived evidence, metrics, quality diagnostics, and the failed gate list, but
+they cannot teach the personal baseline. Re-running the same qualified session
+also remains duplicate-safe and cannot count twice.
+
 ### 5. External Action 4 session provenance
 
 For strict rig/clock evidence, the derived Action 4 journal can be imported as
