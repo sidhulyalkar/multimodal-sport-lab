@@ -723,6 +723,7 @@ final class WatchSessionController: ObservableObject {
 
         case "session_protocol_cue_v1":
             guard state == .running || state == .paused,
+                  validateProductControlSession(message),
                   let runID = message["run_id"] as? String,
                   bindProductRunID(runID),
                   let title = message["step_title"] as? String
@@ -737,6 +738,7 @@ final class WatchSessionController: ObservableObject {
 
         case "session_stop_request_v1":
             guard state == .running || state == .paused,
+                  validateProductControlSession(message),
                   let runID = message["run_id"] as? String,
                   bindProductRunID(runID)
             else {
@@ -750,6 +752,7 @@ final class WatchSessionController: ObservableObject {
 
         case "session_sync_cue_v1":
             guard state == .running || state == .paused,
+                  validateProductControlSession(message),
                   let runID = message["run_id"] as? String,
                   bindProductRunID(runID),
                   let cueID = message["cue_id"] as? String,
@@ -815,6 +818,20 @@ final class WatchSessionController: ObservableObject {
         default:
             return
         }
+    }
+
+    private func validateProductControlSession(
+        _ message: [String: Any]
+    ) -> Bool {
+        guard let currentSessionID = sessionID,
+              let targetSessionID =
+                message["watch_session_id"] as? String,
+              targetSessionID == currentSessionID
+        else {
+            rejectedProductControlCount &+= 1
+            return false
+        }
+        return true
     }
 
     @discardableResult
