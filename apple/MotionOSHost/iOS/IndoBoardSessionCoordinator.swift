@@ -43,7 +43,9 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         case cameraProfileInvalid
         case insufficientBattery
         case insufficientStorage
+        case watchCaptureAlreadyActive
         case watchDidNotStart
+        case watchIdentityUnavailable
         case watchDidNotStop
         case syncUnavailable
         case fieldRunUnavailable
@@ -60,8 +62,12 @@ final class IndoBoardSessionCoordinator: ObservableObject {
                 "Charge the iPhone above the 20% development preflight margin."
             case .insufficientStorage:
                 "Free at least 5 GB on the iPhone before recording."
+            case .watchCaptureAlreadyActive:
+                "Finish the current Watch capture before starting an Indo Board product session."
             case .watchDidNotStart:
                 "The Watch workout did not reach running state in time."
+            case .watchIdentityUnavailable:
+                "The Watch started, but MotionOS did not receive a fresh capture identity. Stop the Watch capture before retrying."
             case .watchDidNotStop:
                 "The phone could not confirm Watch shutdown. Stop the capture on the Watch, then recheck before starting another session."
             case .syncUnavailable:
@@ -92,6 +98,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
 
     @Published private(set) var phase: Phase = .idle
     @Published private(set) var outcome: ProductSessionOutcome?
+    @Published private(set) var activeWatchSessionID: String?
     @Published var captureMode: CaptureMode = .watchAndPhone
     @Published private(set) var startedAt: Date?
     @Published private(set) var cueReceipts: [CueReceipt] = []
@@ -156,6 +163,10 @@ final class IndoBoardSessionCoordinator: ObservableObject {
             fail(SessionError.watchUnavailable)
             return
         }
+        guard !watchCaptureBusy(phone) else {
+            fail(SessionError.watchCaptureAlreadyActive)
+            return
+        }
         guard camera.phase == .ready
                 || camera.phase == .evidenceReady
         else {
@@ -207,6 +218,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         externalVideoEvidence = nil
         productManifestURL = nil
         outcome = nil
+        activeWatchSessionID = nil
         startedAt = nil
 
         fieldRun.createRun(kind: .indoBoard)
@@ -217,9 +229,11 @@ final class IndoBoardSessionCoordinator: ObservableObject {
             return
         }
 
-        if phone.state != .running && phone.state != .paused {
-            await phone.startP0()
-        }
+        let previousWatchSessionID =
+            phone.watchCaptureHealth?.sessionID
+        let watchLaunchRequestedAt = Date()
+
+        await phone.startP0()
 
         guard await waitForWatchRunning(phone: phone)
         else {
@@ -232,6 +246,24 @@ final class IndoBoardSessionCoordinator: ObservableObject {
             )
             return
         }
+
+        guard let watchSessionID =
+            await waitForFreshWatchSessionID(
+                phone: phone,
+                after: watchLaunchRequestedAt,
+                excluding: previousWatchSessionID
+            )
+        else {
+            await abortStart(
+                error: .watchIdentityUnavailable,
+                phone: phone,
+                camera: camera,
+                fieldRun: fieldRun,
+                pod: pod
+            )
+            return
+        }
+        activeWatchSessionID = watchSessionID
 
         if camera.phase != .ready && camera.phase != .evidenceReady {
             await camera.prepare()
