@@ -73,6 +73,7 @@ Run preflight and require:
 - Watch paired;
 - MotionOS Watch companion confirmed by system state or MotionOS handshake;
 - live Watch link;
+- no other Watch capture already active;
 - Health/workout access enabled;
 - iPhone rear camera ready;
 - 1920×1080 capture;
@@ -93,14 +94,15 @@ start unless you intentionally finish early.
 
 MotionOS should:
 
-1. start / mirror the Watch workout;
-2. start the sealed iPhone camera capture;
-3. arm operator evidence;
-4. keep the phone awake;
-5. advance the shared Indo Board protocol automatically;
-6. send protocol instructions to the Watch;
-7. generate three journal-backed sync opportunities;
-8. automatically stop and seal all available evidence at the 120 s target.
+1. start / mirror a fresh Watch workout;
+2. wait for a fresh Watch capture session ID and bind all product controls to it;
+3. start the sealed iPhone camera capture;
+4. arm operator evidence;
+5. keep the phone awake;
+6. advance the shared Indo Board protocol automatically;
+7. send protocol instructions to the Watch;
+8. generate three journal-backed sync opportunities;
+9. automatically stop and seal all available evidence at the 120 s target.
 
 The current product protocol is:
 
@@ -120,7 +122,9 @@ SYNC windows are intentionally separate from board perturbations:
 
 When the Watch presents **SYNC · MOVE NOW**, make one sharp arm gesture while
 trying to keep the board near neutral. The Watch acknowledgment counts only
-after the sync event has been appended to the Watch journal.
+after the sync event has been appended to the Watch journal. Product cues,
+sync cues, and the remote stop are accepted only when they target the current
+Watch capture session ID and the current product run.
 
 Do not deliberately make the board unstable just to create a larger signal.
 
