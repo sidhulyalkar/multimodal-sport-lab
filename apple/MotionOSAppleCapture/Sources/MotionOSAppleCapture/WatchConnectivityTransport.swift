@@ -183,4 +183,19 @@ public final class WatchConnectivityTransport: NSObject, WCSessionDelegate {
     }
     #endif
 }
+
+extension WatchConnectivityTransport: LiveTelemetryChannel {
+    public var canDeliverLiveTelemetry: Bool {
+        session.activationState == .activated && session.isReachable
+    }
+
+    /// Immediate `sendMessage` only. Never `transferUserInfo` or application
+    /// context, which would queue a stale preview for later delivery.
+    @discardableResult
+    public func sendLiveTelemetry(_ message: [String: Any]) -> Bool {
+        guard canDeliverLiveTelemetry else { return false }
+        session.sendMessage(message, replyHandler: nil, errorHandler: nil)
+        return true
+    }
+}
 #endif
