@@ -1176,17 +1176,16 @@ final class IndoBoardSessionCoordinator: ObservableObject {
             || phone.state == .paused
             || phone.state == .waitingForMirror
             || phone.state == .launchingWatch {
+            watchStopped = false
             if fieldRun.runID != nil,
                let watchSessionID = activeWatchSessionID {
                 stopRequested = phone.sendWatchStopRequest(
                     runID: runID,
                     watchSessionID: watchSessionID
                 )
-            } else {
-                // Without a fresh Watch capture identity, do not send an
-                // ambiguous remote-stop command into a possibly different run.
-                watchStopped = false
             }
+            // Without a fresh Watch capture identity, do not send an
+            // ambiguous remote-stop command into a possibly different run.
         }
 
         if camera.phase == .recording {
