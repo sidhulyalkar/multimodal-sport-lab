@@ -79,6 +79,7 @@ final class WatchSessionController: ObservableObject {
     private var finalized = false
     private var heartRateSequence: UInt64 = 0
     private var sessionSyncSequence: UInt64 = 0
+    private var productCueTitle: String?
     private var closedJournalURL: URL?
     private var closedJournalEvidence: FileEvidenceDigest?
     private var imuHealth = SampleTimingHealth()
@@ -265,6 +266,7 @@ final class WatchSessionController: ObservableObject {
         visualTelemetryHistory = []
         heartRateSequence = 0
         sessionSyncSequence = 0
+        productCueTitle = nil
         finalized = false
         closedJournalURL = nil
         closedJournalEvidence = nil
@@ -712,6 +714,7 @@ final class WatchSessionController: ObservableObject {
             else {
                 return
             }
+            productCueTitle = title
             guidedCueTitle = title
             WKInterfaceDevice.current().play(.notification)
 
@@ -719,6 +722,7 @@ final class WatchSessionController: ObservableObject {
             guard state == .running || state == .paused else {
                 return
             }
+            productCueTitle = nil
             guidedCueTitle = "FINISHING"
             WKInterfaceDevice.current().play(.stop)
             stop()
@@ -778,7 +782,7 @@ final class WatchSessionController: ObservableObject {
                     else {
                         return
                     }
-                    self.guidedCueTitle = nil
+                    self.guidedCueTitle = self.productCueTitle
                 }
             }
 
