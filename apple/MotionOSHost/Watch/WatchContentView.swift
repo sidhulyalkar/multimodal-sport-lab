@@ -258,6 +258,39 @@ struct WatchContentView: View {
                 protocolCueCard(cue)
             }
 
+            HStack(spacing: 7) {
+                Button {
+                    if controller.state == .running {
+                        controller.pause()
+                    } else {
+                        controller.resume()
+                    }
+                } label: {
+                    Image(
+                        systemName: controller.state == .running
+                            ? "pause.fill"
+                            : "play.fill"
+                    )
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .accessibilityLabel(
+                    controller.state == .running
+                        ? "Pause capture"
+                        : "Resume capture"
+                )
+
+                Button {
+                    confirmStop = true
+                } label: {
+                    Image(systemName: "stop.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.red)
+                .accessibilityLabel("Stop capture")
+            }
+
             WatchMotionTrace(
                 points: controller.visualTelemetryHistory,
                 currentUserAccelerationG: controller.userAccelerationG,
@@ -316,32 +349,6 @@ struct WatchContentView: View {
                 }
             }
 
-            HStack(spacing: 7) {
-                Button {
-                    if controller.state == .running {
-                        controller.pause()
-                    } else {
-                        controller.resume()
-                    }
-                } label: {
-                    Image(
-                        systemName: controller.state == .running
-                            ? "pause.fill"
-                            : "play.fill"
-                    )
-                    .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-
-                Button {
-                    confirmStop = true
-                } label: {
-                    Image(systemName: "stop.fill")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(.red)
-            }
         }
         .panelStyle()
     }
