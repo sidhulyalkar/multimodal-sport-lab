@@ -18,6 +18,7 @@ final class CameraCaptureController: ObservableObject {
 
     @Published private(set) var phase: Phase = .idle
     @Published private(set) var configuration: CameraCaptureConfiguration?
+    @Published private(set) var sessionID: String?
     @Published private(set) var evidenceBundle: CameraEvidenceBundle?
     @Published private(set) var liveStats: CameraLiveCaptureStats?
     @Published private(set) var errorMessage: String?
@@ -62,6 +63,7 @@ final class CameraCaptureController: ObservableObject {
             }
 
             let sessionID = Self.makeSessionID()
+            self.sessionID = sessionID
             configuration = try await pipeline.startRecording(
                 sessionID: sessionID,
                 hostModel: UIDevice.current.model,
@@ -70,6 +72,7 @@ final class CameraCaptureController: ObservableObject {
             phase = .recording
             startStatsPolling()
         } catch {
+            sessionID = nil
             fail(error)
         }
     }
