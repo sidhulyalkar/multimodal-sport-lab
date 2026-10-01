@@ -5,6 +5,15 @@ import MotionOSAppleCapture
 import UIKit
 import WatchConnectivity
 
+struct SessionSyncAcknowledgment: Equatable, Sendable {
+    let runID: String
+    let cueID: String
+    let label: String
+    let watchSessionID: String
+    let watchDeviceTimeNS: UInt64
+    let receivedAt: Date
+}
+
 struct WatchLiveCaptureHealth: Equatable, Sendable {
     let sessionID: String
     let receivedAt: Date
@@ -74,6 +83,8 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
     @Published private(set) var watchCaptureHealth: WatchLiveCaptureHealth?
     @Published private(set) var watchPresence: WatchPresence?
     @Published private(set) var watchTelemetryHistory: [WatchTelemetryPoint] = []
+    @Published private(set) var lastSessionSyncAcknowledgment:
+        SessionSyncAcknowledgment?
     @Published private(set) var iPhoneBatteryLevel: Double?
     @Published private(set) var iPhoneAvailableStorageBytes: Int64?
     @Published private(set) var errorMessage: String?
@@ -208,6 +219,22 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
         )
     }
 
+    @discardableResult
+    func sendSessionSyncCue(
+        runID: String,
+        cueID: String,
+        label: String
+    ) -> Bool {
+        transport.sendMessage(
+            [
+                "motionos_message": "session_sync_cue_v1",
+                "run_id": runID,
+                "cue_id": cueID,
+                "label": label,
+            ]
+        )
+    }
+
     func watchCaptureHealthAge(
         at date: Date = Date()
     ) -> TimeInterval? {
@@ -237,14 +264,39 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
     private func ingestWatchMessage(
         _ message: [String: Any]
     ) {
-        if message["motionos_message"] as? String == "watch_presence_v1" {
+        let type = message["motionos_message"] as? String
+
+        if type == "watch_presence_v1" {
             ingestWatchPresence(message)
             refreshWatchState()
             return
         }
 
-        guard message["motionos_message"] as? String
-                == "watch_capture_health_v1",
+        if type == "session_sync_cue_ack_v1" {
+            guard let runID = message["run_id"] as? String,
+                  let cueID = message["cue_id"] as? String,
+                  let label = message["label"] as? String,
+                  let watchSessionID =
+                    message["watch_session_id"] as? String,
+                  let watchDeviceTimeNS = Self.uint64(
+                    message["watch_device_time_ns"]
+                  )
+            else {
+                return
+            }
+
+            lastSessionSyncAcknowledgment = SessionSyncAcknowledgment(
+                runID: runID,
+                cueID: cueID,
+                label: label,
+                watchSessionID: watchSessionID,
+                watchDeviceTimeNS: watchDeviceTimeNS,
+                receivedAt: Date()
+            )
+            return
+        }
+
+        guard type == "watch_capture_health_v1",
               let sessionID = message["session_id"] as? String,
               let imuSamples = Self.uint64(
                 message["imu_sample_count"]
