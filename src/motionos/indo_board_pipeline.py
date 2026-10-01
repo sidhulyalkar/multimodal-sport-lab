@@ -1260,11 +1260,6 @@ def _validate_pipeline_matches_qualification_plan(
     qualification: dict[str, object],
     rig_id: str,
 ) -> None:
-    if str(plan.get("rig_id", "")) != rig_id:
-        raise ValueError(
-            "camera rig ID does not match the frozen qualification plan"
-        )
-
     evidence = _mapping(plan, "evidence")
     path_by_evidence_key = {
         "rig_receipt": required_paths["rig_receipt"],
@@ -1285,6 +1280,11 @@ def _validate_pipeline_matches_qualification_plan(
             raise ValueError(
                 f"{key} does not match the frozen qualification plan"
             )
+
+    if str(plan.get("rig_id", "")) != rig_id:
+        raise ValueError(
+            "camera rig ID does not match the frozen qualification plan"
+        )
 
     if thresholds != _mapping(plan, "thresholds"):
         raise ValueError(
