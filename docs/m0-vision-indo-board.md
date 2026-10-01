@@ -331,14 +331,58 @@ The cue itself only defines the search window for the iPhone physical-motion
 peak. The cross-camera landmark is the actual whole-body impulse detected in
 both pose streams, avoiding human response latency as the camera offset.
 
+### 3.5. Calibrate Watch ↔ vision fusion on a separate run
+
+Do **not** invent the Watch/vision fusion uncertainties for the scored session.
+Use a separate reconstructed calibration run with one quiet stationary period
+and one deliberately dynamic wrist-movement period.
+
+Copy and freeze
+`examples/wrist-fusion-calibration-spec.example.json` before inspecting the
+calibration result. The windows are measured relative to the first paired
+Watch/vision wrist-acceleration sample on canonical Watch time.
+
+Run:
+
+```bash
+motionos calibrate-wrist-fusion \
+  calibration/skeleton-geometry.json \
+  calibration/skeleton-correspondences.json \
+  calibration/watch.jsonl \
+  wrist-fusion-calibration-spec.json \
+  wrist-fusion-calibration.json
+```
+
+The calibration receipt reports:
+
+- stationary Watch acceleration-magnitude RMS relative to zero motion;
+- stationary vision acceleration-magnitude RMS relative to zero motion;
+- stationary and dynamic Watch↔vision disagreement;
+- observed Watch and vision scalar acceleration-rate distributions;
+- the declared acceleration-rate percentile;
+- the predeclared non-shrinking margin factor;
+- the resulting `recommended_wrist_fusion` block;
+- SHA-256 hashes of the exact geometry, correspondence, Watch-journal, and
+  calibration-spec inputs.
+
+Copy the four values from `recommended_wrist_fusion` into the scored pipeline
+spec and set `wrist_fusion_calibration_receipt` to that exact receipt. Desktop
+preflight verifies the copied values match the receipt, so manual drift fails
+closed.
+
+The calibration receipt intentionally does **not** choose
+`qualification.maximum_watch_vision_rms_m_s2`. Freeze that scored-session gate
+independently, before looking at the scored run, just like the other
+qualification thresholds.
+
 ### 4. Preflight, then run the complete reconstruction
 
 Copy and fill `examples/indo-board-pipeline-spec.example.json`. The
 `rig_receipt` must be a passing, current-session rig receipt. The iPhone and
 Action 4 entries each require the exact video, pose/frame journal, and metadata
-file generated for that capture. The `wrist_fusion` standard deviations and
-acceleration-rate bound are mandatory empirical/predeclared inputs; do not copy
-arbitrary uncertainty values.
+file generated for that capture. The `wrist_fusion` parameters must match the
+exact `wrist_fusion_calibration_receipt` produced from the separate calibration
+run; arbitrary or hand-edited uncertainty values fail preflight.
 
 Run the fail-fast check before creating derived evidence:
 
@@ -361,6 +405,8 @@ following are wrong:
   `camera-metadata.json`;
 - the Action 4 video, pose journal, or derived metadata is not hash-bound to the
   sealed `vision_session.json`;
+- the scored `wrist_fusion` values differ from the exact referenced
+  wrist-fusion calibration receipt;
 - a confidence fraction is outside `[0, 1]`;
 - a timing, residual, uncertainty, or rate bound is non-positive/non-finite;
 - the marker-frame stride is not a positive integer.
@@ -407,9 +453,13 @@ anthropometric COM + bilateral knee geometry
         ↓
 five quality-gated Indo Board metrics
         ↓
-duplicate-safe longitudinal profile update
-        ↓
 secondary Watch ↔ vision wrist-acceleration fusion
+        ↓
+dimensioned evidence-quality report (no composite score)
+        ↓
+frozen session qualification receipt
+        ↓
+qualified-only longitudinal profile update
         ↓
 dimensioned evidence-quality report (no composite score)
         ↓
