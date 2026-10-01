@@ -1070,15 +1070,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
             bundle.metadataURL
         )
 
-        let cameraVideoDigest = try camera.evidenceBundle.map {
-            try FileEvidence.digest($0.videoURL)
-        }
-        let cameraJournalDigest = try camera.evidenceBundle.map {
-            try FileEvidence.digest($0.journalURL)
-        }
-        let cameraMetadataDigest = try camera.evidenceBundle.map {
-            try FileEvidence.digest($0.metadataURL)
-        }
+        let cameraBundle = camera.evidenceBundle
 
         let latestWatchReceiptMatchesRun =
             phone.inbox.latestProductRunID == runID
@@ -1100,9 +1092,9 @@ final class IndoBoardSessionCoordinator: ObservableObject {
             cameraSessionID: camera.sessionID,
             operatorJournalSHA256: operatorJournalDigest.sha256,
             operatorMetadataSHA256: operatorMetadataDigest.sha256,
-            cameraVideoSHA256: cameraVideoDigest?.sha256,
-            cameraJournalSHA256: cameraJournalDigest?.sha256,
-            cameraMetadataSHA256: cameraMetadataDigest?.sha256,
+            cameraVideoSHA256: cameraBundle?.videoSHA256,
+            cameraJournalSHA256: cameraBundle?.journalSHA256,
+            cameraMetadataSHA256: cameraBundle?.metadataSHA256,
             syncReceipts: receipts,
             externalCameraExpected: requiresExternalCamera,
             externalCameraImported: externalVideoEvidence != nil,
