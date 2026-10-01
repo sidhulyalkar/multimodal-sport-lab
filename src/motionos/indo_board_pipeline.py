@@ -18,10 +18,7 @@ from .indo_board_qualification import (
     validate_qualification_contract,
 )
 from .indo_board_reconstruction import build_indo_board_samples
-from .longitudinal import (
-    load_longitudinal_profile,
-    update_longitudinal_profile,
-)
+from .longitudinal import update_longitudinal_profile_if_qualified
 from .multiview_pose import write_skeleton_sequence_correspondences
 from .pose2d_io import (
     infer_pose2d_source_id,
@@ -485,15 +482,13 @@ def process_indo_board_pipeline(
         qualification_path,
     )
 
-    existing_profile = load_longitudinal_profile(profile_path)
-    already_processed = (
-        manifest.session_id in existing_profile.processed_session_ids
-    )
-    longitudinal_updated = False
-    if qualification_receipt["passed"]:
-        profile = update_longitudinal_profile(
+    profile, longitudinal_updated = (
+        update_longitudinal_profile_if_qualified(
             profile_path,
             metrics,
+            qualification_passed=bool(
+                qualification_receipt["passed"]
+            ),
             minimum_confidence=float(
                 thresholds.get(
                     "minimum_longitudinal_confidence",
@@ -501,16 +496,14 @@ def process_indo_board_pipeline(
                 )
             ),
         )
-        longitudinal_updated = not already_processed
-        if profile_path.is_file():
-            _record_stage(
-                state,
-                state_path,
-                "longitudinal_profile",
-                profile_path,
-            )
-    else:
-        profile = existing_profile
+    )
+    if longitudinal_updated and profile_path.is_file():
+        _record_stage(
+            state,
+            state_path,
+            "longitudinal_profile",
+            profile_path,
+        )
 
     artifacts = [
         external_sync_path,
