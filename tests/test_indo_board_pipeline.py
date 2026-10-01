@@ -39,6 +39,7 @@ def _fixture(tmp_path):
     action_journal = tmp_path / "action.jsonl"
     action_metadata = tmp_path / "action-metadata.json"
     profile = tmp_path / "profile.json"
+    fusion_receipt = tmp_path / "wrist-fusion-calibration.json"
     spec = tmp_path / "pipeline.json"
 
     landmarks = [
@@ -237,6 +238,22 @@ def _fixture(tmp_path):
         encoding="utf-8",
     )
 
+    fusion_receipt.write_text(
+        json.dumps(
+            {
+                "schema_version":
+                    "motionos.wrist-fusion-calibration.v1",
+                "recommended_wrist_fusion": {
+                    "watch_acceleration_std_m_s2": 0.2,
+                    "vision_acceleration_std_m_s2": 0.4,
+                    "maximum_acceleration_rate_m_s3": 25.0,
+                    "maximum_time_delta_ms": 20.0,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
     document = {
         "schema_version": "motionos.indo-board-pipeline-spec.v1",
         "vision_session": vision.name,
@@ -245,6 +262,7 @@ def _fixture(tmp_path):
         "board_marker_layout": layout.name,
         "board_marker_asset_receipt": marker_receipt.name,
         "longitudinal_profile": profile.name,
+        "wrist_fusion_calibration_receipt": fusion_receipt.name,
         "iphone": {
             "video": iphone_video.name,
             "journal": iphone_journal.name,
@@ -511,6 +529,7 @@ def _state_fixture(tmp_path):
         "marker-receipt.json",
         "iphone-metadata.json",
         "action-metadata.json",
+        "wrist-fusion-calibration.json",
     ):
         path = tmp_path / name
         path.write_text(name + "\n", encoding="utf-8")
@@ -529,6 +548,8 @@ def _state_fixture(tmp_path):
         "action4": {
             "metadata": paths["action-metadata.json"].name,
         },
+        "wrist_fusion_calibration_receipt":
+            paths["wrist-fusion-calibration.json"].name,
     }
     spec = tmp_path / "state-spec.json"
     spec.write_text(
@@ -910,3 +931,16 @@ def test_pipeline_qualification_controls_longitudinal_promotion(
         output / "indo-board-qualification-receipt.json"
     ).is_file()
     assert (output / "indo-board-report.json").is_file()
+
+
+
+def test_pipeline_preflight_rejects_fusion_parameter_drift(tmp_path):
+    spec, document, _rig = _fixture(tmp_path)
+    document["wrist_fusion"]["watch_acceleration_std_m_s2"] = 0.25
+    spec.write_text(json.dumps(document), encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match="do not match the exact calibration receipt",
+    ):
+        validate_indo_board_pipeline_spec(spec)
