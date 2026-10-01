@@ -68,8 +68,6 @@ public struct WatchSessionSummary: Codable, Equatable, Sendable {
 }
 
 public enum WatchSessionSummaryBuilder {
-    private static let standardGravity = 9.80665
-
     public static func build(
         journalURL: URL,
         sourceJournalSHA256: String,
@@ -135,16 +133,15 @@ public enum WatchSessionSummaryBuilder {
                 }
                 previousIMUTimestamp = event.deviceTimeNS
 
-                guard let accelerationG = userAccelerationMagnitudeG(
-                    payload: event.payload
-                ),
-                let rotationRate = rotationRateMagnitude(
+                guard let derived = WatchMotionDerivation.derive(
                     payload: event.payload
                 )
                 else {
                     return
                 }
 
+                let accelerationG = derived.userAccelerationG
+                let rotationRate = derived.rotationRateRadS
                 accelerationValues.append(accelerationG)
                 rotationValues.append(rotationRate)
 
@@ -246,45 +243,6 @@ public enum WatchSessionSummaryBuilder {
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         let data = try encoder.encode(summary)
         try data.write(to: url, options: .atomic)
-    }
-
-    private static func userAccelerationMagnitudeG(
-        payload: [String: JSONValue]
-    ) -> Double? {
-        if let x = number(payload["user_ax"]),
-           let y = number(payload["user_ay"]),
-           let z = number(payload["user_az"]) {
-            return sqrt(x * x + y * y + z * z) / standardGravity
-        }
-
-        guard let x = number(payload["ax"]),
-              let y = number(payload["ay"]),
-              let z = number(payload["az"])
-        else {
-            return nil
-        }
-
-        let totalG = sqrt(x * x + y * y + z * z) / standardGravity
-        return abs(totalG - 1.0)
-    }
-
-    private static func rotationRateMagnitude(
-        payload: [String: JSONValue]
-    ) -> Double? {
-        guard let x = number(payload["gx"]),
-              let y = number(payload["gy"]),
-              let z = number(payload["gz"])
-        else {
-            return nil
-        }
-        return sqrt(x * x + y * y + z * z)
-    }
-
-    private static func number(_ value: JSONValue?) -> Double? {
-        guard case .number(let number) = value else {
-            return nil
-        }
-        return number
     }
 
     private static func mean(_ values: [Double]) -> Double? {
