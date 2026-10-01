@@ -297,6 +297,135 @@ final class MotionOSAppleCaptureTests: XCTestCase {
         )
     }
 
+    func testBodyMovementFrameParsesVisionPoseWithoutInventingCOM() throws {
+        let payload: [String: JSONValue] = [
+            "joints_root_relative_m": .object([
+                "root": .array([.number(0), .number(1), .number(0)]),
+                "leftHip": .array([.number(-0.15), .number(0.95), .number(0)]),
+                "rightHip": .array([.number(0.15), .number(0.95), .number(0)]),
+                "leftKnee": .array([.number(-0.16), .number(0.52), .number(0)]),
+                "rightKnee": .array([.number(0.16), .number(0.52), .number(0)]),
+                "leftAnkle": .array([.number(-0.17), .number(0.05), .number(0)]),
+                "rightAnkle": .array([.number(0.17), .number(0.05), .number(0)]),
+            ]),
+            "joint_parents": .object([
+                "root": .null,
+                "leftHip": .string("root"),
+                "rightHip": .string("root"),
+                "leftKnee": .string("leftHip"),
+                "rightKnee": .string("rightHip"),
+                "leftAnkle": .string("leftKnee"),
+                "rightAnkle": .string("rightKnee"),
+            ]),
+            "body_height_m": .number(1.70),
+            "joint_coordinate_frame":
+                .string("vision_root_joint_relative_meters"),
+        ]
+
+        let frame = try XCTUnwrap(
+            BodyMovementFrameParser.parseVisionPose(
+                payload: payload,
+                sessionID: "camera-1",
+                sequence: 7,
+                deviceTimeNS: 123
+            )
+        )
+
+        XCTAssertEqual(frame.sessionID, "camera-1")
+        XCTAssertEqual(frame.sequence, 7)
+        XCTAssertEqual(frame.joints.count, 7)
+        XCTAssertEqual(frame.bodyHeightM, 1.70)
+        XCTAssertNil(frame.centerOfMass)
+        XCTAssertEqual(frame.supportPoints.count, 2)
+        XCTAssertEqual(
+            frame.pelvisReference?.provenance,
+            .geometricProxy
+        )
+        XCTAssertTrue(
+            frame.pelvisReference?.label.contains("not center of mass")
+                == true
+        )
+        XCTAssertTrue(frame.muscleActivations.isEmpty)
+    }
+
+    func testBodyMovementFrameRejectsInvalidOrTinyPose() {
+        let payload: [String: JSONValue] = [
+            "joints_root_relative_m": .object([
+                "root": .array([.number(0), .number(0), .number(0)]),
+            ]),
+            "joint_parents": .object([
+                "root": .null,
+            ]),
+        ]
+
+        XCTAssertNil(
+            BodyMovementFrameParser.parseVisionPose(
+                payload: payload,
+                sessionID: "tiny",
+                sequence: 0,
+                deviceTimeNS: 1
+            )
+        )
+    }
+
+    func testBodyMovementFrameAcceptsExplicitModelEstimates() throws {
+        let payload: [String: JSONValue] = [
+            "joints_root_relative_m": .object([
+                "root": .array([.number(0), .number(1), .number(0)]),
+                "leftHip": .array([.number(-0.1), .number(0.9), .number(0)]),
+                "rightHip": .array([.number(0.1), .number(0.9), .number(0)]),
+                "leftKnee": .array([.number(-0.1), .number(0.5), .number(0)]),
+                "rightKnee": .array([.number(0.1), .number(0.5), .number(0)]),
+                "leftAnkle": .array([.number(-0.1), .number(0), .number(0)]),
+                "rightAnkle": .array([.number(0.1), .number(0), .number(0)]),
+            ]),
+            "joint_parents": .object([
+                "root": .null,
+                "leftHip": .string("root"),
+                "rightHip": .string("root"),
+                "leftKnee": .string("leftHip"),
+                "rightKnee": .string("rightHip"),
+                "leftAnkle": .string("leftKnee"),
+                "rightAnkle": .string("rightKnee"),
+            ]),
+            "center_of_mass_root_relative_m":
+                .array([.number(0.02), .number(0.88), .number(0.01)]),
+            "center_of_mass_provenance": .string("model_estimated"),
+            "muscle_activation": .object([
+                "left_thigh": .number(0.8),
+                "right_thigh": .number(1.4),
+            ]),
+            "muscle_activation_model_id": .string("fixture-model"),
+        ]
+
+        let frame = try XCTUnwrap(
+            BodyMovementFrameParser.parseVisionPose(
+                payload: payload,
+                sessionID: "estimated",
+                sequence: 1,
+                deviceTimeNS: 2
+            )
+        )
+
+        XCTAssertEqual(
+            frame.centerOfMass?.provenance,
+            .modelEstimated
+        )
+        XCTAssertEqual(frame.muscleActivations.count, 2)
+        XCTAssertEqual(
+            frame.muscleActivations.first {
+                $0.region == .rightThigh
+            }?.intensity,
+            1.0
+        )
+        XCTAssertEqual(
+            frame.muscleActivations.first {
+                $0.region == .leftThigh
+            }?.modelID,
+            "fixture-model"
+        )
+    }
+
     func testWatchMotionDerivationUsesUserAccelerationChannels() throws {
         let gravity = 9.80665
         let derived = try XCTUnwrap(
