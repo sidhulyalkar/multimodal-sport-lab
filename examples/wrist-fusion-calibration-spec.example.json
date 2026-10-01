@@ -13,5 +13,6 @@
   "minimum_dynamic_pairs": 180,
   "jerk_percentile": 0.99,
   "jerk_margin_factor": 1.25,
-  "wrist_side": null
+  "wrist_side": null,
+  "reconstruction_receipt": "REPLACE/derived/wrist-fusion-calibration/wrist-fusion-reconstruction-receipt.json"
 }
