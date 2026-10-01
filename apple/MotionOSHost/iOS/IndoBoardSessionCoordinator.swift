@@ -1002,7 +1002,13 @@ final class IndoBoardSessionCoordinator: ObservableObject {
             return false
         }
 
-        return ["idle", "transferred"].contains(watchState)
+        return [
+            "idle",
+            "journalready",
+            "transferqueued",
+            "transportcomplete",
+            "transferred",
+        ].contains(watchState)
     }
 
     func watchCaptureAvailabilityDetail(
@@ -1014,11 +1020,11 @@ final class IndoBoardSessionCoordinator: ObservableObject {
 
         switch rawState.lowercased() {
         case "idle", "transferred":
-            return "available for this session"
+            return "ready"
         case "journalready", "transferqueued", "transportcomplete":
-            return "previous journal still verifying"
+            return "ready · previous recording syncing"
         case "starting", "running", "paused", "ending":
-            return "another capture is active"
+            return "another recording is active"
         case "failed":
             return "resolve saved Watch evidence first"
         default:
