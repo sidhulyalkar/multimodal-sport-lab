@@ -65,6 +65,7 @@ final class WatchSessionController: ObservableObject {
     @Published private(set) var devicePitchRadians: Double?
     @Published private(set) var deviceYawRadians: Double?
     @Published private(set) var visualTelemetryHistory: [VisualTelemetryPoint] = []
+    @Published private(set) var productCueInstruction: String?
     /// Operator diagnostics for late, foreign, or stale events that were not
     /// journaled. Not raw evidence.
     @Published private(set) var captureRejections = CaptureRejectionCounts()
@@ -269,6 +270,7 @@ final class WatchSessionController: ObservableObject {
         heartRateSequence = 0
         sessionSyncSequence = 0
         productCueTitle = nil
+        productCueInstruction = nil
         linkedProductRunID = nil
         rejectedProductControlCount = 0
         finalized = false
@@ -728,6 +730,8 @@ final class WatchSessionController: ObservableObject {
                 return
             }
             productCueTitle = title
+            productCueInstruction =
+                message["instruction"] as? String
             guidedCueTitle = title
             WKInterfaceDevice.current().play(.notification)
 
@@ -739,6 +743,7 @@ final class WatchSessionController: ObservableObject {
                 return
             }
             productCueTitle = nil
+            productCueInstruction = nil
             guidedCueTitle = "FINISHING"
             WKInterfaceDevice.current().play(.stop)
             stop()
