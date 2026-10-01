@@ -3,6 +3,77 @@ import CryptoKit
 import Foundation
 import MotionOSAppleCapture
 
+enum FieldProtocolKind: String, CaseIterable, Identifiable, Sendable {
+    case indoBoard = "Indo Board"
+    case longboard = "Longboard"
+
+    var id: String { rawValue }
+}
+
+struct FieldProtocolDefinition: Equatable, Sendable {
+    let kind: FieldProtocolKind
+    let protocolVersion: String
+    let title: String
+    let subtitle: String
+    let runIDPrefix: String
+    let blocks: [FieldProtocolBlock]
+
+    static let indoBoardM0 = FieldProtocolDefinition(
+        kind: .indoBoard,
+        protocolVersion: "motionos.indo-board-product-session.v1",
+        title: "Indo Board · Complete Session",
+        subtitle: "Two-minute balance session with repeatable neutral, free-balance, and recovery blocks.",
+        runIDPrefix: "m0-indo-board",
+        blocks: [
+            .init(
+                id: "neutral-settle",
+                label: "Neutral settle",
+                instruction: "Settle into a comfortable neutral balance for about 10 seconds."
+            ),
+            .init(
+                id: "free-balance-a",
+                label: "Natural free balance",
+                instruction: "Balance naturally for about 25 seconds without chasing a target."
+            ),
+            .init(
+                id: "tilt-recover",
+                label: "Tilt + recover",
+                instruction: "Perform five comfortable controlled tilt-and-recover cycles, alternating directions and returning to neutral."
+            ),
+            .init(
+                id: "free-balance-b",
+                label: "Free balance repeat",
+                instruction: "Return to natural free balance for about 15 seconds."
+            ),
+            .init(
+                id: "neutral-finish",
+                label: "Neutral finish",
+                instruction: "Finish near neutral with minimal voluntary motion for about 10 seconds."
+            ),
+        ]
+    )
+
+    static let longboardM0 = FieldProtocolDefinition(
+        kind: .longboard,
+        protocolVersion: "motionos.longboard-calibration.v1",
+        title: "Longboard · Calibration",
+        subtitle: "Structured riding blocks for the existing M0 longboard protocol.",
+        runIDPrefix: "m0-longboard",
+        blocks: FieldProtocolBlock.longboardM0
+    )
+
+    static func definition(
+        for kind: FieldProtocolKind
+    ) -> FieldProtocolDefinition {
+        switch kind {
+        case .indoBoard:
+            .indoBoardM0
+        case .longboard:
+            .longboardM0
+        }
+    }
+}
+
 struct FieldProtocolBlock: Identifiable, Equatable, Sendable {
     let id: String
     let label: String
@@ -136,10 +207,10 @@ final class FieldRunCoordinator: ObservableObject {
 
     static let schemaVersion = "motionos.operator-events.v1"
     static let metadataSchemaVersion = "motionos.operator-metadata.v1"
-    static let protocolVersion = "motionos.longboard-calibration.v1"
     static let timingSemantics = "annotation_only_not_sync_authority"
 
     @Published private(set) var phase: Phase = .idle
+    @Published private(set) var protocolKind: FieldProtocolKind = .indoBoard
     @Published private(set) var runID: String?
     @Published private(set) var eventCount: UInt64 = 0
     @Published private(set) var startedAtUTC: String?
@@ -150,7 +221,13 @@ final class FieldRunCoordinator: ObservableObject {
     @Published private(set) var evidenceBundle: OperatorEvidenceBundle?
     @Published private(set) var errorMessage: String?
 
-    let protocolBlocks = FieldProtocolBlock.longboardM0
+    var protocolDefinition: FieldProtocolDefinition {
+        FieldProtocolDefinition.definition(for: protocolKind)
+    }
+
+    var protocolBlocks: [FieldProtocolBlock] {
+        protocolDefinition.blocks
+    }
 
     var closureWarnings: [String] {
         var warnings: [String] = []
@@ -196,7 +273,9 @@ final class FieldRunCoordinator: ObservableObject {
         return encoder
     }()
 
-    func createRun() {
+    func createRun(
+        kind: FieldProtocolKind = .indoBoard
+    ) {
         guard phase == .idle || phase == .sealed || phase == .failed else {
             fail(CoordinatorError.invalidState(
                 "Seal or discard the active run before creating another."
@@ -206,7 +285,9 @@ final class FieldRunCoordinator: ObservableObject {
 
         do {
             resetMutableState()
-            let id = Self.makeRunID()
+            protocolKind = kind
+            let definition = protocolDefinition
+            let id = Self.makeRunID(prefix: definition.runIDPrefix)
             let urls = try Self.makeEvidenceURLs(runID: id)
 
             _ = FileManager.default.createFile(
@@ -225,9 +306,10 @@ final class FieldRunCoordinator: ObservableObject {
 
             try append(
                 kind: "run_created",
-                label: "first multimodal longboard calibration",
+                label: definition.title,
                 payload: [
-                    "protocol_version": Self.protocolVersion,
+                    "protocol_version": definition.protocolVersion,
+                    "protocol_kind": definition.kind.rawValue,
                 ]
             )
         } catch {
@@ -442,7 +524,8 @@ final class FieldRunCoordinator: ObservableObject {
                 "schema_version": Self.metadataSchemaVersion,
                 "event_schema_version": Self.schemaVersion,
                 "run_id": runID,
-                "protocol_version": Self.protocolVersion,
+                "protocol_version": protocolDefinition.protocolVersion,
+                "protocol_kind": protocolKind.rawValue,
                 "armed_at_utc": armedAtValue,
                 "started_at_utc": startedAtValue,
                 "sealed_at_utc": sealedAtValue,
@@ -557,11 +640,13 @@ final class FieldRunCoordinator: ObservableObject {
         }
     }
 
-    private static func makeRunID() -> String {
+    private static func makeRunID(
+        prefix: String
+    ) -> String {
         let stamp = ISO8601DateFormatter()
             .string(from: Date())
             .replacingOccurrences(of: ":", with: "")
-        return "m0-longboard-\(stamp)-\(UUID().uuidString.prefix(8).lowercased())"
+        return "\(prefix)-\(stamp)-\(UUID().uuidString.prefix(8).lowercased())"
     }
 
     private static func utcNow() -> String {
