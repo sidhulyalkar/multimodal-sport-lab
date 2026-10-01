@@ -492,7 +492,7 @@ struct BodyIntelligenceView: View {
             MotionOSSectionHeader(
                 title: "Three truth levels",
                 subtitle: "A visual language that scales from prototype to research-grade interpretation",
-                systemImage: "checkmark.seal.text.page",
+                systemImage: "checkmark.seal.fill",
                 accent: .indigo
             )
 
@@ -500,7 +500,7 @@ struct BodyIntelligenceView: View {
                 title: "Observed",
                 detail: "Directly supported by a captured sensor stream",
                 color: .green,
-                symbol: "sensor.fill"
+                symbol: "dot.radiowaves.left.and.right"
             )
             truthRow(
                 title: "Model-estimated",
@@ -893,7 +893,9 @@ private enum BodySceneFactory {
             to: rightWrist,
             radius: 0.13,
             color: mode == .movement
-                ? mix(neutral, observed, 0.45 + 0.45 * snapshot.motionIntensity)
+                ? snapshot.watchEvidencePresent
+                    ? mix(neutral, observed, 0.45 + 0.45 * snapshot.motionIntensity)
+                    : mix(neutral, pending, 0.18)
                 : mode == .muscles
                     ? mix(neutral, model, 0.34)
                     : neutral
@@ -965,7 +967,9 @@ private enum BodySceneFactory {
                 name: "watch",
                 radius: 0.15,
                 position: rightWrist,
-                color: mode == .movement ? observed : joint
+                color: mode == .movement
+                    ? snapshot.watchEvidencePresent ? observed : pending
+                    : joint
             )
         )
 
@@ -1197,7 +1201,7 @@ private enum BodySceneFactory {
         _ b: UIColor,
         _ amount: Double
     ) -> UIColor {
-        let t = min(1, max(0, amount))
+        let t = CGFloat(min(1, max(0, amount)))
         var ar: CGFloat = 0
         var ag: CGFloat = 0
         var ab: CGFloat = 0
