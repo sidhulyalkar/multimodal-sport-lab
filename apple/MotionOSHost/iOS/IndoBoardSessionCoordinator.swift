@@ -661,6 +661,14 @@ final class IndoBoardSessionCoordinator: ObservableObject {
                     when: true
                 ) {
                     fieldRun.startBlock(block.id)
+                    if let runID = fieldRun.runID {
+                        _ = phone.sendSessionProtocolCue(
+                            runID: runID,
+                            stepID: block.id,
+                            title: block.title,
+                            instruction: block.instruction
+                        )
+                    }
                 }
             }
         }
