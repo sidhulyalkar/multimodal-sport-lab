@@ -296,6 +296,8 @@ def _fixture(tmp_path):
             {
                 "schema_version":
                     "motionos.wrist-fusion-calibration.v1",
+                "acquisition_profile_id":
+                    "m0-indo-board-two-camera-v1",
                 "recommended_wrist_fusion": {
                     "watch_acceleration_std_m_s2": 0.2,
                     "vision_acceleration_std_m_s2": 0.4,
