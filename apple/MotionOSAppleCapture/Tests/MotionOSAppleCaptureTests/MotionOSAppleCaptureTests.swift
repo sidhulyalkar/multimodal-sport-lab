@@ -461,6 +461,148 @@ final class MotionOSAppleCaptureTests: XCTestCase {
         }
     }
 
+    func testWatchSessionSummaryBuildsDerivedMetricsFromJournal() throws {
+        let url = try makeWatchSummaryJournal()
+        defer {
+            try? FileManager.default.removeItem(
+                at: url.deletingLastPathComponent()
+            )
+        }
+
+        let summary = try WatchSessionSummaryBuilder.build(
+            journalURL: url,
+            sourceJournalSHA256: "fixture-sha",
+            bucketSeconds: 0.1
+        )
+
+        XCTAssertEqual(
+            summary.protocolVersion,
+            WatchSessionSummary.protocolVersion
+        )
+        XCTAssertEqual(summary.sessionID, "summary-session")
+        XCTAssertEqual(summary.sourceJournalSHA256, "fixture-sha")
+
+        XCTAssertEqual(summary.imu.count, 10)
+        XCTAssertEqual(summary.imu.durationSeconds, 0.18, accuracy: 1e-9)
+        XCTAssertEqual(summary.imu.effectiveHz, 50.0, accuracy: 1e-9)
+        XCTAssertEqual(summary.imu.maxGapMS, 20.0, accuracy: 1e-9)
+        XCTAssertEqual(summary.imu.missingSequences, 0)
+        XCTAssertEqual(summary.imu.nonMonotonicSequences, 0)
+        XCTAssertEqual(summary.imu.nonMonotonicTimestamps, 0)
+
+        XCTAssertEqual(summary.heartRate.count, 2)
+        XCTAssertEqual(summary.heartRate.minimumBPM ?? 0, 100, accuracy: 1e-9)
+        XCTAssertEqual(summary.heartRate.meanBPM ?? 0, 105, accuracy: 1e-9)
+        XCTAssertEqual(summary.heartRate.maximumBPM ?? 0, 110, accuracy: 1e-9)
+
+        XCTAssertEqual(
+            summary.motion.userAccelerationRMSG ?? 0,
+            0.1,
+            accuracy: 1e-9
+        )
+        XCTAssertEqual(
+            summary.motion.userAccelerationP95G ?? 0,
+            0.1,
+            accuracy: 1e-9
+        )
+        XCTAssertEqual(
+            summary.motion.rotationRateRMSRadS ?? 0,
+            1.0,
+            accuracy: 1e-9
+        )
+        XCTAssertEqual(
+            summary.motion.rotationRateP95RadS ?? 0,
+            1.0,
+            accuracy: 1e-9
+        )
+
+        XCTAssertEqual(summary.trace.count, 2)
+        XCTAssertEqual(
+            summary.trace[0].meanUserAccelerationG,
+            0.1,
+            accuracy: 1e-9
+        )
+        XCTAssertEqual(
+            summary.trace[1].meanRotationRateRadS,
+            1.0,
+            accuracy: 1e-9
+        )
+        XCTAssertTrue(summary.claimBoundary.contains("not raw evidence"))
+    }
+
+    func testWatchSessionSummaryRejectsMixedSessionIDs() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "motionos-summary-mixed-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+        let url = directory.appendingPathComponent("watch.jsonl")
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let events = [
+            SensorEnvelope(
+                sessionID: "one",
+                deviceID: "apple-watch",
+                stream: "/meta/watch",
+                sequence: 0,
+                deviceTimeNS: 1,
+                payload: [:]
+            ),
+            SensorEnvelope(
+                sessionID: "two",
+                deviceID: "apple-watch",
+                stream: "/body/watch/imu",
+                sequence: 0,
+                deviceTimeNS: 2,
+                payload: [
+                    "user_ax": .number(0),
+                    "user_ay": .number(0),
+                    "user_az": .number(0),
+                    "gx": .number(0),
+                    "gy": .number(0),
+                    "gz": .number(0),
+                ]
+            ),
+        ]
+        try writeJSONL(events, to: url)
+
+        XCTAssertThrowsError(
+            try WatchSessionSummaryBuilder.build(
+                journalURL: url,
+                sourceJournalSHA256: "fixture"
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? WatchSessionSummaryBuilder.SummaryError,
+                .mixedSessionIDs
+            )
+        }
+    }
+
+    func testWatchSessionSummaryWritesSourceBoundJSON() throws {
+        let journalURL = try makeWatchSummaryJournal()
+        let directory = journalURL.deletingLastPathComponent()
+        let summaryURL = directory.appendingPathComponent("summary.json")
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let summary = try WatchSessionSummaryBuilder.build(
+            journalURL: journalURL,
+            sourceJournalSHA256: "abc123"
+        )
+        try WatchSessionSummaryBuilder.write(summary, to: summaryURL)
+
+        let roundTrip = try JSONDecoder().decode(
+            WatchSessionSummary.self,
+            from: Data(contentsOf: summaryURL)
+        )
+        XCTAssertEqual(roundTrip, summary)
+        XCTAssertEqual(roundTrip.sourceJournalSHA256, "abc123")
+    }
+
     /// A journal writer whose first append suspends until `release()`.
     private actor GatedJournalWriter: CaptureJournalWriting {
         private(set) var log: [String] = []
@@ -495,6 +637,85 @@ final class MotionOSAppleCaptureTests: XCTestCase {
             gate?.resume()
             gate = nil
         }
+    }
+
+    private func makeWatchSummaryJournal() throws -> URL {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "motionos-summary-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+
+        let url = directory.appendingPathComponent("watch.jsonl")
+        let gravity = 9.80665
+        var events: [SensorEnvelope] = [
+            SensorEnvelope(
+                sessionID: "summary-session",
+                deviceID: "apple-watch",
+                stream: "/meta/watch",
+                sequence: 0,
+                deviceTimeNS: 1,
+                payload: ["requested_imu_hz": .number(50)]
+            )
+        ]
+
+        for sequence in 0..<UInt64(10) {
+            events.append(
+                SensorEnvelope(
+                    sessionID: "summary-session",
+                    deviceID: "apple-watch",
+                    stream: "/body/watch/imu",
+                    sequence: sequence,
+                    deviceTimeNS: sequence * 20_000_000,
+                    payload: [
+                        "ax": .number(gravity),
+                        "ay": .number(0),
+                        "az": .number(0),
+                        "user_ax": .number(gravity * 0.1),
+                        "user_ay": .number(0),
+                        "user_az": .number(0),
+                        "gx": .number(1),
+                        "gy": .number(0),
+                        "gz": .number(0),
+                    ]
+                )
+            )
+        }
+
+        for (sequence, bpm) in [100.0, 110.0].enumerated() {
+            events.append(
+                SensorEnvelope(
+                    sessionID: "summary-session",
+                    deviceID: "apple-watch",
+                    stream: "/body/watch/hr",
+                    sequence: UInt64(sequence),
+                    deviceTimeNS: UInt64(sequence + 1) * 1_000_000_000,
+                    payload: ["bpm": .number(bpm)]
+                )
+            )
+        }
+
+        try writeJSONL(events, to: url)
+        return url
+    }
+
+    private func writeJSONL(
+        _ events: [SensorEnvelope],
+        to url: URL
+    ) throws {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+
+        var data = Data()
+        for event in events {
+            data.append(try encoder.encode(event))
+            data.append(0x0A)
+        }
+        try data.write(to: url, options: .atomic)
     }
 
     private func makeShutdownJournalURL() throws -> URL {
