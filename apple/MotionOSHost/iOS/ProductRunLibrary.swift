@@ -117,7 +117,7 @@ final class ProductRunLibrary: ObservableObject {
         refresh()
     }
 
-    private static func loadRuns() throws -> [ProductRunRecord] {
+    nonisolated private static func loadRuns() throws -> [ProductRunRecord] {
         let manager = FileManager.default
         let documents = try manager.url(
             for: .documentDirectory,
@@ -361,7 +361,7 @@ final class ProductRunLibrary: ObservableObject {
         }
     }
 
-    private static func watchSessionIDLinked(
+    nonisolated private static func watchSessionIDLinked(
         to runID: String,
         documents: URL,
         manager: FileManager
@@ -410,7 +410,7 @@ final class ProductRunLibrary: ObservableObject {
         return unique.first
     }
 
-    private static func stringMap(
+    nonisolated private static func stringMap(
         _ value: Any?
     ) -> [String: String] {
         guard let dictionary = value as? [String: Any] else {
@@ -428,7 +428,7 @@ final class ProductRunLibrary: ObservableObject {
         )
     }
 
-    private static func usefulIdentifier(
+    nonisolated private static func usefulIdentifier(
         _ value: String?
     ) -> String? {
         guard let value,
@@ -441,7 +441,7 @@ final class ProductRunLibrary: ObservableObject {
         return value
     }
 
-    private static func existingURL(
+    nonisolated private static func existingURL(
         _ url: URL?,
         manager: FileManager
     ) -> URL? {
@@ -453,7 +453,7 @@ final class ProductRunLibrary: ObservableObject {
         return url
     }
 
-    private static func externalVideoURL(
+    nonisolated private static func externalVideoURL(
         in directory: URL,
         manager: FileManager
     ) -> URL? {
@@ -471,7 +471,7 @@ final class ProductRunLibrary: ObservableObject {
         }
     }
 
-    private static func date(
+    nonisolated private static func date(
         _ value: Any?,
         formatter: ISO8601DateFormatter
     ) -> Date? {
@@ -481,7 +481,7 @@ final class ProductRunLibrary: ObservableObject {
         return formatter.date(from: value)
     }
 
-    private static func int(
+    nonisolated private static func int(
         _ value: Any?
     ) -> Int? {
         if let value = value as? Int {
