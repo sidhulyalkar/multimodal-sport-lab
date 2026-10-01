@@ -187,6 +187,7 @@ final class CameraCapturePipeline:
     private var lastPTSNS: UInt64?
     private var firstIntrinsicMatrix: [[Double]]?
     private var lastIntrinsicMatrix: [[Double]]?
+    private var latestPoseFrame: BodyMovementFrame?
     private var encoder = JSONEncoder()
 
     override init() {
@@ -263,6 +264,14 @@ final class CameraCapturePipeline:
         await withCheckedContinuation { continuation in
             outputQueue.async {
                 continuation.resume(returning: self.makeLiveStats())
+            }
+        }
+    }
+
+    func livePoseFrame() async -> BodyMovementFrame? {
+        await withCheckedContinuation { continuation in
+            outputQueue.async {
+                continuation.resume(returning: self.latestPoseFrame)
             }
         }
     }
@@ -492,6 +501,7 @@ final class CameraCapturePipeline:
         lastPTSNS = nil
         firstIntrinsicMatrix = nil
         lastIntrinsicMatrix = nil
+        latestPoseFrame = nil
     }
 
     nonisolated func captureOutput(
@@ -658,6 +668,15 @@ final class CameraCapturePipeline:
                         payload: payload
                     )
                 )
+
+                latestPoseFrame =
+                    BodyMovementFrameParser.parseVisionPose(
+                        payload: payload,
+                        sessionID: sessionID,
+                        sequence: poseSequence,
+                        deviceTimeNS: ptsNS
+                    )
+
                 poseSequence += 1
             }
 
