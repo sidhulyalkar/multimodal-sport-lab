@@ -464,7 +464,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
             stopRequested = false
         }
 
-        let watchStopped = stopRequested
+        var watchStopped = stopRequested
             ? await waitForWatchToLeaveRunning(phone: phone)
             : false
 
@@ -1152,6 +1152,10 @@ final class IndoBoardSessionCoordinator: ObservableObject {
                 // ambiguous remote-stop command into a possibly different run.
                 watchStopped = false
             }
+        }
+
+        if !watchStopped {
+            watchStopped = watchCaptureStopped(phone)
         }
 
         if camera.phase == .recording {
