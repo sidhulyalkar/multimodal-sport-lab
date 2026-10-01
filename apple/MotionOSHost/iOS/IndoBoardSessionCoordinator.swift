@@ -584,23 +584,42 @@ final class IndoBoardSessionCoordinator: ObservableObject {
                 let safeName = sourceURL.lastPathComponent.isEmpty
                     ? "action4.mov"
                     : sourceURL.lastPathComponent
-                let destination = directory.appendingPathComponent(
-                    "original-" + safeName
-                )
-
                 let sourceDigest = try FileEvidence.digest(
                     sourceURL
                 )
 
-                if manager.fileExists(atPath: destination.path) {
+                let existingOriginals =
+                    (try? manager.contentsOfDirectory(
+                        at: directory,
+                        includingPropertiesForKeys: nil,
+                        options: [.skipsHiddenFiles]
+                    ))?
+                    .filter {
+                        $0.lastPathComponent.hasPrefix("original-")
+                    } ?? []
+
+                let destination: URL
+                if let existing = existingOriginals.first {
+                    guard existingOriginals.count == 1 else {
+                        throw ExternalVideoImportError
+                            .conflictingExistingEvidence(
+                                "multiple preserved originals"
+                            )
+                    }
                     let existingDigest = try FileEvidence.digest(
-                        destination
+                        existing
                     )
                     guard existingDigest == sourceDigest else {
                         throw ExternalVideoImportError
-                            .conflictingExistingEvidence(safeName)
+                            .conflictingExistingEvidence(
+                                existing.lastPathComponent
+                            )
                     }
+                    destination = existing
                 } else {
+                    destination = directory.appendingPathComponent(
+                        "original-" + safeName
+                    )
                     try manager.copyItem(
                         at: sourceURL,
                         to: destination
