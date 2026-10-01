@@ -270,7 +270,8 @@ struct PreviousRunComparisonCard: View {
     @EnvironmentObject private var library: ProductRunLibrary
 
     var body: some View {
-        if let previous = previousComparableRun,
+        if run.outcome == .completed,
+           let previous = previousComparableRun,
            let currentSummary = run.watchSummary,
            let previousSummary = previous.watchSummary {
             VStack(alignment: .leading, spacing: 12) {
