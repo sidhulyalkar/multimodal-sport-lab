@@ -1,37 +1,37 @@
 import Foundation
 
-struct ProductSessionManifest: Codable, Equatable, Sendable {
-    static let schemaVersion = "motionos.product-session.v1"
+public struct ProductSessionManifest: Codable, Equatable, Sendable {
+    public static let schemaVersion = "motionos.product-session.v1"
 
-    let schemaVersion: String
-    let runID: String
-    let sport: String
-    let captureMode: String
-    let targetDurationSeconds: Double
-    let createdAtUTC: String
-    let watchSessionID: String?
-    let cameraSessionID: String?
-    let operatorJournalSHA256: String?
-    let operatorMetadataSHA256: String?
-    let cameraVideoSHA256: String?
-    let cameraJournalSHA256: String?
-    let cameraMetadataSHA256: String?
-    let syncReceipts: [SyncReceipt]
-    let externalCameraExpected: Bool
-    let externalCameraImported: Bool
-    let externalCameraSHA256: String?
-    let operatorEvidenceSealed: Bool
-    let cameraEvidenceSealed: Bool
-    let claimBoundary: String
+    public let schemaVersion: String
+    public let runID: String
+    public let sport: String
+    public let captureMode: String
+    public let targetDurationSeconds: Double
+    public let createdAtUTC: String
+    public let watchSessionID: String?
+    public let cameraSessionID: String?
+    public let operatorJournalSHA256: String?
+    public let operatorMetadataSHA256: String?
+    public let cameraVideoSHA256: String?
+    public let cameraJournalSHA256: String?
+    public let cameraMetadataSHA256: String?
+    public let syncReceipts: [SyncReceipt]
+    public let externalCameraExpected: Bool
+    public let externalCameraImported: Bool
+    public let externalCameraSHA256: String?
+    public let operatorEvidenceSealed: Bool
+    public let cameraEvidenceSealed: Bool
+    public let claimBoundary: String
 
-    struct SyncReceipt: Codable, Equatable, Sendable {
-        let cueID: String
-        let label: String
-        let acknowledgedAtUTC: String
-        let watchDeviceTimeNS: UInt64
+    public struct SyncReceipt: Codable, Equatable, Sendable {
+        public let cueID: String
+        public let label: String
+        public let acknowledgedAtUTC: String
+        public let watchDeviceTimeNS: UInt64
     }
 
-    init(
+    public init(
         runID: String,
         captureMode: String,
         targetDurationSeconds: Double,
@@ -78,9 +78,9 @@ struct ProductSessionManifest: Codable, Equatable, Sendable {
     }
 }
 
-enum ProductSessionManifestStore {
+public enum ProductSessionManifestStore {
     @discardableResult
-    static func write(
+    public static func write(
         _ manifest: ProductSessionManifest,
         to runDirectory: URL
     ) throws -> URL {
@@ -93,7 +93,7 @@ enum ProductSessionManifestStore {
         return url
     }
 
-    static func load(
+    public static func load(
         from url: URL
     ) throws -> ProductSessionManifest {
         try JSONDecoder().decode(
