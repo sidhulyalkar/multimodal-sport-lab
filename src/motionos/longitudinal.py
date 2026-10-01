@@ -156,3 +156,27 @@ def update_longitudinal_profile(
     if changed:
         save_longitudinal_profile(profile, path)
     return profile
+
+
+
+def update_longitudinal_profile_if_qualified(
+    path: str | Path,
+    report: IndoBoardReport,
+    *,
+    qualification_passed: bool,
+    sport: str = "indo_board",
+    minimum_confidence: float = 0.6,
+) -> tuple[LongitudinalProfile, bool]:
+    profile = load_longitudinal_profile(path, sport=sport)
+    if not qualification_passed:
+        return profile, False
+    if report.session_id in profile.processed_session_ids:
+        return profile, False
+
+    changed = profile.update(
+        report,
+        minimum_confidence=minimum_confidence,
+    )
+    if changed:
+        save_longitudinal_profile(profile, path)
+    return profile, changed
