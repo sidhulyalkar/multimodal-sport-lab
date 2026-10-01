@@ -94,6 +94,7 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
     private let healthStore = HKHealthStore()
     private let transport = WatchConnectivityTransport()
     private var mirroredSession: HKWorkoutSession?
+    private var batteryObservers: [NSObjectProtocol] = []
     private var lastWatchPresenceRequestAt = Date.distantPast
     private let watchPresenceRequestMinimumInterval: TimeInterval = 5
 
@@ -101,6 +102,7 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
         super.init()
 
         UIDevice.current.isBatteryMonitoringEnabled = true
+        installHostReadinessObservers()
 
         healthStore.workoutSessionMirroringStartHandler = { [weak self] session in
             guard let self else { return }
@@ -189,6 +191,31 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
 
         requestWatchPresenceIfNeeded()
         refreshHostReadiness()
+    }
+
+    private func installHostReadinessObservers() {
+        for name in [
+            UIDevice.batteryLevelDidChangeNotification,
+            UIDevice.batteryStateDidChangeNotification,
+            UIApplication.didBecomeActiveNotification,
+        ] {
+            let observer = NotificationCenter.default.addObserver(
+                forName: name,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.refreshHostReadiness()
+                    self?.refreshWatchState()
+                }
+            }
+            batteryObservers.append(observer)
+        }
+
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(500))
+            self?.refreshHostReadiness()
+        }
     }
 
     func refreshHostReadiness() {
