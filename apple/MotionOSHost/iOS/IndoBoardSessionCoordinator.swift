@@ -87,7 +87,8 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         let watchDeviceTimeNS: UInt64
     }
 
-    static let targetDurationSeconds: TimeInterval = 120
+    static let targetDurationSeconds: TimeInterval =
+        IndoBoardProductProtocol.targetDurationSeconds
 
     @Published private(set) var phase: Phase = .idle
     @Published var captureMode: CaptureMode = .watchAndPhone
@@ -603,30 +604,10 @@ final class IndoBoardSessionCoordinator: ObservableObject {
     func instruction(
         at elapsed: TimeInterval
     ) -> String {
-        switch elapsed {
-        case ..<10:
-            "Settle into neutral balance."
-        case ..<20:
-            acknowledgedCueLabels.contains("start")
-                ? "Return to neutral after the start sync gesture."
-                : "When the Watch taps for START sync, make one sharp arm gesture."
-        case ..<45:
-            "Natural free balance. Stay comfortable and visible to camera."
-        case ..<55:
-            acknowledgedCueLabels.contains("middle")
-                ? "Return to neutral after the middle sync gesture."
-                : "When the Watch taps for MIDDLE sync, make one sharp arm gesture."
-        case ..<90:
-            "Five controlled tilt-and-recover cycles. Alternate directions."
-        case ..<110:
-            "Natural free balance, then settle toward neutral."
-        case ..<120:
-            acknowledgedCueLabels.contains("end")
-                ? "Hold a comfortable neutral finish."
-                : "When the Watch taps for END sync, make one sharp arm gesture."
-        default:
-            "Session target reached. Finish and seal when stable."
-        }
+        IndoBoardProductProtocol.instruction(
+            at: elapsed,
+            acknowledgedSyncLabels: acknowledgedCueLabels
+        )
     }
 
     private func startProtocolTimeline(
@@ -635,7 +616,12 @@ final class IndoBoardSessionCoordinator: ObservableObject {
     ) {
         protocolTask?.cancel()
         protocolTransitions = []
-        fieldRun.startBlock("neutral-settle")
+
+        advanceProtocol(
+            elapsed: 0,
+            phone: phone,
+            fieldRun: fieldRun
+        )
 
         protocolTask = Task { @MainActor [weak self, weak fieldRun] in
             while !Task.isCancelled {
@@ -661,94 +647,33 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         phone: PhoneSessionCoordinator,
         fieldRun: FieldRunCoordinator
     ) {
-        transition(
-            "complete-neutral-settle",
-            when: elapsed >= 10
-        ) {
-            fieldRun.completeBlock("neutral-settle")
+        for block in IndoBoardProductProtocol.blocks {
+            if elapsed >= block.endSeconds {
+                transition(
+                    "complete-\(block.id)",
+                    when: true
+                ) {
+                    fieldRun.completeBlock(block.id)
+                }
+            } else if elapsed >= block.startSeconds {
+                transition(
+                    "start-\(block.id)",
+                    when: true
+                ) {
+                    fieldRun.startBlock(block.id)
+                }
+            }
         }
 
-        autoCue(
-            "start",
-            elapsed: elapsed,
-            target: 12,
-            windowEnd: 20,
-            phone: phone,
-            fieldRun: fieldRun
-        )
-
-        transition(
-            "start-free-a",
-            when: elapsed >= 20
-        ) {
-            fieldRun.startBlock("free-balance-a")
-        }
-
-        transition(
-            "complete-free-a",
-            when: elapsed >= 45
-        ) {
-            fieldRun.completeBlock("free-balance-a")
-        }
-
-        autoCue(
-            "middle",
-            elapsed: elapsed,
-            target: 50,
-            windowEnd: 58,
-            phone: phone,
-            fieldRun: fieldRun
-        )
-
-        transition(
-            "start-tilt-recover",
-            when: elapsed >= 55
-        ) {
-            fieldRun.startBlock("tilt-recover")
-        }
-
-        transition(
-            "complete-tilt-recover",
-            when: elapsed >= 90
-        ) {
-            fieldRun.completeBlock("tilt-recover")
-        }
-
-        transition(
-            "start-free-b",
-            when: elapsed >= 95
-        ) {
-            fieldRun.startBlock("free-balance-b")
-        }
-
-        transition(
-            "complete-free-b",
-            when: elapsed >= 110
-        ) {
-            fieldRun.completeBlock("free-balance-b")
-        }
-
-        transition(
-            "start-neutral-finish",
-            when: elapsed >= 110
-        ) {
-            fieldRun.startBlock("neutral-finish")
-        }
-
-        autoCue(
-            "end",
-            elapsed: elapsed,
-            target: 110,
-            windowEnd: 120,
-            phone: phone,
-            fieldRun: fieldRun
-        )
-
-        transition(
-            "complete-neutral-finish",
-            when: elapsed >= 120
-        ) {
-            fieldRun.completeBlock("neutral-finish")
+        for sync in IndoBoardProductProtocol.syncWindows {
+            autoCue(
+                sync.label,
+                elapsed: elapsed,
+                target: sync.preferredSeconds,
+                windowEnd: sync.endSeconds,
+                phone: phone,
+                fieldRun: fieldRun
+            )
         }
     }
 
