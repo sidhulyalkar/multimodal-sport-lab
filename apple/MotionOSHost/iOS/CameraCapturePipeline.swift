@@ -15,6 +15,12 @@ struct CameraCaptureConfiguration: Sendable {
     let formatHeight: Int32
     let minFrameRate: Double
     let maxFrameRate: Double
+    let requestedFrameRate: Double
+    let configuredFrameRate: Double
+    let frameRateLocked: Bool
+    let videoStabilizationSupported: Bool
+    let preferredVideoStabilizationMode: String
+    let stabilizationLockedOff: Bool
     let intrinsicDeliveryEnabled: Bool
 
     func metadataObject() -> [String: Any] {
@@ -27,6 +33,13 @@ struct CameraCaptureConfiguration: Sendable {
             "format_height": Int(formatHeight),
             "min_supported_frame_rate": minFrameRate,
             "max_supported_frame_rate": maxFrameRate,
+            "requested_frame_rate": requestedFrameRate,
+            "configured_frame_rate": configuredFrameRate,
+            "frame_rate_locked": frameRateLocked,
+            "video_stabilization_supported": videoStabilizationSupported,
+            "preferred_video_stabilization_mode":
+                preferredVideoStabilizationMode,
+            "stabilization_locked_off": stabilizationLockedOff,
             "intrinsic_matrix_delivery_enabled": intrinsicDeliveryEnabled,
         ]
     }
@@ -87,6 +100,7 @@ enum CameraCaptureError: LocalizedError {
     case cannotAddOutput
     case videoConnectionUnavailable
     case writerSettingsUnavailable
+    case targetFrameRateUnavailable(Double)
     case recordingAlreadyActive
     case recordingNotActive
     case invalidPresentationTime
@@ -105,6 +119,9 @@ enum CameraCaptureError: LocalizedError {
             "The capture session has no video connection."
         case .writerSettingsUnavailable:
             "AVFoundation did not provide compatible movie-writer settings."
+        case .targetFrameRateUnavailable(let frameRate):
+            "The active rear-camera format does not support the required " +
+                "\(Int(frameRate)) fps M0-Vision capture rate."
         case .recordingAlreadyActive:
             "A camera evidence recording is already active."
         case .recordingNotActive:
@@ -126,6 +143,7 @@ final class CameraCapturePipeline:
 {
     static let schemaVersion = "motionos.camera.v1"
     static let poseStride: UInt64 = 3
+    static let targetFrameRate: Double = 30.0
 
     private let captureSession = AVCaptureSession()
     private let videoOutput = AVCaptureVideoDataOutput()
@@ -153,6 +171,7 @@ final class CameraCapturePipeline:
     private var writerStarted = false
     private var frameSequence: UInt64 = 0
     private var poseSequence: UInt64 = 0
+    private var pose2DSequence: UInt64 = 0
     private var dropSequence: UInt64 = 0
     private var deliveredFrameCount: UInt64 = 0
     private var writtenFrameCount: UInt64 = 0
@@ -320,10 +339,41 @@ final class CameraCapturePipeline:
             connection.videoRotationAngle = 0
         }
 
+        let stabilizationSupported =
+            connection.isVideoStabilizationSupported
+        if stabilizationSupported {
+            connection.preferredVideoStabilizationMode = .off
+        }
+        let stabilizationLockedOff =
+            !stabilizationSupported
+                || connection.preferredVideoStabilizationMode == .off
+
+        let ranges = device.activeFormat.videoSupportedFrameRateRanges
+        let targetFrameRate = Self.targetFrameRate
+        guard ranges.contains(where: {
+            $0.minFrameRate <= targetFrameRate
+                && targetFrameRate <= $0.maxFrameRate
+        }) else {
+            throw CameraCaptureError.targetFrameRateUnavailable(
+                targetFrameRate
+            )
+        }
+
+        try device.lockForConfiguration()
+        let frameDuration = CMTime(
+            value: 1,
+            timescale: CMTimeScale(targetFrameRate)
+        )
+        device.activeVideoMinFrameDuration = frameDuration
+        device.activeVideoMaxFrameDuration = frameDuration
+        let configuredFrameRate = 1.0 / CMTimeGetSeconds(
+            device.activeVideoMinFrameDuration
+        )
+        device.unlockForConfiguration()
+
         let dimensions = CMVideoFormatDescriptionGetDimensions(
             device.activeFormat.formatDescription
         )
-        let ranges = device.activeFormat.videoSupportedFrameRateRanges
         let minRate = ranges.map(\.minFrameRate).min() ?? 0
         let maxRate = ranges.map(\.maxFrameRate).max() ?? 0
 
@@ -336,6 +386,12 @@ final class CameraCapturePipeline:
             formatHeight: dimensions.height,
             minFrameRate: minRate,
             maxFrameRate: maxRate,
+            requestedFrameRate: targetFrameRate,
+            configuredFrameRate: configuredFrameRate,
+            frameRateLocked: true,
+            videoStabilizationSupported: stabilizationSupported,
+            preferredVideoStabilizationMode: "off",
+            stabilizationLockedOff: stabilizationLockedOff,
             intrinsicDeliveryEnabled: intrinsicsEnabled
         )
         self.configuration = configuration
@@ -421,6 +477,7 @@ final class CameraCapturePipeline:
         writerStarted = false
         frameSequence = 0
         poseSequence = 0
+        pose2DSequence = 0
         dropSequence = 0
         deliveredFrameCount = 0
         writtenFrameCount = 0
@@ -466,6 +523,7 @@ final class CameraCapturePipeline:
         do {
             let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
             let ptsNS = try presentationTimeNS(pts)
+            let hostMonotonicTimeNS = MonotonicClock.nowNS()
 
             if !writerStarted {
                 guard writer.startWriting() else {
@@ -509,12 +567,22 @@ final class CameraCapturePipeline:
                 frameSequence % Self.poseStride == 0
             var poseStatus = "not_scheduled"
             var posePayload: [String: JSONValue]?
+            var pose2DPayload: [String: JSONValue]?
 
             if shouldAnalyzePose {
                 poseScheduledCount += 1
                 if let pixelBuffer = CMSampleBufferGetImageBuffer(
                     sampleBuffer
                 ) {
+                    do {
+                        pose2DPayload = try Pose2DExtractor.extract(
+                            from: pixelBuffer,
+                            orientation: .up
+                        )
+                    } catch {
+                        pose2DPayload = nil
+                    }
+
                     do {
                         if let pose = try Pose3DExtractor.extract(
                             from: pixelBuffer,
@@ -555,6 +623,8 @@ final class CameraCapturePipeline:
                 ),
                 "width_px": .number(Double(dimensions.width)),
                 "height_px": .number(Double(dimensions.height)),
+                "host_monotonic_time_ns":
+                    .number(Double(hostMonotonicTimeNS)),
             ]
             if let intrinsic {
                 framePayload["camera_intrinsic_matrix"] =
@@ -575,6 +645,38 @@ final class CameraCapturePipeline:
                     payload: framePayload
                 )
             )
+
+            if let pose2DPayload {
+                var payload = pose2DPayload
+                payload["source_frame_sequence"] =
+                    .number(Double(frameSequence))
+                payload["source_frame_pts_ns"] =
+                    .number(Double(ptsNS))
+                payload["timestamp_basis"] = .string(
+                    "avcapture_presentation_timestamp"
+                )
+                payload["source"] = .string(
+                    "vision_2d_pose_from_camera_frame"
+                )
+                payload["image_width_px"] =
+                    .number(Double(dimensions.width))
+                payload["image_height_px"] =
+                    .number(Double(dimensions.height))
+                payload["vision_orientation"] = .string("up")
+
+                try appendEvent(
+                    SensorEnvelope(
+                        sessionID: sessionID,
+                        deviceID:
+                            configuration?.uniqueID ?? "iphone-camera",
+                        stream: "/camera/pose2d",
+                        sequence: pose2DSequence,
+                        deviceTimeNS: ptsNS,
+                        payload: payload
+                    )
+                )
+                pose2DSequence += 1
+            }
 
             if let posePayload {
                 var payload = posePayload
@@ -756,7 +858,10 @@ final class CameraCapturePipeline:
                         "rear_camera_native_landscape",
                 ],
                 "pose": [
-                    "request": "VNDetectHumanBodyPose3DRequest",
+                    "requests": [
+                        "VNDetectHumanBodyPoseRequest",
+                        "VNDetectHumanBodyPose3DRequest",
+                    ],
                     "stride_delivered_frames": Int(Self.poseStride),
                     "vision_orientation": "up",
                     "joint_coordinate_frame":

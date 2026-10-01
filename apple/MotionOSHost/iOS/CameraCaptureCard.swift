@@ -272,15 +272,45 @@ struct CameraCaptureCard: View {
             .font(.caption)
             .foregroundStyle(.secondary)
 
-            Text(
-                String(
-                    format: "format range %.1f–%.1f fps",
-                    configuration.minFrameRate,
-                    configuration.maxFrameRate
+            HStack(spacing: 6) {
+                Label(
+                    String(
+                        format: "%.0f fps locked",
+                        configuration.configuredFrameRate
+                    ),
+                    systemImage: configuration.frameRateLocked
+                        ? "lock.fill"
+                        : "exclamationmark.triangle.fill"
                 )
+                .foregroundStyle(
+                    configuration.frameRateLocked ? .green : .yellow
+                )
+
+                Text(
+                    String(
+                        format: "· format range %.1f–%.1f fps",
+                        configuration.minFrameRate,
+                        configuration.maxFrameRate
+                    )
+                )
+                .foregroundStyle(.secondary)
+            }
+            .font(.caption)
+
+            Label(
+                configuration.stabilizationLockedOff
+                    ? "Video stabilization off · geometry-safe"
+                    : "Video stabilization state requires review",
+                systemImage: configuration.stabilizationLockedOff
+                    ? "viewfinder.circle"
+                    : "exclamationmark.triangle.fill"
             )
             .font(.caption)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(
+                configuration.stabilizationLockedOff
+                    ? .green
+                    : .yellow
+            )
         }
     }
 

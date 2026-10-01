@@ -1,0 +1,34 @@
+{
+  "schema_version": "motionos.charuco-calibration-spec.v1",
+  "calibration_id": "REPLACE_CAMERA_ID-calibration-v1",
+  "camera_id": "REPLACE_WITH_EXACT_RIG_CAMERA_ID",
+  "calibration_board": "calibration-board.example.json",
+  "world_frame": "world-frame.example.json",
+  "images": [
+    "calibration/REPLACE_001.png",
+    "calibration/REPLACE_002.png",
+    "calibration/REPLACE_003.png",
+    "calibration/REPLACE_004.png",
+    "calibration/REPLACE_005.png"
+  ],
+  "reference_image": "calibration/REPLACE_003.png",
+  "world_from_board": [
+    [1.0, 0.0, 0.0, 0.0],
+    [0.0, 1.0, 0.0, 0.0],
+    [0.0, 0.0, 1.0, 0.0],
+    [0.0, 0.0, 0.0, 1.0]
+  ],
+  "acceptance": {
+    "max_reprojection_rms_px": 1.0,
+    "max_reprojection_max_px": 2.0,
+    "thresholds_frozen_before_review": true
+  },
+  "camera_identity": {
+    "device_model": "REPLACE_WITH_DEVICE_MODEL",
+    "camera_unique_id": "REPLACE_WITH_EXACT_RIG_CAMERA_ID",
+    "device_type": "REPLACE_WITH_CAMERA_TYPE",
+    "position": "fixed_tripod",
+    "pixel_format": "decoded_bgr"
+  },
+  "source_timestamp_basis": "REPLACE_WITH_CAPTURE_TIMESTAMP_BASIS"
+}

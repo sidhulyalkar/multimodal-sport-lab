@@ -1,0 +1,18 @@
+{
+  "schema_version": "motionos.wrist-fusion-calibration-spec.v1",
+  "stationary_window_s": [
+    5,
+    15
+  ],
+  "dynamic_window_s": [
+    20,
+    50
+  ],
+  "maximum_time_delta_ms": 10,
+  "minimum_stationary_pairs": 60,
+  "minimum_dynamic_pairs": 180,
+  "jerk_percentile": 0.99,
+  "jerk_margin_factor": 1.25,
+  "wrist_side": null,
+  "reconstruction_receipt": "REPLACE/derived/wrist-fusion-calibration/wrist-fusion-reconstruction-receipt.json"
+}

@@ -1,0 +1,14 @@
+{
+  "schema_version": "motionos.aruco-marker-build-spec.v1",
+  "asset_id": "indo-board-four-marker-v1",
+  "dictionary": "DICT_4X4_50",
+  "marker_ids": [
+    21,
+    22,
+    23,
+    24
+  ],
+  "marker_size_m": 0.05,
+  "print_dpi": 600,
+  "border_bits": 1
+}

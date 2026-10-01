@@ -1,0 +1,51 @@
+{
+  "schema_version": "motionos.vision-session.v1",
+  "session_id": "indo-board-20260930-example",
+  "sport": "indo_board",
+  "capture_mode": "multiview_calibration",
+  "created_at_utc": "2026-09-30T22:00:00Z",
+  "camera_sources": [
+    {
+      "source_id": "iphone-rear",
+      "display_name": "iPhone rear camera",
+      "kind": "built_in",
+      "clock_domain": "avcapture-pts",
+      "timestamp_basis": "avcapture_presentation_timestamp",
+      "supports_live_frames": true,
+      "supports_remote_control": true,
+      "capabilities": [
+        "vision_pose",
+        "intrinsics",
+        "live_preview"
+      ]
+    },
+    {
+      "source_id": "dji-action4",
+      "display_name": "DJI Osmo Action 4",
+      "kind": "external_recorded",
+      "clock_domain": "action4-video-pts",
+      "timestamp_basis": "container_video_pts",
+      "supports_live_frames": false,
+      "supports_remote_control": false,
+      "capabilities": [
+        "4k",
+        "timecode",
+        "wide_fov",
+        "manual_import"
+      ]
+    }
+  ],
+  "sync_landmarks": [
+    {
+      "landmark_id": "sync-001",
+      "session_id": "indo-board-20260930-example",
+      "kind": "whole_body_impulse",
+      "host_monotonic_time_ns": 123456789,
+      "created_at_unix_ms": 1790805600000,
+      "note": "whole-body impulse visible to both cameras and Watch IMU"
+    }
+  ],
+  "claim_boundary": "Camera and wearable streams retain native timing until explicit calibration; derived biomechanics carry uncertainty.",
+  "coaching_condition": "feedback_disabled",
+  "media_artifacts": []
+}

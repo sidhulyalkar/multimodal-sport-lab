@@ -34,6 +34,8 @@ final class WatchSessionController: ObservableObject {
     @Published private(set) var nonMonotonicIMUCount: UInt64 = 0
     @Published private(set) var watchBatteryLevel: Double?
     @Published private(set) var guidedCueTitle: String?
+    @Published private(set) var visionSyncCueTitle: String?
+    @Published private(set) var coachingCue: CoachingCue?
     @Published private(set) var lastIMUSampleReceivedAt: Date?
     @Published private(set) var startedAt: Date?
     @Published private(set) var lastTransferredURL: URL?
@@ -51,6 +53,8 @@ final class WatchSessionController: ObservableObject {
     private var staleMotionRejectionBaseline: UInt64 = 0
     private var finalized = false
     private var heartRateSequence: UInt64 = 0
+    private var syncCueSequence: UInt64 = 0
+    private var lastVisionSyncLandmarkID: String?
     private var closedJournalURL: URL?
     private var closedJournalEvidence: FileEvidenceDigest?
     private var imuHealth = SampleTimingHealth()
@@ -142,8 +146,12 @@ final class WatchSessionController: ObservableObject {
         nonMonotonicIMUCount = 0
         watchBatteryLevel = nil
         guidedCueTitle = nil
+        visionSyncCueTitle = nil
+        coachingCue = nil
         lastIMUSampleReceivedAt = nil
         heartRateSequence = 0
+        syncCueSequence = 0
+        lastVisionSyncLandmarkID = nil
         finalized = false
         closedJournalURL = nil
         closedJournalEvidence = nil
@@ -275,11 +283,12 @@ final class WatchSessionController: ObservableObject {
         )
     }
 
-    private func record(_ event: SensorEnvelope) async {
+    @discardableResult
+    private func record(_ event: SensorEnvelope) async -> Bool {
         guard let journal = admittedJournal(sessionID: event.sessionID) else {
-            return
+            return false
         }
-        await append(event, to: journal)
+        return await append(event, to: journal)
     }
 
     /// The shutdown and cross-session boundary. Runs synchronously on the main
@@ -300,10 +309,11 @@ final class WatchSessionController: ObservableObject {
         return journal
     }
 
+    @discardableResult
     private func append(
         _ event: SensorEnvelope,
         to journal: CaptureSessionJournal
-    ) async {
+    ) async -> Bool {
         do {
             let outcome = try await journal.append(event)
             guard case .appended(let count) = outcome else {
@@ -311,7 +321,7 @@ final class WatchSessionController: ObservableObject {
                     admission.recordRejection(rejection)
                     refreshCaptureRejections()
                 }
-                return
+                return false
             }
 
             if event.stream == "/body/watch/imu" {
@@ -333,8 +343,10 @@ final class WatchSessionController: ObservableObject {
             if admission.isCapturing, count.isMultiple(of: 25) {
                 eventCount = count
             }
+            return true
         } catch {
             fail(error)
+            return false
         }
     }
 
@@ -486,15 +498,129 @@ final class WatchSessionController: ObservableObject {
     private func handleMessage(
         _ message: [String: Any]
     ) {
-        guard message["motionos_message"] as? String
-                == "guided_protocol_cue_v1",
-              let title = message["step_title"] as? String
-        else {
+        guard let type = message["motionos_message"] as? String else {
             return
         }
 
-        guidedCueTitle = title
-        WKInterfaceDevice.current().play(.notification)
+        switch type {
+        case "guided_protocol_cue_v1":
+            guard let title = message["step_title"] as? String else {
+                return
+            }
+            guidedCueTitle = title
+            WKInterfaceDevice.current().play(.notification)
+
+        case "vision_sync_cue_v1":
+            guard state == .running || state == .paused,
+                  let landmarkID = message["landmark_id"] as? String,
+                  let visionSessionID =
+                    message["vision_session_id"] as? String,
+                  let watchSessionID = sessionID
+            else {
+                return
+            }
+
+            let receivedAtNS = MonotonicClock.nowNS()
+            let syncEvent = SensorEnvelope(
+                sessionID: watchSessionID,
+                deviceID: "apple-watch",
+                stream: "/sync/vision_cue",
+                sequence: syncCueSequence,
+                deviceTimeNS: receivedAtNS,
+                payload: [
+                    "vision_session_id": .string(visionSessionID),
+                    "landmark_id": .string(landmarkID),
+                    "cue_kind": .string(
+                        message["kind"] as? String
+                            ?? SyncLandmarkKind.wholeBodyImpulse.rawValue
+                    ),
+                ]
+            )
+            syncCueSequence += 1
+
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                let journaled = await self.record(syncEvent)
+                guard journaled else { return }
+
+                self.lastVisionSyncLandmarkID = landmarkID
+                self.visionSyncCueTitle = "SYNC · MOVE NOW"
+                WKInterfaceDevice.current().play(.notification)
+
+                let acknowledgment: [String: Any] = [
+                    "motionos_message": "vision_sync_cue_ack_v1",
+                    "vision_session_id": visionSessionID,
+                    "landmark_id": landmarkID,
+                    "watch_session_id": watchSessionID,
+                    "watch_device_time_ns": receivedAtNS,
+                ]
+                _ = self.transport.sendMessage(acknowledgment)
+                _ = self.transport.queueUserInfo(acknowledgment)
+
+                Task { @MainActor [weak self] in
+                    try? await Task.sleep(for: .milliseconds(1_500))
+                    guard let self,
+                          self.lastVisionSyncLandmarkID == landmarkID
+                    else {
+                        return
+                    }
+                    self.visionSyncCueTitle = nil
+                }
+            }
+
+        case "coaching_cue_v1":
+            guard state == .running || state == .paused,
+                  let cueID = message["cue_id"] as? String,
+                  let visionSessionID =
+                    message["vision_session_id"] as? String,
+                  let metricID = message["metric_id"] as? String,
+                  let cueMessage = message["message"] as? String,
+                  let kindRaw = message["kind"] as? String,
+                  let kind = CoachingCueKind(rawValue: kindRaw),
+                  let confidence = Self.double(message["confidence"]),
+                  let issuedAtUnixMS =
+                    Self.uint64(message["issued_at_unix_ms"]),
+                  let validForMS = Self.uint64(message["valid_for_ms"])
+            else {
+                return
+            }
+
+            let cue = CoachingCue(
+                cueID: cueID,
+                sessionID: visionSessionID,
+                metricID: metricID,
+                value: Self.double(message["value"]),
+                unit: message["unit"] as? String,
+                message: cueMessage,
+                kind: kind,
+                confidence: confidence,
+                issuedAtUnixMS: issuedAtUnixMS,
+                validForMS: validForMS
+            )
+            let nowMS = UInt64(
+                max(0, Date().timeIntervalSince1970 * 1000.0)
+            )
+            guard cue.isEligibleForLiveDelivery(nowUnixMS: nowMS) else {
+                return
+            }
+
+            coachingCue = cue
+            WKInterfaceDevice.current().play(.notification)
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(
+                    for: .milliseconds(Int(min(validForMS, 10_000)))
+                )
+                guard let self,
+                      self.coachingCue?.cueID == cueID
+                else {
+                    return
+                }
+                self.coachingCue = nil
+            }
+
+        default:
+            return
+        }
     }
 
     private func handleUserInfo(
@@ -591,6 +717,30 @@ final class WatchSessionController: ObservableObject {
         default:
             break
         }
+    }
+
+    private static func uint64(_ value: Any?) -> UInt64? {
+        if let value = value as? UInt64 {
+            return value
+        }
+        if let value = value as? Int, value >= 0 {
+            return UInt64(value)
+        }
+        if let value = value as? NSNumber {
+            let signed = value.int64Value
+            return signed >= 0 ? UInt64(signed) : nil
+        }
+        return nil
+    }
+
+    private static func double(_ value: Any?) -> Double? {
+        if let value = value as? Double {
+            return value
+        }
+        if let value = value as? NSNumber {
+            return value.doubleValue
+        }
+        return nil
     }
 
     private func fail(_ error: Error) {

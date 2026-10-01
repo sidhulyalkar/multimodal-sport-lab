@@ -1,0 +1,11 @@
+{
+  "schema_version": "motionos.charuco-board-build-spec.v1",
+  "board_id": "charuco-indo-board-v1",
+  "squares_x": 7,
+  "squares_y": 5,
+  "square_length_m": 0.04,
+  "marker_length_m": 0.03,
+  "dictionary": "DICT_5X5_1000",
+  "print_dpi": 600,
+  "margin_m": 0.01
+}

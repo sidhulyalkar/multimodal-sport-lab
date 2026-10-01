@@ -20,6 +20,7 @@ final class CameraCaptureController: ObservableObject {
     @Published private(set) var configuration: CameraCaptureConfiguration?
     @Published private(set) var evidenceBundle: CameraEvidenceBundle?
     @Published private(set) var liveStats: CameraLiveCaptureStats?
+    @Published private(set) var activeSessionID: String?
     @Published private(set) var errorMessage: String?
 
     private let pipeline = CameraCapturePipeline()
@@ -49,10 +50,11 @@ final class CameraCaptureController: ObservableObject {
         }
     }
 
-    func startRecording() async {
+    func startRecording(sessionID requestedSessionID: String? = nil) async {
         errorMessage = nil
         evidenceBundle = nil
         liveStats = nil
+        activeSessionID = nil
 
         do {
             let authorized = try await ensureAuthorization()
@@ -61,12 +63,13 @@ final class CameraCaptureController: ObservableObject {
                 return
             }
 
-            let sessionID = Self.makeSessionID()
+            let sessionID = requestedSessionID ?? Self.makeSessionID()
             configuration = try await pipeline.startRecording(
                 sessionID: sessionID,
                 hostModel: UIDevice.current.model,
                 hostOSVersion: UIDevice.current.systemVersion
             )
+            activeSessionID = sessionID
             phase = .recording
             startStatsPolling()
         } catch {

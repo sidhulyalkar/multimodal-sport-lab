@@ -5,6 +5,14 @@ import MotionOSAppleCapture
 import UIKit
 import WatchConnectivity
 
+struct VisionSyncCueAcknowledgment: Equatable, Sendable {
+    let visionSessionID: String
+    let landmarkID: String
+    let watchSessionID: String
+    let watchDeviceTimeNS: UInt64
+    let receivedAt: Date
+}
+
 struct WatchLiveCaptureHealth: Equatable, Sendable {
     let sessionID: String
     let receivedAt: Date
@@ -38,6 +46,8 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
     @Published private(set) var watchAppInstalled = false
     @Published private(set) var watchReachable = false
     @Published private(set) var watchCaptureHealth: WatchLiveCaptureHealth?
+    @Published private(set) var lastVisionSyncCueAcknowledgment:
+        VisionSyncCueAcknowledgment?
     @Published private(set) var iPhoneBatteryLevel: Double?
     @Published private(set) var iPhoneAvailableStorageBytes: Int64?
     @Published private(set) var errorMessage: String?
@@ -88,6 +98,13 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
             }
         }
 
+        transport.onUserInfoReceived = { [weak self] userInfo in
+            guard let self else { return }
+            Task { @MainActor in
+                self.ingestWatchMessage(userInfo)
+            }
+        }
+
         refreshWatchState()
     }
 
@@ -134,6 +151,54 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
         )
     }
 
+    @discardableResult
+    func sendVisionSyncCue(_ landmark: SyncLandmark) -> Bool {
+        transport.sendMessage(
+            [
+                "motionos_message": "vision_sync_cue_v1",
+                "vision_session_id": landmark.sessionID,
+                "landmark_id": landmark.landmarkID,
+                "kind": landmark.kind.rawValue,
+                "host_monotonic_time_ns": landmark.hostMonotonicTimeNS,
+                "created_at_unix_ms": landmark.createdAtUnixMS,
+            ]
+        )
+    }
+
+    @discardableResult
+    func sendCoachingCue(
+        _ cue: CoachingCue,
+        condition: CoachingCondition
+    ) -> Bool {
+        let nowMS = UInt64(
+            max(0, Date().timeIntervalSince1970 * 1000.0)
+        )
+        guard condition == .feedbackEnabled,
+              cue.isEligibleForLiveDelivery(nowUnixMS: nowMS)
+        else {
+            return false
+        }
+
+        var message: [String: Any] = [
+            "motionos_message": "coaching_cue_v1",
+            "cue_id": cue.cueID,
+            "vision_session_id": cue.sessionID,
+            "metric_id": cue.metricID,
+            "message": cue.message,
+            "kind": cue.kind.rawValue,
+            "confidence": cue.confidence,
+            "issued_at_unix_ms": cue.issuedAtUnixMS,
+            "valid_for_ms": cue.validForMS,
+        ]
+        if let value = cue.value {
+            message["value"] = value
+        }
+        if let unit = cue.unit {
+            message["unit"] = unit
+        }
+        return transport.sendMessage(message)
+    }
+
     func watchCaptureHealthAge(
         at date: Date = Date()
     ) -> TimeInterval? {
@@ -147,9 +212,45 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
     private func ingestWatchMessage(
         _ message: [String: Any]
     ) {
-        guard message["motionos_message"] as? String
-                == "watch_capture_health_v1",
-              let sessionID = message["session_id"] as? String,
+        guard let type = message["motionos_message"] as? String else {
+            return
+        }
+
+        switch type {
+        case "watch_capture_health_v1":
+            ingestWatchCaptureHealth(message)
+
+        case "vision_sync_cue_ack_v1":
+            guard let visionSessionID =
+                    message["vision_session_id"] as? String,
+                  let landmarkID = message["landmark_id"] as? String,
+                  let watchSessionID =
+                    message["watch_session_id"] as? String,
+                  let watchDeviceTimeNS = Self.uint64(
+                    message["watch_device_time_ns"]
+                  )
+            else {
+                return
+            }
+
+            lastVisionSyncCueAcknowledgment =
+                VisionSyncCueAcknowledgment(
+                    visionSessionID: visionSessionID,
+                    landmarkID: landmarkID,
+                    watchSessionID: watchSessionID,
+                    watchDeviceTimeNS: watchDeviceTimeNS,
+                    receivedAt: Date()
+                )
+
+        default:
+            return
+        }
+    }
+
+    private func ingestWatchCaptureHealth(
+        _ message: [String: Any]
+    ) {
+        guard let sessionID = message["session_id"] as? String,
               let imuSamples = Self.uint64(
                 message["imu_sample_count"]
               ),

@@ -129,13 +129,26 @@ Neither case is silently interpolated.
 
 ## Pose scheduling
 
-Initial M0 policy:
+Initial iPhone M0 policy:
 
 ~~~
+capture_rate_fps = 30
 pose_stride_delivered_frames = 3
+preferred_video_stabilization_mode = off
 ~~~
 
-Vision is intentionally not required on every video frame.
+The fixed-camera Action 4 M0-Vision import uses:
+
+~~~
+source_video = 3840x2160 @ approximately 60 fps
+pose_stride_decoded_frames = 1
+operator_confirmed_eis = off
+operator_confirmed_fov = Standard (Dewarp)
+~~~
+
+Vision is intentionally not required on every live iPhone video frame. Action 4
+pose is offline, so every decoded frame is analyzed to make cross-camera
+temporal pairing dense without increasing live phone compute.
 
 Every video frame still records whether pose was scheduled and what happened.
 

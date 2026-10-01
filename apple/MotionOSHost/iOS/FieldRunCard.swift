@@ -457,6 +457,12 @@ struct FieldRunCard: View {
             "camera_intrinsics_enabled": String(
                 camera.configuration?.intrinsicDeliveryEnabled ?? false
             ),
+            "camera_frame_rate_locked": String(
+                camera.configuration?.frameRateLocked ?? false
+            ),
+            "camera_configured_frame_rate": String(
+                camera.configuration?.configuredFrameRate ?? 0
+            ),
         ]
     }
 

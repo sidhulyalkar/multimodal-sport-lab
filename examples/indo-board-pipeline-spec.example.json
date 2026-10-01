@@ -1,0 +1,65 @@
+{
+  "schema_version": "motionos.indo-board-pipeline-spec.v1",
+  "vision_session": "REPLACE/vision_session.json",
+  "watch_journal": "REPLACE/watch.jsonl",
+  "rig_receipt": "REPLACE/current-session-camera-rig-receipt.json",
+  "board_marker_layout": "indo-board-marker-layout.example.json",
+  "longitudinal_profile": "../profiles/indo-board-profile.json",
+  "iphone": {
+    "video": "REPLACE/iphone/camera.mov",
+    "journal": "REPLACE/iphone/camera-frames.jsonl",
+    "metadata": "REPLACE/iphone/camera-metadata.json"
+  },
+  "action4": {
+    "video": "REPLACE/action4/original.mov",
+    "journal": "REPLACE/action4/action4-frames.jsonl",
+    "metadata": "REPLACE/action4/action4-derived-metadata.json"
+  },
+  "thresholds": {
+    "maximum_pose_pair_ms": 10,
+    "maximum_marker_pair_ms": 10,
+    "minimum_joint_confidence": 0.6,
+    "marker_frame_stride": 1,
+    "maximum_board_scale_error_fraction": 0.03,
+    "maximum_skeleton_board_pair_ms": 20,
+    "minimum_modeled_mass_coverage": 0.75,
+    "maximum_board_fit_residual_m": 0.03,
+    "minimum_pose_confidence": 0.6,
+    "maximum_timing_uncertainty_ms": 20,
+    "maximum_reprojection_rms_px": 3,
+    "minimum_longitudinal_confidence": 0.6
+  },
+  "wrist_fusion": {
+    "watch_acceleration_std_m_s2": "REPLACE_WITH_EMPIRICAL_WATCH_STD",
+    "vision_acceleration_std_m_s2": "REPLACE_WITH_EMPIRICAL_VISION_STD",
+    "maximum_acceleration_rate_m_s3": "REPLACE_WITH_PREDECLARED_JERK_BOUND",
+    "maximum_time_delta_ms": 20
+  },
+  "board_marker_asset_receipt": "REPLACE/indo-board-four-marker-v1-build-receipt.json",
+  "qualification": {
+    "minimum_pose_frame_pairs": "REPLACE_WITH_FROZEN_MINIMUM",
+    "minimum_board_frame_pairs": "REPLACE_WITH_FROZEN_MINIMUM",
+    "minimum_board_pose_count": "REPLACE_WITH_FROZEN_MINIMUM",
+    "minimum_metric_accepted_samples": "REPLACE_WITH_FROZEN_MINIMUM",
+    "minimum_metric_accepted_fraction": "REPLACE_WITH_FROZEN_FRACTION",
+    "maximum_external_clock_residual_ms": "REPLACE_WITH_FROZEN_LIMIT",
+    "maximum_iphone_clock_residual_ms": "REPLACE_WITH_FROZEN_LIMIT",
+    "maximum_action4_clock_residual_ms": "REPLACE_WITH_FROZEN_LIMIT",
+    "maximum_skeleton_reprojection_rms_px": "REPLACE_WITH_FROZEN_LIMIT",
+    "maximum_board_reprojection_rms_px": "REPLACE_WITH_FROZEN_LIMIT",
+    "maximum_board_pose_residual_p95_m": "REPLACE_WITH_FROZEN_LIMIT",
+    "maximum_board_pose_scale_error_p95_fraction": "REPLACE_WITH_FROZEN_LIMIT",
+    "maximum_board_pose_rejected_fraction": "REPLACE_WITH_FROZEN_FRACTION",
+    "maximum_reconstruction_rejected_fraction": "REPLACE_WITH_FROZEN_FRACTION",
+    "maximum_watch_vision_rms_m_s2": "REPLACE_WITH_EMPIRICAL_LIMIT",
+    "required_metric_ids": [
+      "balance_stability_rms_m",
+      "com_excursion_p95_m",
+      "board_control_jerk_rms_deg_s3",
+      "recovery_latency_median_s",
+      "stance_asymmetry_mean_abs_knee_deg"
+    ]
+  },
+  "wrist_fusion_calibration_receipt": "REPLACE/calibration/wrist-fusion-calibration.json",
+  "qualification_plan": "REPLACE/indo-board-qualification-plan.json"
+}
