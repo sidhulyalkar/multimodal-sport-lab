@@ -418,14 +418,17 @@ private struct BodyMovementScene3D: UIViewRepresentable {
 
     final class Coordinator {
         private let scene = SCNScene()
+        private let surfaceRoot = SCNNode()
         private let bodyRoot = SCNNode()
         private let supportRoot = SCNNode()
         private let muscleRoot = SCNNode()
         private let markerRoot = SCNNode()
         private let cameraNode = SCNNode()
+        private let groundNode = SCNNode()
 
         private var jointNodes: [String: SCNNode] = [:]
         private var boneNodes: [String: SCNNode] = [:]
+        private var surfaceNodes: [String: SCNNode] = [:]
         private var lastViewpoint: BodySceneViewpoint?
         private var lastSessionID: String?
         private var lastSequence: UInt64?
@@ -434,6 +437,7 @@ private struct BodyMovementScene3D: UIViewRepresentable {
             _ view: SCNView
         ) {
             scene.background.contents = UIColor.clear
+            scene.rootNode.addChildNode(surfaceRoot)
             scene.rootNode.addChildNode(bodyRoot)
             scene.rootNode.addChildNode(supportRoot)
             scene.rootNode.addChildNode(muscleRoot)
@@ -470,14 +474,20 @@ private struct BodyMovementScene3D: UIViewRepresentable {
             if lastSessionID != frame.sessionID {
                 jointNodes.values.forEach { $0.removeFromParentNode() }
                 boneNodes.values.forEach { $0.removeFromParentNode() }
+                surfaceNodes.values.forEach { $0.removeFromParentNode() }
                 jointNodes.removeAll()
                 boneNodes.removeAll()
+                surfaceNodes.removeAll()
                 lastSequence = nil
                 lastSessionID = frame.sessionID
             }
 
             if lastSequence != frame.sequence
                 || lastSequence == nil {
+                updateBodySurface(
+                    frame,
+                    isReference: isReference
+                )
                 updateSkeleton(
                     frame,
                     isReference: isReference
@@ -558,11 +568,150 @@ private struct BodyMovementScene3D: UIViewRepresentable {
             material.isDoubleSided = true
             plane.materials = [material]
 
-            let ground = SCNNode(geometry: plane)
-            ground.name = "ground"
-            ground.eulerAngles.x = -.pi / 2
-            ground.position.y = -0.88
-            scene.rootNode.addChildNode(ground)
+            groundNode.geometry = plane
+            groundNode.name = "ground"
+            groundNode.eulerAngles.x = -.pi / 2
+            groundNode.position.y = -0.88
+            scene.rootNode.addChildNode(groundNode)
+        }
+
+        private func updateBodySurface(
+            _ frame: BodyMovementFrame,
+            isReference: Bool
+        ) {
+            let map = frame.jointMap
+            var present = Set<String>()
+
+            SCNTransaction.begin()
+            SCNTransaction.animationDuration = isReference ? 0 : 0.12
+
+            for joint in frame.joints {
+                guard let parentID = joint.parentID,
+                      let parent = map[parentID],
+                      let radius = surfaceRadius(
+                        for: joint.id
+                      )
+                else {
+                    continue
+                }
+
+                let id = "surface:\(parentID)->\(joint.id)"
+                present.insert(id)
+
+                let node: SCNNode
+                if let existing = surfaceNodes[id] {
+                    node = existing
+                } else {
+                    node = cylinderNode(
+                        radius: radius,
+                        color: .secondaryLabel,
+                        opacity: isReference ? 0.09 : 0.15
+                    )
+                    node.name = id
+                    surfaceNodes[id] = node
+                    surfaceRoot.addChildNode(node)
+                }
+
+                node.isHidden = false
+                positionCylinder(
+                    node,
+                    from: parent.position,
+                    to: joint.position
+                )
+            }
+
+            if let head = frame.joints.first(where: {
+                normalize($0.id).contains("head")
+            }) {
+                let id = "surface:head"
+                present.insert(id)
+
+                let node: SCNNode
+                if let existing = surfaceNodes[id] {
+                    node = existing
+                } else {
+                    node = sphere(
+                        radius: 0.095,
+                        color: .secondaryLabel,
+                        opacity: isReference ? 0.10 : 0.16
+                    )
+                    node.name = id
+                    surfaceNodes[id] = node
+                    surfaceRoot.addChildNode(node)
+                }
+
+                node.isHidden = false
+                node.simdPosition = vector(head.position)
+            }
+
+            if let pelvis = frame.pelvisReference?.position {
+                let id = "surface:pelvis"
+                present.insert(id)
+
+                let node: SCNNode
+                if let existing = surfaceNodes[id] {
+                    node = existing
+                } else {
+                    let geometry = SCNSphere(radius: 0.115)
+                    geometry.segmentCount = 20
+                    geometry.materials = [
+                        material(
+                            color: .secondaryLabel,
+                            opacity: isReference ? 0.08 : 0.13
+                        )
+                    ]
+                    node = SCNNode(geometry: geometry)
+                    node.scale = SCNVector3(1.25, 0.75, 0.82)
+                    node.name = id
+                    surfaceNodes[id] = node
+                    surfaceRoot.addChildNode(node)
+                }
+
+                node.isHidden = false
+                node.simdPosition = vector(pelvis)
+            }
+
+            for (id, node) in surfaceNodes {
+                node.isHidden = !present.contains(id)
+            }
+
+            SCNTransaction.commit()
+        }
+
+        private func surfaceRadius(
+            for jointID: String
+        ) -> CGFloat? {
+            let id = normalize(jointID)
+
+            if id.contains("head") {
+                return nil
+            }
+            if id.contains("centershoulder")
+                || id.contains("spine") {
+                return 0.090
+            }
+            if id.contains("hip") {
+                return 0.070
+            }
+            if id.contains("knee") {
+                return 0.055
+            }
+            if id.contains("ankle")
+                || id.contains("foot") {
+                return 0.040
+            }
+            if id.contains("shoulder") {
+                return 0.048
+            }
+            if id.contains("elbow") {
+                return 0.038
+            }
+            if id.contains("wrist")
+                || id.contains("hand") {
+                return 0.028
+            }
+
+            return 0.042
         }
 
         private func updateSkeleton(
@@ -631,6 +780,7 @@ private struct BodyMovementScene3D: UIViewRepresentable {
             supportRoot.isHidden = !showSupport
 
             let floorY = inferredFloorY(frame)
+            groundNode.position.y = Float(floorY - 0.006)
 
             if let pelvis = frame.pelvisReference {
                 let marker = sphere(
@@ -934,13 +1084,18 @@ private struct BodyMovementScene3D: UIViewRepresentable {
                 Float((bounds.min.y + bounds.max.y) / 2),
                 Float((bounds.min.z + bounds.max.z) / 2)
             )
-            let height = max(
+            let xSpan = Float(bounds.max.x - bounds.min.x)
+            let ySpan = Float(bounds.max.y - bounds.min.y)
+            let zSpan = Float(bounds.max.z - bounds.min.z)
+            let bodySpan = max(
                 1.0,
-                Float(bounds.max.y - bounds.min.y)
+                max(xSpan, max(ySpan, zSpan))
             )
+            let heightHint = Float(frame.bodyHeightM ?? 0)
+            let fitSpan = max(bodySpan, min(2.4, heightHint))
             let distance = max(
                 2.25,
-                height * 1.55
+                fitSpan * 1.45
             )
 
             switch viewpoint {
