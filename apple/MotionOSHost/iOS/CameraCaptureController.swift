@@ -38,6 +38,7 @@ final class CameraCaptureController: ObservableObject {
     }
 
     func prepare() async {
+        stopLivePolling()
         errorMessage = nil
 
         // Preview preparation starts a new capture opportunity. Never let a
