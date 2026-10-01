@@ -12,6 +12,10 @@ from .board_marker_correspondences import (
 )
 from .board_pose_series import build_board_pose_series
 from .indo_board import analyze_indo_board
+from .indo_board_acquisition import (
+    ACQUISITION_PROFILE_ID,
+    require_indo_board_acquisition,
+)
 from .indo_board_plan import validate_indo_board_qualification_plan
 from .indo_board_qualification import (
     build_indo_board_qualification_receipt,
@@ -541,6 +545,7 @@ def process_indo_board_pipeline(
             sha256_file(fusion_calibration_receipt),
         "qualification_plan_sha256":
             sha256_file(qualification_plan),
+        "acquisition_profile_id": ACQUISITION_PROFILE_ID,
         "pose_pair_count": pose_pair_count,
         "marker_pair_count": marker_pair_count,
         "metric_count": len(metrics.metrics),
@@ -629,6 +634,12 @@ def validate_indo_board_pipeline_spec(
         raise FileNotFoundError(
             "pipeline input files are missing: " + ", ".join(missing)
         )
+
+    require_indo_board_acquisition(
+        required_paths["vision_session"],
+        required_paths["iphone.metadata"],
+        required_paths["action4.metadata"],
+    )
 
     qualification_plan = validate_indo_board_qualification_plan(
         required_paths["qualification_plan"]
