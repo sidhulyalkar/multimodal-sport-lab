@@ -114,6 +114,53 @@ final class MotionOSAppleCaptureTests: XCTestCase {
     }
 
 
+    func testIndoBoardProductProtocolIsContiguousAndBounded() {
+        XCTAssertTrue(IndoBoardProductProtocol.isInternallyConsistent)
+        XCTAssertEqual(
+            IndoBoardProductProtocol.blocks.first?.startSeconds,
+            0
+        )
+        XCTAssertEqual(
+            IndoBoardProductProtocol.blocks.last?.endSeconds,
+            IndoBoardProductProtocol.targetDurationSeconds
+        )
+        XCTAssertEqual(
+            Set(
+                IndoBoardProductProtocol.syncWindows.map(\.label)
+            ),
+            Set(["start", "middle", "end"])
+        )
+    }
+
+    func testIndoBoardProductProtocolPrioritizesUnacknowledgedSyncCue() {
+        let instruction = IndoBoardProductProtocol.instruction(
+            at: 12,
+            acknowledgedSyncLabels: []
+        )
+        XCTAssertTrue(instruction.contains("START"))
+
+        let acknowledged = IndoBoardProductProtocol.instruction(
+            at: 12,
+            acknowledgedSyncLabels: ["start"]
+        )
+        XCTAssertEqual(
+            acknowledged,
+            IndoBoardProductProtocol.blocks[0].instruction
+        )
+    }
+
+    func testIndoBoardProductProtocolFindsActiveBlock() {
+        XCTAssertEqual(
+            IndoBoardProductProtocol.activeBlock(at: 60)?.id,
+            "tilt-recover"
+        )
+        XCTAssertNil(
+            IndoBoardProductProtocol.activeBlock(
+                at: IndoBoardProductProtocol.targetDurationSeconds
+            )
+        )
+    }
+
     func testWatchMotionDerivationUsesUserAccelerationChannels() throws {
         let gravity = 9.80665
         let derived = try XCTUnwrap(
