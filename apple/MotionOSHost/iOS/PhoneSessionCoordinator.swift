@@ -220,6 +220,18 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
     }
 
     @discardableResult
+    func sendWatchStopRequest(
+        runID: String
+    ) -> Bool {
+        transport.sendMessage(
+            [
+                "motionos_message": "session_stop_request_v1",
+                "run_id": runID,
+            ]
+        )
+    }
+
+    @discardableResult
     func sendSessionSyncCue(
         runID: String,
         cueID: String,
