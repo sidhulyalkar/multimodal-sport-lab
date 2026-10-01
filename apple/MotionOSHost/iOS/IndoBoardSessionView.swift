@@ -176,10 +176,12 @@ struct IndoBoardSessionView: View {
 
             readinessRow(
                 title: "iPhone camera",
-                detail: camera.phase.rawValue,
-                ready: camera.phase == .ready
-                    || camera.phase == .evidenceReady
-                    || camera.phase == .recording,
+                detail: cameraDetail,
+                ready: (
+                    camera.phase == .ready
+                        || camera.phase == .evidenceReady
+                        || camera.phase == .recording
+                ) && session.cameraProfileReady(camera),
                 symbol: "camera.fill"
             )
 
@@ -907,6 +909,23 @@ struct IndoBoardSessionView: View {
         .cardStyle()
     }
 
+    private var cameraDetail: String {
+        guard let configuration = camera.configuration else {
+            return camera.phase.rawValue
+        }
+
+        if session.cameraProfileReady(camera) {
+            return String(
+                format: "%dx%d · %.0f fps · stab off",
+                configuration.formatWidth,
+                configuration.formatHeight,
+                configuration.configuredFrameRate
+            )
+        }
+
+        return "profile needs review"
+    }
+
     private var watchDetail: String {
         if phone.watchReachable {
             return "connected"
@@ -928,6 +947,7 @@ struct IndoBoardSessionView: View {
                 camera.phase == .ready
                     || camera.phase == .evidenceReady
             )
+            && session.cameraProfileReady(camera)
             && (phone.iPhoneBatteryLevel ?? 0) >= 0.20
             && (phone.iPhoneAvailableStorageBytes ?? 0)
                 >= 5_000_000_000
