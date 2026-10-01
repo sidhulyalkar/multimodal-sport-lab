@@ -491,7 +491,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
                     reason: String(
                         format:
                             "Operator stopped the product session at %.1f s before the %.0f s target.",
-                        elapsedSeconds,
+                        finishRequestedElapsed,
                         IndoBoardProductProtocol
                             .targetDurationSeconds
                     ),
@@ -748,9 +748,9 @@ final class IndoBoardSessionCoordinator: ObservableObject {
                     fieldRun: fieldRun
                 )
 
-                if elapsed
-                    >= IndoBoardProductProtocol
-                        .targetDurationSeconds {
+                if IndoBoardProductProtocol.reachedTarget(
+                    at: elapsed
+                ) {
                     Task { @MainActor [weak self, weak fieldRun] in
                         guard let self,
                               let fieldRun,
