@@ -36,6 +36,14 @@ final class CameraCaptureController: ObservableObject {
 
     func prepare() async {
         errorMessage = nil
+
+        // Preview preparation starts a new capture opportunity. Never let a
+        // prior sealed camera bundle or session identifier leak into a later
+        // product run that fails before recording actually starts.
+        sessionID = nil
+        evidenceBundle = nil
+        liveStats = nil
+
         do {
             let authorized = try await ensureAuthorization()
             guard authorized else {
