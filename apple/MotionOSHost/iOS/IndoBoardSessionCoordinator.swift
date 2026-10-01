@@ -541,6 +541,11 @@ final class IndoBoardSessionCoordinator: ObservableObject {
                     createdAtUTC: existing.createdAtUTC,
                     watchSessionID: existing.watchSessionID,
                     cameraSessionID: existing.cameraSessionID,
+                    operatorJournalSHA256: existing.operatorJournalSHA256,
+                    operatorMetadataSHA256: existing.operatorMetadataSHA256,
+                    cameraVideoSHA256: existing.cameraVideoSHA256,
+                    cameraJournalSHA256: existing.cameraJournalSHA256,
+                    cameraMetadataSHA256: existing.cameraMetadataSHA256,
                     syncReceipts: existing.syncReceipts,
                     externalCameraExpected: existing.externalCameraExpected,
                     externalCameraImported: true,
@@ -831,12 +836,34 @@ final class IndoBoardSessionCoordinator: ObservableObject {
             )
         }
 
+        let operatorJournalDigest = try FileEvidence.digest(
+            bundle.journalURL
+        )
+        let operatorMetadataDigest = try FileEvidence.digest(
+            bundle.metadataURL
+        )
+
+        let cameraVideoDigest = try camera.evidenceBundle.map {
+            try FileEvidence.digest($0.videoURL)
+        }
+        let cameraJournalDigest = try camera.evidenceBundle.map {
+            try FileEvidence.digest($0.journalURL)
+        }
+        let cameraMetadataDigest = try camera.evidenceBundle.map {
+            try FileEvidence.digest($0.metadataURL)
+        }
+
         let manifest = ProductSessionManifest(
             runID: runID,
             captureMode: captureMode.rawValue,
             targetDurationSeconds: Self.targetDurationSeconds,
             watchSessionID: phone.watchCaptureHealth?.sessionID,
             cameraSessionID: camera.sessionID,
+            operatorJournalSHA256: operatorJournalDigest.sha256,
+            operatorMetadataSHA256: operatorMetadataDigest.sha256,
+            cameraVideoSHA256: cameraVideoDigest?.sha256,
+            cameraJournalSHA256: cameraJournalDigest?.sha256,
+            cameraMetadataSHA256: cameraMetadataDigest?.sha256,
             syncReceipts: receipts,
             externalCameraExpected: requiresExternalCamera,
             externalCameraImported: externalVideoEvidence != nil,
