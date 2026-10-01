@@ -281,6 +281,13 @@ struct IndoBoardSessionView: View {
             )
 
             readinessRow(
+                title: "Workout access",
+                detail: session.watchWorkoutAccessDetail(phone),
+                ready: session.watchWorkoutAccessReady(phone),
+                symbol: "heart.circle"
+            )
+
+            readinessRow(
                 title: "iPhone camera",
                 detail: cameraDetail,
                 ready: (
@@ -1318,6 +1325,7 @@ struct IndoBoardSessionView: View {
             && phone.watchAppInstalled
             && phone.watchReachable
             && session.watchCaptureAvailable(phone)
+            && session.watchWorkoutAccessReady(phone)
             && (
                 camera.phase == .ready
                     || camera.phase == .evidenceReady
