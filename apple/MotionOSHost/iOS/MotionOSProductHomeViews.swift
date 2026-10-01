@@ -233,6 +233,8 @@ struct ObserveHomeView: View {
             indoBoard.currentInstruction
         case .finishing:
             "Sealing the current session"
+        case .watchStopRequired:
+            "Stop the Watch to close its journal"
         case .sealed:
             "Latest session is sealed"
         case .failed:
