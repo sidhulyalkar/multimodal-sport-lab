@@ -168,6 +168,7 @@ final class WatchSessionController: ObservableObject {
             }
         }
 
+        recoverPendingJournals()
         refreshReadinessAndPresence()
     }
 
@@ -774,11 +775,111 @@ final class WatchSessionController: ObservableObject {
             transferMetadata["product_run_id"] = linkedProductRunID
         }
 
-        pendingJournalTransfers[sessionID] = PendingJournalTransfer(
+        let pending = PendingJournalTransfer(
             url: journalURL,
             evidence: evidence,
             metadata: transferMetadata
         )
+        pendingJournalTransfers[sessionID] = pending
+        pendingTransferCount = pendingJournalTransfers.count
+        persistPendingJournal(
+            pending,
+            sessionID: sessionID
+        )
+    }
+
+    private func persistPendingJournal(
+        _ pending: PendingJournalTransfer,
+        sessionID: String
+    ) {
+        let sidecarURL = pending.url
+            .deletingLastPathComponent()
+            .appendingPathComponent("watch-transfer.json")
+
+        let object: [String: Any] = [
+            "schema_version": "motionos.watch-transfer.v1",
+            "session_id": sessionID,
+            "journal_sha256": pending.evidence.sha256,
+            "journal_byte_count": pending.evidence.byteCount,
+            "transfer_metadata": pending.metadata,
+        ]
+
+        guard JSONSerialization.isValidJSONObject(object),
+              let data = try? JSONSerialization.data(
+                withJSONObject: object,
+                options: [.prettyPrinted, .sortedKeys]
+              )
+        else {
+            return
+        }
+        try? data.write(to: sidecarURL, options: .atomic)
+    }
+
+    private func recoverPendingJournals() {
+        let manager = FileManager.default
+        guard let documents = try? manager.url(
+            for: .documentDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        ) else {
+            return
+        }
+
+        let root = documents.appendingPathComponent(
+            "MotionOS",
+            isDirectory: true
+        )
+        guard manager.fileExists(atPath: root.path),
+              let directories = try? manager.contentsOfDirectory(
+                at: root,
+                includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles]
+              )
+        else {
+            return
+        }
+
+        for directory in directories {
+            let journalURL = directory.appendingPathComponent("watch.jsonl")
+            guard manager.fileExists(atPath: journalURL.path),
+                  let evidence = try? FileEvidence.digest(journalURL)
+            else {
+                continue
+            }
+
+            let sessionID = directory.lastPathComponent
+            let sidecarURL = directory.appendingPathComponent(
+                "watch-transfer.json"
+            )
+
+            var metadata: [String: Any] = [
+                "session_id": sessionID,
+                "schema_version": "motionos.m0.v1",
+                "stream": "/body/watch",
+                "journal_sha256": evidence.sha256,
+                "journal_byte_count": evidence.byteCount,
+                "capture_origin": "Recovered Watch journal",
+            ]
+
+            if let data = try? Data(contentsOf: sidecarURL),
+               let object = try? JSONSerialization.jsonObject(
+                    with: data
+               ) as? [String: Any],
+               let storedHash = object["journal_sha256"] as? String,
+               storedHash.lowercased() == evidence.sha256,
+               let storedMetadata =
+                    object["transfer_metadata"] as? [String: Any] {
+                metadata = storedMetadata
+            }
+
+            pendingJournalTransfers[sessionID] = PendingJournalTransfer(
+                url: journalURL,
+                evidence: evidence,
+                metadata: metadata
+            )
+        }
+
         pendingTransferCount = pendingJournalTransfers.count
     }
 
