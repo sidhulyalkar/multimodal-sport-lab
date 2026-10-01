@@ -53,26 +53,14 @@ struct WatchCaptureToolsView: View {
     private var readiness: some View {
         VStack(alignment: .leading, spacing: 10) {
             statusRow(
-                "Paired",
-                phone.watchPaired,
-                phone.watchPaired ? "yes" : "no"
-            )
-            statusRow(
-                "MotionOS Watch",
-                phone.watchAppInstalled,
-                phone.hasRecentWatchPresence()
-                    ? "handshake"
-                    : (phone.watchAppInstalled ? "installed" : "missing")
-            )
-            statusRow(
-                "Live link",
-                phone.watchReachable,
-                phone.watchReachable ? "reachable" : "background"
+                "Watch connection",
+                phone.watchConnectionReady,
+                phone.watchConnectionDetail
             )
             statusRow(
                 "Workout",
                 phone.state == .running || phone.state == .paused,
-                phone.state.rawValue
+                phone.state == .idle ? "Ready" : phone.state.rawValue.capitalized
             )
 
             if let health = phone.watchCaptureHealth {
