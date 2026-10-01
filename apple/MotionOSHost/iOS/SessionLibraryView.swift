@@ -118,7 +118,7 @@ struct SessionLibraryView: View {
                 HStack(spacing: 8) {
                     snapshotMetric(
                         "SOURCES",
-                        "\(run.sourceCount)",
+                        "\(run.sourceCount)/\(run.expectedSourceCount)",
                         "point.3.connected.trianglepath.dotted"
                     )
                     snapshotMetric(
@@ -369,7 +369,9 @@ struct SessionLibraryView: View {
                         Text(date, style: .date)
                     }
                     Text("·")
-                    Text("\(run.sourceCount) sources")
+                    Text(run.captureModeLabel)
+                    Text("·")
+                    Text("\(run.sourceCount)/\(run.expectedSourceCount) sources")
                     Text("·")
                     Text(
                         run.syncComplete
