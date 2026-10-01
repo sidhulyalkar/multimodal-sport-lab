@@ -165,6 +165,59 @@ final class SystemsLabQualificationTests: XCTestCase {
         XCTAssertEqual(tracker.current?.meanEffectiveIMUHz, 50)
     }
 
+    func testLateReceiptStillUpdatesOlderCompletedSession() throws {
+        var tracker = SystemsLabQualificationTracker()
+        let start = Date(timeIntervalSince1970: 4_500)
+
+        tracker.observePresence(
+            sessionID: "first",
+            captureState: "running",
+            watchBatteryFraction: 0.9,
+            phoneBatteryFraction: 0.8,
+            receivedAt: start
+        )
+        tracker.observePresence(
+            sessionID: "first",
+            captureState: "transferQueued",
+            watchBatteryFraction: 0.89,
+            phoneBatteryFraction: 0.8,
+            receivedAt: start.addingTimeInterval(10)
+        )
+
+        tracker.observePresence(
+            sessionID: "second",
+            captureState: "running",
+            watchBatteryFraction: 0.89,
+            phoneBatteryFraction: 0.8,
+            receivedAt: start.addingTimeInterval(11)
+        )
+        tracker.observePresence(
+            sessionID: "second",
+            captureState: "transferQueued",
+            watchBatteryFraction: 0.88,
+            phoneBatteryFraction: 0.79,
+            receivedAt: start.addingTimeInterval(20)
+        )
+
+        XCTAssertEqual(tracker.latestCompleted?.sessionID, "second")
+
+        let updated = tracker.markJournalReceived(
+            sessionID: "first",
+            receivedAt: start.addingTimeInterval(30),
+            byteCount: 12_345,
+            sha256: "late-first"
+        )
+
+        XCTAssertEqual(updated?.sessionID, "first")
+        XCTAssertEqual(updated?.journalByteCount, 12_345)
+        XCTAssertEqual(tracker.latestCompleted?.sessionID, "second")
+
+        let storedFirst = tracker.recentCompleted.first {
+            $0.sessionID == "first"
+        }
+        XCTAssertEqual(storedFirst?.journalSHA256, "late-first")
+    }
+
     func testBatterySlopeRequiresTenMinutes() throws {
         var tracker = SystemsLabQualificationTracker()
         let start = Date(timeIntervalSince1970: 5_000)
