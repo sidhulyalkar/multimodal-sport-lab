@@ -477,16 +477,19 @@ final class IndoBoardSessionCoordinator: ObservableObject {
             stopRequested = false
         }
 
+        // Stop the camera immediately after issuing the Watch stop so
+        // its media endpoint stays close to the 120 s product boundary.
+        // Watch journal finalization can finish asynchronously afterward.
+        if camera.phase == .recording {
+            await camera.stopRecording()
+        }
+
         var watchStopped = stopRequested
             ? await waitForWatchToLeaveRunning(phone: phone)
             : false
 
         if !watchStopped {
             watchStopped = watchCaptureStopped(phone)
-        }
-
-        if camera.phase == .recording {
-            await camera.stopRecording()
         }
 
         if fieldRun.phase == .running || fieldRun.phase == .armed {
@@ -1168,18 +1171,16 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         let runID = fieldRun.runID ?? "unknown"
         var watchStopped = true
 
+        var stopRequested = false
         if phone.state == .running
             || phone.state == .paused
             || phone.state == .waitingForMirror
             || phone.state == .launchingWatch {
             if fieldRun.runID != nil,
-               let watchSessionID = activeWatchSessionID,
-               phone.sendWatchStopRequest(
+               let watchSessionID = activeWatchSessionID {
+                stopRequested = phone.sendWatchStopRequest(
                     runID: runID,
                     watchSessionID: watchSessionID
-               ) {
-                watchStopped = await waitForWatchToLeaveRunning(
-                    phone: phone
                 )
             } else {
                 // Without a fresh Watch capture identity, do not send an
@@ -1188,12 +1189,17 @@ final class IndoBoardSessionCoordinator: ObservableObject {
             }
         }
 
-        if !watchStopped {
-            watchStopped = watchCaptureStopped(phone)
-        }
-
         if camera.phase == .recording {
             await camera.stopRecording()
+        }
+
+        if stopRequested {
+            watchStopped = await waitForWatchToLeaveRunning(
+                phone: phone
+            )
+        }
+        if !watchStopped {
+            watchStopped = watchCaptureStopped(phone)
         }
 
         if fieldRun.phase == .armed
