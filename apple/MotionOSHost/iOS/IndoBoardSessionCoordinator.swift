@@ -934,28 +934,42 @@ final class IndoBoardSessionCoordinator: ObservableObject {
     func watchCaptureAvailable(
         _ phone: PhoneSessionCoordinator
     ) -> Bool {
-        !watchCaptureBusy(phone)
-    }
-
-    private func watchCaptureBusy(
-        _ phone: PhoneSessionCoordinator
-    ) -> Bool {
         switch phone.state {
         case .launchingWatch, .waitingForMirror, .running, .paused:
-            return true
+            return false
         default:
             break
         }
 
-        let watchState = phone.watchPresence?
+        guard let watchState = phone.watchPresence?
             .captureState
             .lowercased()
-        return [
-            "starting",
-            "running",
-            "paused",
-            "ending",
-        ].contains(watchState ?? "")
+        else {
+            return false
+        }
+
+        return ["idle", "transferred"].contains(watchState)
+    }
+
+    func watchCaptureAvailabilityDetail(
+        _ phone: PhoneSessionCoordinator
+    ) -> String {
+        guard let rawState = phone.watchPresence?.captureState else {
+            return "waiting for Watch status"
+        }
+
+        switch rawState.lowercased() {
+        case "idle", "transferred":
+            return "available for this session"
+        case "journalready", "transferqueued", "transportcomplete":
+            return "previous journal still verifying"
+        case "starting", "running", "paused", "ending":
+            return "another capture is active"
+        case "failed":
+            return "resolve saved Watch evidence first"
+        default:
+            return rawState
+        }
     }
 
     private func waitForFreshWatchSessionID(
