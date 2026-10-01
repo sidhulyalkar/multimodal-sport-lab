@@ -72,6 +72,12 @@ targets:
       path: iOS/Info.plist
       properties:
         CFBundleDisplayName: MotionOS
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
         NSHealthShareUsageDescription: MotionOS uses workout state to coordinate capture with Apple Watch.
