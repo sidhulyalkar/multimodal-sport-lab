@@ -249,31 +249,37 @@ def validate_wrist_fusion_reconstruction_spec(
         if isinstance(item, dict)
     }
 
+    expected_iphone_source_id = _validate_iphone_journal_binding(
+        manifest,
+        journal_path=required["iphone.journal"],
+        metadata_path=required["iphone.metadata"],
+    )
+    expected_action4_source_id = _validate_action4_journal_binding(
+        manifest,
+        journal_path=required["action4.journal"],
+        metadata_path=required["action4.metadata"],
+    )
+
     iphone_source_id = infer_pose2d_source_id(
         required["iphone.journal"]
     )
     action4_source_id = infer_pose2d_source_id(
         required["action4.journal"]
     )
+    if iphone_source_id != expected_iphone_source_id:
+        raise ValueError(
+            "iPhone pose journal camera ID does not match sealed metadata"
+        )
+    if action4_source_id != expected_action4_source_id:
+        raise ValueError(
+            "Action4 pose journal camera ID does not match sealed metadata"
+        )
     if iphone_source_id == action4_source_id:
         raise ValueError("camera journals must use distinct source IDs")
     if {iphone_source_id, action4_source_id} - rig_camera_ids:
         raise ValueError(
             "calibration camera journal IDs are absent from the rig receipt"
         )
-
-    _validate_iphone_journal_binding(
-        manifest,
-        journal_path=required["iphone.journal"],
-        metadata_path=required["iphone.metadata"],
-        source_id=iphone_source_id,
-    )
-    _validate_action4_journal_binding(
-        manifest,
-        journal_path=required["action4.journal"],
-        metadata_path=required["action4.metadata"],
-        source_id=action4_source_id,
-    )
 
     thresholds = _mapping(spec, "thresholds")
     _positive_float(thresholds, "maximum_pose_pair_ms")
@@ -286,8 +292,7 @@ def _validate_iphone_journal_binding(
     *,
     journal_path: Path,
     metadata_path: Path,
-    source_id: str,
-) -> None:
+) -> str:
     metadata = _json_object(metadata_path)
     if metadata.get("schema_version") != "motionos.camera.v1":
         raise ValueError("unsupported iPhone camera metadata schema")
@@ -301,16 +306,16 @@ def _validate_iphone_journal_binding(
         raise TypeError(
             "iPhone metadata requires camera and provenance objects"
         )
-    if str(camera.get("unique_id", "")) != source_id:
-        raise ValueError(
-            "iPhone metadata camera ID does not match calibration journal"
-        )
+    source_id = str(camera.get("unique_id", "")).strip()
+    if not source_id:
+        raise ValueError("iPhone metadata requires a camera unique_id")
     if str(
         provenance.get("camera_frames_jsonl_sha256", "")
     ) != sha256_file(journal_path):
         raise ValueError(
             "iPhone calibration journal hash does not match sealed metadata"
         )
+    return source_id
 
 
 def _validate_action4_journal_binding(
@@ -318,8 +323,7 @@ def _validate_action4_journal_binding(
     *,
     journal_path: Path,
     metadata_path: Path,
-    source_id: str,
-) -> None:
+) -> str:
     metadata = _json_object(metadata_path)
     if metadata.get("schema_version") != (
         "motionos.external-video-pose2d.v1"
@@ -329,10 +333,9 @@ def _validate_action4_journal_binding(
         raise ValueError(
             "Action4 metadata session_id does not match calibration session"
         )
-    if str(metadata.get("source_id", "")) != source_id:
-        raise ValueError(
-            "Action4 metadata source ID does not match calibration journal"
-        )
+    source_id = str(metadata.get("source_id", "")).strip()
+    if not source_id:
+        raise ValueError("Action4 metadata requires source_id")
     source_video = metadata.get("source_video")
     if not isinstance(source_video, dict):
         raise TypeError("Action4 metadata.source_video must be an object")
@@ -350,6 +353,7 @@ def _validate_action4_journal_binding(
         raise ValueError(
             "Action4 calibration journal is not bound to the sealed session"
         )
+    return source_id
 
 
 def _validate_watch_receipts(
