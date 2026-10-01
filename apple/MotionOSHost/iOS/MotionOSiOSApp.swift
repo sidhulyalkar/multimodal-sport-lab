@@ -26,9 +26,9 @@ struct MotionOSiOSApp: App {
                     coordinator.inbox.refreshCatalog()
                     runLibrary.refresh()
                 }
-                .onChange(
-                    of: coordinator.inbox.latestSessionID
-                ) { _, _ in
+                .onReceive(
+                    coordinator.inbox.$latestSessionID
+                ) { _ in
                     runLibrary.refresh()
                 }
                 .onChange(
