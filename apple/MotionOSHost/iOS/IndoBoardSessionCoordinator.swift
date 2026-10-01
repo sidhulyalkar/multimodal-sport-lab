@@ -1,6 +1,7 @@
 import Combine
 import Foundation
 import MotionOSAppleCapture
+import UIKit
 
 @MainActor
 final class IndoBoardSessionCoordinator: ObservableObject {
@@ -74,7 +75,9 @@ final class IndoBoardSessionCoordinator: ObservableObject {
     @Published var externalCameraConfirmed = false
 
     private var protocolTask: Task<Void, Never>?
+    private var syncTimeoutTask: Task<Void, Never>?
     private var protocolTransitions: Set<String> = []
+    private var lastCueAttemptAt: [String: Date] = [:]
 
     var elapsedSeconds: TimeInterval {
         guard let startedAt else { return 0 }
@@ -210,7 +213,11 @@ final class IndoBoardSessionCoordinator: ObservableObject {
 
         startedAt = Date()
         phase = .running
-        startProtocolTimeline(fieldRun: fieldRun)
+        UIApplication.shared.isIdleTimerDisabled = true
+        startProtocolTimeline(
+            phone: phone,
+            fieldRun: fieldRun
+        )
     }
 
     @discardableResult
@@ -247,6 +254,22 @@ final class IndoBoardSessionCoordinator: ObservableObject {
 
         pendingCueID = cueID
         errorMessage = nil
+
+        syncTimeoutTask?.cancel()
+        syncTimeoutTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(5))
+            guard let self,
+                  self.pendingCueID == cueID
+            else {
+                return
+            }
+            self.pendingCueID = nil
+            self.errorMessage = (
+                "The Watch did not acknowledge the "
+                    + normalized.uppercased()
+                    + " sync cue. MotionOS can retry while the cue window is open."
+            )
+        }
         return cueID
     }
 
@@ -274,6 +297,8 @@ final class IndoBoardSessionCoordinator: ObservableObject {
             fieldRun.markSyncCue(normalized)
         }
 
+        syncTimeoutTask?.cancel()
+        syncTimeoutTask = nil
         pendingCueID = nil
         errorMessage = nil
     }
@@ -311,6 +336,9 @@ final class IndoBoardSessionCoordinator: ObservableObject {
 
         protocolTask?.cancel()
         protocolTask = nil
+        syncTimeoutTask?.cancel()
+        syncTimeoutTask = nil
+        UIApplication.shared.isIdleTimerDisabled = false
 
         if fieldRun.phase == .sealed {
             phase = .sealed
@@ -426,7 +454,11 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         }
         protocolTask?.cancel()
         protocolTask = nil
+        syncTimeoutTask?.cancel()
+        syncTimeoutTask = nil
         protocolTransitions = []
+        lastCueAttemptAt = [:]
+        UIApplication.shared.isIdleTimerDisabled = false
         phase = .idle
         startedAt = nil
         cueReceipts = []
@@ -465,6 +497,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
     }
 
     private func startProtocolTimeline(
+        phone: PhoneSessionCoordinator,
         fieldRun: FieldRunCoordinator
     ) {
         protocolTask?.cancel()
@@ -482,6 +515,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
 
                 self.advanceProtocol(
                     elapsed: self.elapsedSeconds,
+                    phone: phone,
                     fieldRun: fieldRun
                 )
                 try? await Task.sleep(for: .milliseconds(250))
@@ -491,6 +525,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
 
     private func advanceProtocol(
         elapsed: TimeInterval,
+        phone: PhoneSessionCoordinator,
         fieldRun: FieldRunCoordinator
     ) {
         transition(
@@ -499,6 +534,15 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         ) {
             fieldRun.completeBlock("neutral-settle")
         }
+
+        autoCue(
+            "start",
+            elapsed: elapsed,
+            target: 12,
+            windowEnd: 20,
+            phone: phone,
+            fieldRun: fieldRun
+        )
 
         transition(
             "start-free-a",
@@ -513,6 +557,15 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         ) {
             fieldRun.completeBlock("free-balance-a")
         }
+
+        autoCue(
+            "middle",
+            elapsed: elapsed,
+            target: 50,
+            windowEnd: 58,
+            phone: phone,
+            fieldRun: fieldRun
+        )
 
         transition(
             "start-tilt-recover",
@@ -549,12 +602,51 @@ final class IndoBoardSessionCoordinator: ObservableObject {
             fieldRun.startBlock("neutral-finish")
         }
 
+        autoCue(
+            "end",
+            elapsed: elapsed,
+            target: 110,
+            windowEnd: 120,
+            phone: phone,
+            fieldRun: fieldRun
+        )
+
         transition(
             "complete-neutral-finish",
             when: elapsed >= 120
         ) {
             fieldRun.completeBlock("neutral-finish")
         }
+    }
+
+    private func autoCue(
+        _ label: String,
+        elapsed: TimeInterval,
+        target: TimeInterval,
+        windowEnd: TimeInterval,
+        phone: PhoneSessionCoordinator,
+        fieldRun: FieldRunCoordinator
+    ) {
+        guard elapsed >= target,
+              elapsed <= windowEnd,
+              !acknowledgedCueLabels.contains(label),
+              pendingCueID == nil
+        else {
+            return
+        }
+
+        let now = Date()
+        if let previous = lastCueAttemptAt[label],
+           now.timeIntervalSince(previous) < 3 {
+            return
+        }
+        lastCueAttemptAt[label] = now
+
+        _ = emitSyncCue(
+            label: label,
+            phone: phone,
+            fieldRun: fieldRun
+        )
     }
 
     private func transition(
@@ -648,6 +740,9 @@ final class IndoBoardSessionCoordinator: ObservableObject {
     private func fail(_ error: Error) {
         protocolTask?.cancel()
         protocolTask = nil
+        syncTimeoutTask?.cancel()
+        syncTimeoutTask = nil
+        UIApplication.shared.isIdleTimerDisabled = false
         phase = .failed
         errorMessage = error.localizedDescription
     }
