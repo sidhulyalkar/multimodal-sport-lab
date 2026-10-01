@@ -16,7 +16,8 @@ struct WatchContentView: View {
                     stateCard
                 }
 
-                if controller.captureRejections.total > 0 {
+                if controller.captureRejections.total > 0
+                    || controller.rejectedProductControlCount > 0 {
                     rejectionDiagnostics
                 }
 
@@ -399,7 +400,8 @@ struct WatchContentView: View {
             Text(
                 "\(value.afterShutdown) late · "
                     + "\(value.sessionMismatch &+ value.noActiveSession) foreign · "
-                    + "\(value.staleMotionGeneration) stale"
+                    + "\(value.staleMotionGeneration) stale · "
+                    + "\(controller.rejectedProductControlCount) control"
             )
             .font(.system(.caption2, design: .monospaced))
             .foregroundStyle(.secondary)
