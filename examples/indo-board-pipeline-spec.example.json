@@ -60,5 +60,6 @@
       "stance_asymmetry_mean_abs_knee_deg"
     ]
   },
-  "wrist_fusion_calibration_receipt": "REPLACE/calibration/wrist-fusion-calibration.json"
+  "wrist_fusion_calibration_receipt": "REPLACE/calibration/wrist-fusion-calibration.json",
+  "qualification_plan": "REPLACE/indo-board-qualification-plan.json"
 }
