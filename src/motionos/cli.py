@@ -49,6 +49,7 @@ from .fiducial_assets import (
     build_aruco_marker_assets,
     build_charuco_board_assets,
 )
+from .indo_board_acquisition import evaluate_indo_board_acquisition
 from .indo_board_pipeline import (
     process_indo_board_pipeline,
     validate_indo_board_pipeline_spec,
