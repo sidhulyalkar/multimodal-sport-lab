@@ -63,22 +63,27 @@ struct DeviceHubView: View {
                 state: watchState
             )
 
-            deviceRow(
-                "Companion",
-                phone.watchAppInstalled
-                    ? (
-                        phone.hasRecentWatchPresence()
-                            ? "handshake confirmed"
-                            : "installed"
-                    )
-                    : "not confirmed"
+            Label(
+                watchSummary,
+                systemImage: phone.watchConnectionReady
+                    ? "checkmark.circle.fill"
+                    : "info.circle"
             )
-            deviceRow(
-                "Link",
-                phone.watchConnectionDetail
+            .font(.subheadline)
+            .foregroundStyle(
+                phone.watchConnectionReady
+                    ? Color.green
+                    : Color.secondary
             )
 
             if let presence = phone.watchPresence {
+                deviceRow(
+                    "Detected",
+                    presence.receivedAt.formatted(
+                        date: .omitted,
+                        time: .shortened
+                    )
+                )
                 deviceRow(
                     "WatchOS",
                     presence.watchSystemVersion
@@ -99,22 +104,11 @@ struct DeviceHubView: View {
                 }
             }
 
-            if phone.watchAppInstalled
-                && !phone.systemWatchAppInstalled {
-                Label(
-                    "MotionOS handshake proves the Watch app is present even "
-                        + "though the system install flag is stale.",
-                    systemImage: "checkmark.shield.fill"
-                )
-                .font(.caption)
-                .foregroundStyle(.green)
-            }
-
             Button {
                 phone.refreshWatchState()
             } label: {
                 Label(
-                    "Refresh Watch State",
+                    "Check Watch",
                     systemImage: "arrow.clockwise"
                 )
                 .frame(maxWidth: .infinity)
@@ -388,8 +382,22 @@ struct DeviceHubView: View {
     }
 
     private var watchState: String {
-        phone.watchConnectionLabel
-            .replacingOccurrences(of: "Watch ", with: "")
+        if phone.watchConnectionReady {
+            return "ready"
+        }
+        return phone.watchPaired ? "app setup" : "not paired"
+    }
+
+    private var watchSummary: String {
+        if phone.watchConnectionReady {
+            return phone.watchReachable
+                ? "Apple Watch + MotionOS detected now"
+                : "Apple Watch + MotionOS are ready"
+        }
+        if phone.watchPaired {
+            return "Apple Watch is paired. Open MotionOS on the Watch once to finish setup."
+        }
+        return "No Apple Watch is paired with this iPhone."
     }
 
     private var watchColor: Color {
