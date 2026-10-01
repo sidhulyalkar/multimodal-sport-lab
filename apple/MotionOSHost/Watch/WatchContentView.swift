@@ -3,6 +3,7 @@ import SwiftUI
 struct WatchContentView: View {
     @EnvironmentObject private var controller: WatchSessionController
     @State private var confirmStop = false
+    @State private var confirmDelete = false
 
     var body: some View {
         ScrollView {
@@ -41,6 +42,22 @@ struct WatchContentView: View {
             Button("Keep Recording", role: .cancel) {}
         } message: {
             Text("MotionOS will seal the Watch journal before transfer.")
+        }
+        .confirmationDialog(
+            "Delete this recording?",
+            isPresented: $confirmDelete,
+            titleVisibility: .visible
+        ) {
+            Button("Delete Recording", role: .destructive) {
+                _ = controller.deleteCurrentRecording()
+            }
+            Button("Keep Recording", role: .cancel) {}
+        } message: {
+            Text(
+                "MotionOS will cancel the queued transfer when possible and "
+                    + "delete this Watch copy. If the iPhone already received "
+                    + "it, delete that copy from Sessions."
+            )
         }
         .task {
             while !Task.isCancelled {
@@ -128,6 +145,17 @@ struct WatchContentView: View {
                 )
             }
 
+            if controller.pendingTransferCount > 0 {
+                readinessRow(
+                    title: "Background sync",
+                    value: controller.pendingTransferCount == 1
+                        ? "1 recording"
+                        : "\(controller.pendingTransferCount) recordings",
+                    symbol: "arrow.up.doc",
+                    ready: true
+                )
+            }
+
             if !controller.healthAccessReady {
                 Button {
                     Task { await controller.requestAuthorization() }
@@ -147,9 +175,11 @@ struct WatchContentView: View {
             }
 
             Text(
-                controller.companionAppInstalled || controller.phoneReachable
-                    ? "Ready for capture from the paired iPhone. Heart rate appears when read access is available."
-                    : "Sensor Check can validate Watch capture while the iPhone link is being diagnosed."
+                controller.companionAppInstalled
+                    || controller.phonePresenceConfirmed
+                    || controller.phoneReachable
+                    ? "MotionOS is ready. Record here or start a coordinated session from iPhone."
+                    : "Open MotionOS on the paired iPhone once to finish app detection."
             )
             .font(.caption2)
             .foregroundStyle(.secondary)
@@ -186,41 +216,40 @@ struct WatchContentView: View {
             )
 
         case .journalReady:
-            transferPanel(
-                title: "Journal safe",
-                detail: "The evidence file is sealed on this Watch.",
+            completedCapturePanel(
+                title: "Recording saved",
+                detail: "Safe on this Watch. MotionOS will retry the iPhone sync automatically.",
                 symbol: "internaldrive.fill",
-                action: "Retry Transfer"
+                showRetry: true,
+                canDelete: true
             )
 
         case .transferQueued:
-            progressPanel(
-                title: "Transfer queued",
-                detail: "The sealed journal remains safe locally.",
-                symbol: "arrow.up.doc.fill"
+            completedCapturePanel(
+                title: "Recording saved",
+                detail: "Syncing to iPhone in the background. You can keep using MotionOS.",
+                symbol: "arrow.up.doc.fill",
+                showRetry: false,
+                canDelete: true
             )
 
         case .transportComplete:
-            transferPanel(
-                title: "Sent to iPhone",
-                detail: "Waiting for the iPhone to verify the file hash.",
+            completedCapturePanel(
+                title: "Recording sent",
+                detail: "The iPhone is verifying the recording now.",
                 symbol: "iphone.and.arrow.forward",
-                action: "Retry if needed"
+                showRetry: true,
+                canDelete: true
             )
 
         case .transferred:
-            VStack(alignment: .leading, spacing: 7) {
-                Label("Verified on iPhone", systemImage: "checkmark.seal.fill")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.green)
-                if let sessionID = controller.sessionID {
-                    Text(sessionID)
-                        .font(.system(size: 9, design: .monospaced))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
-            }
-            .panelStyle()
+            completedCapturePanel(
+                title: "Saved on iPhone",
+                detail: "Verification passed. The Watch copy has been cleaned up.",
+                symbol: "checkmark.seal.fill",
+                showRetry: false,
+                canDelete: false
+            )
 
         case .failed:
             EmptyView()
@@ -468,26 +497,58 @@ struct WatchContentView: View {
         .panelStyle()
     }
 
-    private func transferPanel(
+    private func completedCapturePanel(
         title: String,
         detail: String,
         symbol: String,
-        action: String
+        showRetry: Bool,
+        canDelete: Bool
     ) -> some View {
-        VStack(spacing: 7) {
+        VStack(spacing: 8) {
             Image(systemName: symbol)
                 .font(.title3)
-                .foregroundStyle(.yellow)
+                .foregroundStyle(
+                    controller.state == .transferred
+                        ? Color.green
+                        : Color.cyan
+                )
+
             Text(title)
                 .font(.subheadline.weight(.semibold))
+
             Text(detail)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
-            Button(action) {
-                controller.retryTransfer()
+                .fixedSize(horizontal: false, vertical: true)
+
+            Button {
+                controller.dismissCompletedCapture()
+            } label: {
+                Label("Done", systemImage: "checkmark")
+                    .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.borderedProminent)
+
+            if showRetry {
+                Button {
+                    controller.retryTransfer()
+                } label: {
+                    Label("Retry Sync", systemImage: "arrow.clockwise")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+            }
+
+            if canDelete {
+                Button(role: .destructive) {
+                    confirmDelete = true
+                } label: {
+                    Label("Delete Recording", systemImage: "trash")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+            }
         }
         .frame(maxWidth: .infinity)
         .panelStyle()
