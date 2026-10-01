@@ -441,17 +441,17 @@ private extension WatchSessionSummaryAnalyzer {
                 )
             }
 
-            updateRange(
+            Self.updateRange(
                 value: number(event.payload["roll"]),
                 minimum: &rollMin,
                 maximum: &rollMax
             )
-            updateRange(
+            Self.updateRange(
                 value: number(event.payload["pitch"]),
                 minimum: &pitchMin,
                 maximum: &pitchMax
             )
-            updateRange(
+            Self.updateRange(
                 value: number(event.payload["yaw"]),
                 minimum: &yawMin,
                 maximum: &yawMax
@@ -520,7 +520,7 @@ private extension WatchSessionSummaryAnalyzer {
             return (maximum - minimum) * 180 / .pi
         }
 
-        private mutating func updateRange(
+        private static func updateRange(
             value: Double?,
             minimum: inout Double?,
             maximum: inout Double?
