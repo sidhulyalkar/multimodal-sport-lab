@@ -57,6 +57,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         case insufficientBattery
         case insufficientStorage
         case watchCaptureAlreadyActive
+        case watchWorkoutAccessUnavailable
         case watchDidNotStart
         case watchIdentityUnavailable
         case watchDidNotStop
@@ -77,6 +78,8 @@ final class IndoBoardSessionCoordinator: ObservableObject {
                 "Free at least 5 GB on the iPhone before recording."
             case .watchCaptureAlreadyActive:
                 "Finish the current Watch capture before starting an Indo Board product session."
+            case .watchWorkoutAccessUnavailable:
+                "Enable workout access in MotionOS on the Apple Watch before starting this session."
             case .watchDidNotStart:
                 "The Watch workout did not reach running state in time."
             case .watchIdentityUnavailable:
@@ -180,6 +183,10 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         }
         guard watchCaptureAvailable(phone) else {
             fail(SessionError.watchCaptureAlreadyActive)
+            return
+        }
+        guard watchWorkoutAccessReady(phone) else {
+            fail(SessionError.watchWorkoutAccessUnavailable)
             return
         }
         guard camera.phase == .ready
@@ -956,6 +963,21 @@ final class IndoBoardSessionCoordinator: ObservableObject {
             && configuration.frameRateLocked
             && abs(configuration.configuredFrameRate - 30.0) < 0.01
             && configuration.stabilizationLockedOff
+    }
+
+    func watchWorkoutAccessReady(
+        _ phone: PhoneSessionCoordinator
+    ) -> Bool {
+        phone.watchPresence?
+            .healthAuthorization
+            .lowercased() == "enabled"
+    }
+
+    func watchWorkoutAccessDetail(
+        _ phone: PhoneSessionCoordinator
+    ) -> String {
+        phone.watchPresence?.healthAuthorization
+            ?? "waiting for Watch status"
     }
 
     func watchCaptureAvailable(
