@@ -468,6 +468,10 @@ final class IndoBoardSessionCoordinator: ObservableObject {
             ? await waitForWatchToLeaveRunning(phone: phone)
             : false
 
+        if !watchStopped {
+            watchStopped = watchCaptureStopped(phone)
+        }
+
         if camera.phase == .recording {
             await camera.stopRecording()
         }
@@ -511,13 +515,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
                     fieldRun: fieldRun
                 )
 
-                if watchStopped
-                    || (
-                        phone.state != .running
-                            && phone.state != .paused
-                            && phone.state != .waitingForMirror
-                            && phone.state != .launchingWatch
-                    ) {
+                if watchStopped || watchCaptureStopped(phone) {
                     phase = .sealed
                 } else {
                     phase = .watchStopRequired
@@ -673,10 +671,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         }
 
         phone.refreshWatchState()
-        if phone.state != .running
-            && phone.state != .paused
-            && phone.state != .waitingForMirror
-            && phone.state != .launchingWatch {
+        if watchCaptureStopped(phone) {
             phase = .sealed
             errorMessage = nil
         } else {
@@ -986,15 +981,36 @@ final class IndoBoardSessionCoordinator: ObservableObject {
     ) async -> Bool {
         let deadline = Date().addingTimeInterval(timeoutSeconds)
         while Date() < deadline {
-            if phone.state != .running
-                && phone.state != .paused
-                && phone.state != .waitingForMirror
-                && phone.state != .launchingWatch {
+            if watchCaptureStopped(phone) {
                 return true
             }
             try? await Task.sleep(for: .milliseconds(250))
         }
-        return false
+        return watchCaptureStopped(phone)
+    }
+
+    private func watchCaptureStopped(
+        _ phone: PhoneSessionCoordinator
+    ) -> Bool {
+        if phone.state == .ended {
+            return true
+        }
+
+        guard let captureState = phone.watchPresence?
+            .captureState
+            .lowercased()
+        else {
+            return false
+        }
+
+        return [
+            "idle",
+            "journalready",
+            "transferqueued",
+            "transportcomplete",
+            "transferred",
+            "failed",
+        ].contains(captureState)
     }
 
     private func readinessSnapshot(
