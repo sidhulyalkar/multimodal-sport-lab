@@ -32,6 +32,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         case starting
         case running
         case finishing
+        case watchStopRequired
         case sealed
         case failed
     }
@@ -43,6 +44,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         case insufficientBattery
         case insufficientStorage
         case watchDidNotStart
+        case watchDidNotStop
         case syncUnavailable
         case fieldRunUnavailable
 
@@ -60,6 +62,8 @@ final class IndoBoardSessionCoordinator: ObservableObject {
                 "Free at least 5 GB on the iPhone before recording."
             case .watchDidNotStart:
                 "The Watch workout did not reach running state in time."
+            case .watchDidNotStop:
+                "The phone could not confirm Watch shutdown. Stop the capture on the Watch, then recheck before starting another session."
             case .syncUnavailable:
                 "The Watch link is unavailable for a journal-backed sync cue."
             case .fieldRunUnavailable:
@@ -267,10 +271,17 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         fieldRun: FieldRunCoordinator
     ) -> String? {
         guard phase == .running,
-              let runID = fieldRun.runID,
-              phone.watchReachable
+              let runID = fieldRun.runID
         else {
-            fail(SessionError.syncUnavailable)
+            return nil
+        }
+
+        guard phone.watchReachable else {
+            errorMessage = (
+                "The Watch live link is temporarily unavailable. "
+                    + "Raw Watch capture can continue; MotionOS will retry "
+                    + "the sync cue while its window remains open."
+            )
             return nil
         }
 
@@ -288,7 +299,12 @@ final class IndoBoardSessionCoordinator: ObservableObject {
             label: normalized
         )
         else {
-            fail(SessionError.syncUnavailable)
+            errorMessage = (
+                "The "
+                    + normalized.uppercased()
+                    + " sync cue could not be sent yet. "
+                    + "Raw capture is still running and MotionOS will retry."
+            )
             return nil
         }
 
@@ -353,11 +369,18 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         phase = .finishing
         errorMessage = nil
 
+        let stopRequested: Bool
         if let runID = fieldRun.runID {
-            _ = phone.sendWatchStopRequest(runID: runID)
+            stopRequested = phone.sendWatchStopRequest(
+                runID: runID
+            )
+        } else {
+            stopRequested = false
         }
 
-        _ = await waitForWatchToLeaveRunning(phone: phone)
+        let watchStopped = stopRequested
+            ? await waitForWatchToLeaveRunning(phone: phone)
+            : false
 
         if camera.phase == .recording {
             await camera.stopRecording()
@@ -387,7 +410,20 @@ final class IndoBoardSessionCoordinator: ObservableObject {
                     camera: camera,
                     fieldRun: fieldRun
                 )
-                phase = .sealed
+
+                if watchStopped
+                    || (
+                        phone.state != .running
+                            && phone.state != .paused
+                            && phone.state != .waitingForMirror
+                            && phone.state != .launchingWatch
+                    ) {
+                    phase = .sealed
+                } else {
+                    phase = .watchStopRequired
+                    errorMessage =
+                        SessionError.watchDidNotStop.localizedDescription
+                }
             } catch {
                 fail(error)
             }
@@ -520,10 +556,31 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         }
     }
 
+    func recheckWatchStop(
+        phone: PhoneSessionCoordinator
+    ) {
+        guard phase == .watchStopRequired else {
+            return
+        }
+
+        phone.refreshWatchState()
+        if phone.state != .running
+            && phone.state != .paused
+            && phone.state != .waitingForMirror
+            && phone.state != .launchingWatch {
+            phase = .sealed
+            errorMessage = nil
+        } else {
+            errorMessage =
+                SessionError.watchDidNotStop.localizedDescription
+        }
+    }
+
     func reset() {
         guard phase != .running
                 && phase != .starting
                 && phase != .finishing
+                && phase != .watchStopRequired
         else {
             return
         }
