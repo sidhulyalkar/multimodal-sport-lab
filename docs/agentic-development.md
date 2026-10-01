@@ -149,3 +149,31 @@ The Xcode 27 warnings currently visible from NordicDFU and ZIPFoundation origina
 The preferred cleanup is to remove unused firmware/DFU dependencies from the MotionOS package graph, either through an upstream MetaWear package split or an exact-revision core-only fork. Do not hide the warnings with global compiler-warning suppression and do not raise MotionOS deployment targets merely to silence a transitive manifest.
 
 Treat that cleanup as a Sensors-lane task with Apple-lane verification.
+
+
+## Fleet operations
+
+Check all lane baselines before starting work:
+
+```bash
+bash scripts/agent_fleet_status.sh
+```
+
+For an idle, clean lane with no lane-local commits, fast-forward it safely:
+
+```bash
+bash scripts/sync_agent_lane.sh apple
+```
+
+The sync helper refuses dirty, ahead, or diverged worktrees. Those states require an explicit human/agent decision rather than an automatic rewrite.
+
+A productive default cadence is:
+
+1. refresh idle lanes;
+2. assign one bounded task per active lane;
+3. keep human-only device work running in parallel;
+4. require exact-commit evidence in handoff;
+5. merge small PRs;
+6. refresh idle lanes again before the next assignment.
+
+Do not keep every lane busy merely because it exists. Activate lanes only when they are off the current critical path or can produce evidence without creating integration contention.
