@@ -61,7 +61,7 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
         SystemsLabQualificationReport?
     @Published private(set) var systemsLabLatestCompletedReport:
         SystemsLabQualificationReport?
-    @Published private(set) var systemsLabLatestReportURL: URL?
+    @Published private(set) var systemsLabReportURLs: [String: URL] = [:]
     @Published private(set) var errorMessage: String?
 
     let inbox = PhoneJournalInbox()
@@ -106,15 +106,16 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
                     fileURL: url,
                     metadata: metadata
                 ) {
-                    self.systemsLabTracker.markJournalReceived(
-                        sessionID: receipt.sessionID,
-                        receivedAt: Date(),
-                        byteCount: receipt.byteCount,
-                        sha256: receipt.journalSHA256
-                    )
-                    self.refreshSystemsLabReports(
-                        persistCompleted: true
-                    )
+                    if let report =
+                        self.systemsLabTracker.markJournalReceived(
+                            sessionID: receipt.sessionID,
+                            receivedAt: Date(),
+                            byteCount: receipt.byteCount,
+                            sha256: receipt.journalSHA256
+                        ) {
+                        self.persistSystemsLabReport(report)
+                    }
+                    self.refreshSystemsLabReports()
                     self.acknowledgeJournal(receipt)
                 }
             }
@@ -520,29 +521,18 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
             phoneBatteryFraction: iPhoneBatteryLevel,
             receivedAt: receivedAt
         )
-        refreshSystemsLabReports(
-            persistCompleted:
-                systemsLabTracker.latestCompleted?.journalReceivedAt != nil
-        )
+        refreshSystemsLabReports()
     }
 
-    private func refreshSystemsLabReports(
-        persistCompleted: Bool = false
-    ) {
+    private func refreshSystemsLabReports() {
         systemsLabCurrentReport = systemsLabTracker.current
         systemsLabLatestCompletedReport =
             systemsLabTracker.latestCompleted
-
-        if persistCompleted,
-           let report = systemsLabTracker.latestCompleted {
-            systemsLabLatestReportURL =
-                persistSystemsLabReport(report)
-        }
     }
 
     private func persistSystemsLabReport(
         _ report: SystemsLabQualificationReport
-    ) -> URL? {
+    ) {
         do {
             let manager = FileManager.default
             let documents = try manager.url(
@@ -570,9 +560,9 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
                 to: url,
                 options: .atomic
             )
-            return url
+            systemsLabReportURLs[report.sessionID] = url
         } catch {
-            return nil
+            // Qualification export is secondary to capture integrity.
         }
     }
 
