@@ -5,6 +5,7 @@ import math
 from itertools import pairwise
 from pathlib import Path
 
+from .indo_board_acquisition import ACQUISITION_PROFILE_ID
 from .indo_board_reconstruction import load_skeleton_frames
 from .provenance import sha256_file
 from .wrist_fusion import (
@@ -36,16 +37,6 @@ def calibrate_wrist_fusion(
     ).resolve()
     watch_path = Path(watch_journal_path).resolve()
     calibration_spec_path = Path(spec_path).resolve()
-
-    for path in (
-        geometry_path,
-        correspondences_path,
-        watch_path,
-        calibration_spec_path,
-    ):
-        if not path.is_file():
-            raise FileNotFoundError(path)
-
     spec = _json_object(calibration_spec_path)
     if spec.get("schema_version") != (
         WRIST_FUSION_CALIBRATION_SPEC_SCHEMA_VERSION
@@ -53,6 +44,28 @@ def calibrate_wrist_fusion(
         raise ValueError(
             "unsupported wrist-fusion calibration spec schema"
         )
+    reconstruction_receipt_path = _resolve(
+        calibration_spec_path.parent,
+        spec["reconstruction_receipt"],
+    )
+
+    for path in (
+        geometry_path,
+        correspondences_path,
+        watch_path,
+        calibration_spec_path,
+        reconstruction_receipt_path,
+    ):
+        if not path.is_file():
+            raise FileNotFoundError(path)
+
+    reconstruction = _json_object(reconstruction_receipt_path)
+    _validate_reconstruction_binding(
+        reconstruction,
+        geometry_path=geometry_path,
+        correspondences_path=correspondences_path,
+        watch_path=watch_path,
+    )
 
     stationary_window = _window(spec, "stationary_window_s")
     dynamic_window = _window(spec, "dynamic_window_s")
@@ -201,6 +214,9 @@ def calibrate_wrist_fusion(
 
     result: dict[str, object] = {
         "schema_version": WRIST_FUSION_CALIBRATION_SCHEMA_VERSION,
+        "acquisition_profile_id": ACQUISITION_PROFILE_ID,
+        "reconstruction_receipt_sha256":
+            sha256_file(reconstruction_receipt_path),
         "wrist_side": wrist_side,
         "source_sha256": {
             "skeleton_geometry": sha256_file(geometry_path),
@@ -209,6 +225,8 @@ def calibrate_wrist_fusion(
             "watch_journal": sha256_file(watch_path),
             "calibration_spec":
                 sha256_file(calibration_spec_path),
+            "reconstruction_receipt":
+                sha256_file(reconstruction_receipt_path),
         },
         "pair_count": len(paired),
         "time_origin_watch_ns": t0_ns,
@@ -283,6 +301,26 @@ def validate_wrist_fusion_calibration_spec(
         raise ValueError(
             "unsupported wrist-fusion calibration spec schema"
         )
+    reconstruction_receipt = spec.get("reconstruction_receipt")
+    if not isinstance(reconstruction_receipt, str) or not (
+        reconstruction_receipt.strip()
+    ):
+        raise ValueError("reconstruction_receipt is required")
+    receipt_path = _resolve(path.parent, reconstruction_receipt)
+    if not receipt_path.is_file():
+        raise FileNotFoundError(receipt_path)
+    receipt = _json_object(receipt_path)
+    if receipt.get("schema_version") != (
+        "motionos.wrist-fusion-reconstruction.v1"
+    ):
+        raise ValueError(
+            "unsupported wrist-fusion reconstruction receipt schema"
+        )
+    if receipt.get("acquisition_profile_id") != ACQUISITION_PROFILE_ID:
+        raise ValueError(
+            "wrist-fusion reconstruction acquisition profile mismatch"
+        )
+
     stationary = _window(spec, "stationary_window_s")
     dynamic = _window(spec, "dynamic_window_s")
     if _overlap(stationary, dynamic):
@@ -305,6 +343,64 @@ def validate_wrist_fusion_calibration_spec(
     if spec.get("wrist_side") not in {None, "left", "right"}:
         raise ValueError("wrist_side must be left or right")
     return spec
+
+
+def _validate_reconstruction_binding(
+    receipt: dict[str, object],
+    *,
+    geometry_path: Path,
+    correspondences_path: Path,
+    watch_path: Path,
+) -> None:
+    if receipt.get("schema_version") != (
+        "motionos.wrist-fusion-reconstruction.v1"
+    ):
+        raise ValueError(
+            "unsupported wrist-fusion reconstruction receipt schema"
+        )
+    if receipt.get("acquisition_profile_id") != ACQUISITION_PROFILE_ID:
+        raise ValueError(
+            "wrist-fusion reconstruction acquisition profile mismatch"
+        )
+
+    artifacts = receipt.get("artifacts")
+    inputs = receipt.get("input_sha256")
+    if not isinstance(artifacts, dict) or not isinstance(inputs, dict):
+        raise TypeError(
+            "wrist-fusion reconstruction receipt is missing provenance"
+        )
+
+    expected_geometry = artifacts.get("skeleton_geometry")
+    expected_correspondences = artifacts.get("skeleton_correspondences")
+    if not isinstance(expected_geometry, dict) or not isinstance(
+        expected_correspondences,
+        dict,
+    ):
+        raise TypeError(
+            "wrist-fusion reconstruction receipt is missing skeleton artifacts"
+        )
+
+    if expected_geometry.get("sha256") != sha256_file(geometry_path):
+        raise ValueError(
+            "skeleton geometry does not match reconstruction receipt"
+        )
+    if expected_correspondences.get("sha256") != sha256_file(
+        correspondences_path
+    ):
+        raise ValueError(
+            "skeleton correspondences do not match reconstruction receipt"
+        )
+    if inputs.get("watch_journal") != sha256_file(watch_path):
+        raise ValueError(
+            "Watch journal does not match reconstruction receipt"
+        )
+
+
+def _resolve(base: Path, raw: object) -> Path:
+    path = Path(str(raw))
+    if not path.is_absolute():
+        path = base / path
+    return path.resolve()
 
 
 def _paired_samples(
