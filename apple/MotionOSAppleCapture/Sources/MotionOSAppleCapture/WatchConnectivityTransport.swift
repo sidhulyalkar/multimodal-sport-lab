@@ -46,8 +46,6 @@ public final class WatchConnectivityTransport: NSObject, WCSessionDelegate {
     public func cancelJournalTransfers(
         sessionID: String
     ) -> Int {
-        guard session.activationState == .activated else { return 0 }
-
         let matches = session.outstandingFileTransfers.filter {
             $0.file.metadata?["session_id"] as? String == sessionID
         }
