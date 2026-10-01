@@ -8,6 +8,7 @@ from .indo_board_plan import validate_indo_board_qualification_plan
 from .provenance import sha256_file
 
 STATUS_SCHEMA_VERSION = "motionos.indo-board-status.v1"
+STATUS_VALIDATION_ERRORS = (OSError, KeyError, TypeError, ValueError)
 
 
 def build_indo_board_status(
@@ -38,7 +39,7 @@ def build_indo_board_status(
 
     try:
         plan = validate_indo_board_qualification_plan(plan_source)
-    except Exception as exc:
+    except STATUS_VALIDATION_ERRORS as exc:
         status["plan"] = {
             "path": str(plan_source),
             "valid": False,
@@ -93,7 +94,7 @@ def build_indo_board_status(
         validate_indo_board_pipeline_spec(pipeline_source)
         pipeline_status["valid"] = True
         pipeline_status["sha256"] = sha256_file(pipeline_source)
-    except Exception as exc:
+    except STATUS_VALIDATION_ERRORS as exc:
         pipeline_status["error"] = str(exc)
 
     status["pipeline_preflight"] = pipeline_status
@@ -195,7 +196,7 @@ def build_indo_board_status(
                     sha256_file(qualification_path),
             }
         )
-    except Exception as exc:
+    except STATUS_VALIDATION_ERRORS as exc:
         result_status["error"] = str(exc)
         status["results"] = result_status
         status["next_action"] = (
