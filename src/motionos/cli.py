@@ -53,6 +53,7 @@ from .indo_board_pipeline import (
     process_indo_board_pipeline,
     validate_indo_board_pipeline_spec,
 )
+from .indo_board_plan import build_indo_board_qualification_plan
 from .insole import (
     import_opengo_text_export,
     write_p2_capture_receipt,
@@ -561,6 +562,16 @@ def _parser() -> argparse.ArgumentParser:
     vision_clock.add_argument("iphone_journal")
     vision_clock.add_argument("external_sync")
     vision_clock.add_argument("output")
+
+    qualification_plan = sub.add_parser(
+        "build-indo-board-qualification-plan",
+        help=(
+            "freeze rig, marker geometry, fusion calibration, analysis "
+            "thresholds, and qualification gates before scored capture"
+        ),
+    )
+    qualification_plan.add_argument("spec")
+    qualification_plan.add_argument("output")
 
     wrist_calibration = sub.add_parser(
         "calibrate-wrist-fusion",
@@ -1110,6 +1121,14 @@ def main(argv: list[str] | None = None) -> int:
             args.watch_journal,
             args.iphone_journal,
             args.external_sync,
+            args.output,
+        )
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+
+    if args.command == "build-indo-board-qualification-plan":
+        result = build_indo_board_qualification_plan(
+            args.spec,
             args.output,
         )
         print(json.dumps(result, indent=2, sort_keys=True))
