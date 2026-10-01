@@ -255,7 +255,7 @@ struct WatchContentView: View {
 
             WatchMotionTrace(
                 points: controller.visualTelemetryHistory,
-                currentDeltaG: controller.motionDeltaG,
+                currentUserAccelerationG: controller.userAccelerationG,
                 currentRotationRate: controller.rotationRateRadS
             )
 
