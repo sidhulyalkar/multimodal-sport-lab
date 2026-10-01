@@ -1026,12 +1026,23 @@ final class IndoBoardSessionCoordinator: ObservableObject {
             try FileEvidence.digest($0.metadataURL)
         }
 
+        let latestWatchReceiptMatchesRun =
+            phone.inbox.latestProductRunID == runID
+                && phone.inbox.latestSessionID
+                    == activeWatchSessionID
+
         let manifest = ProductSessionManifest(
             runID: runID,
             captureMode: captureMode.rawValue,
             targetDurationSeconds: Self.targetDurationSeconds,
             outcome: outcome ?? .completed,
             watchSessionID: activeWatchSessionID,
+            watchJournalSHA256: latestWatchReceiptMatchesRun
+                ? phone.inbox.latestJournalSHA256
+                : nil,
+            watchJournalByteCount: latestWatchReceiptMatchesRun
+                ? phone.inbox.latestJournalByteCount
+                : nil,
             cameraSessionID: camera.sessionID,
             operatorJournalSHA256: operatorJournalDigest.sha256,
             operatorMetadataSHA256: operatorMetadataDigest.sha256,
