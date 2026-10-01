@@ -441,9 +441,9 @@ Preflight rejects the run before an output directory is created if any of the
 following are wrong:
 
 - required evidence files are missing;
-- fewer than three Watch-acknowledged whole-body synchronization landmarks
-  were sealed, or the Watch journal lacks a unique matching receipt for any
-  sealed landmark;
+- fewer Watch-acknowledged whole-body synchronization landmarks were sealed
+  than the frozen qualification plan requires, or the Watch journal lacks one
+  unique matching receipt for any sealed landmark;
 - the vision session is not an Indo Board multiview-calibration session;
 - a camera journal ID is absent from the passing rig receipt;
 - the measured Indo Board marker layout is not bound to the exact ArUco print
@@ -454,6 +454,9 @@ following are wrong:
   sealed `vision_session.json`;
 - the scored `wrist_fusion` values differ from the exact referenced
   wrist-fusion calibration receipt;
+- the rig, marker evidence, analysis thresholds, qualification gates, feedback
+  condition, fusion parameters, or minimum SYNC requirement differ from the
+  frozen qualification plan;
 - a confidence fraction is outside `[0, 1]`;
 - a timing, residual, uncertainty, or rate bound is non-positive/non-finite;
 - the marker-frame stride is not a positive integer.
@@ -508,8 +511,6 @@ frozen session qualification receipt
         ↓
 qualified-only longitudinal profile update
         ↓
-dimensioned evidence-quality report (no composite score)
-        ↓
 hash-linked pipeline receipt + resumable stage ledger
 ```
 
@@ -542,9 +543,10 @@ can gate:
 - Watch↔vision wrist-acceleration disagreement;
 - explicit required metric availability.
 
-Freeze these thresholds **before** looking at the scored run. The example spec
-uses placeholders where an empirical/predeclared bound is required rather than
-silently inventing a favorable limit.
+Freeze these thresholds in the pre-capture qualification plan **before the
+scored run exists**. The example plan spec uses placeholders where an
+empirical/predeclared bound is required rather than silently inventing a
+favorable limit.
 
 A session updates the persistent longitudinal profile only when the
 qualification receipt has `passed=true`. Failed sessions keep all raw and
