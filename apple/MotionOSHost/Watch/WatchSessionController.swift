@@ -895,8 +895,27 @@ final class WatchSessionController: ObservableObject {
 
         errorMessage = nil
         state = .transferred
+        releaseVerifiedLocalJournal()
         WKInterfaceDevice.current().play(.success)
         publishPresence()
+    }
+
+    private func releaseVerifiedLocalJournal() {
+        guard let journalURL = closedJournalURL else { return }
+
+        // The iPhone has already re-hashed this exact journal and returned the
+        // matching digest. At that point the Watch copy is no longer the only
+        // durable evidence, so release it instead of accumulating sessions
+        // forever on a small wearable filesystem.
+        let sessionDirectory = journalURL.deletingLastPathComponent()
+        do {
+            try FileManager.default.removeItem(at: sessionDirectory)
+            closedJournalURL = nil
+            closedJournalEvidence = nil
+        } catch {
+            // Storage cleanup must never downgrade a successfully verified
+            // transfer. A later app version can reclaim orphaned directories.
+        }
     }
 
     private func publishCaptureHealthIfNeeded() {
