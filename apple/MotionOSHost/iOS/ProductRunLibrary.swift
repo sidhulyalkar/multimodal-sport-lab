@@ -75,9 +75,13 @@ final class ProductRunLibrary: ObservableObject {
     @Published private(set) var runs: [ProductRunRecord] = []
     @Published private(set) var isLoading = false
     @Published private(set) var errorMessage: String?
+    private var refreshPending = false
 
     func refresh() {
-        guard !isLoading else { return }
+        if isLoading {
+            refreshPending = true
+            return
+        }
         isLoading = true
 
         Task { [weak self] in
@@ -93,6 +97,7 @@ final class ProductRunLibrary: ObservableObject {
                 self.runs = values
                 self.isLoading = false
                 self.errorMessage = nil
+                self.runPendingRefreshIfNeeded()
             } catch {
                 guard let self else { return }
                 self.isLoading = false
@@ -100,8 +105,15 @@ final class ProductRunLibrary: ObservableObject {
                     "Run library refresh failed: "
                         + error.localizedDescription
                 )
+                self.runPendingRefreshIfNeeded()
             }
         }
+    }
+
+    private func runPendingRefreshIfNeeded() {
+        guard refreshPending else { return }
+        refreshPending = false
+        refresh()
     }
 
     private static func loadRuns() throws -> [ProductRunRecord] {
