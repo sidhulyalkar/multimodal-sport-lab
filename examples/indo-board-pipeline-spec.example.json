@@ -35,5 +35,29 @@
     "maximum_acceleration_rate_m_s3": "REPLACE_WITH_PREDECLARED_JERK_BOUND",
     "maximum_time_delta_ms": 20
   },
-  "board_marker_asset_receipt": "REPLACE/indo-board-four-marker-v1-build-receipt.json"
+  "board_marker_asset_receipt": "REPLACE/indo-board-four-marker-v1-build-receipt.json",
+  "qualification": {
+    "minimum_pose_frame_pairs": "REPLACE_WITH_FROZEN_MINIMUM",
+    "minimum_board_frame_pairs": "REPLACE_WITH_FROZEN_MINIMUM",
+    "minimum_board_pose_count": "REPLACE_WITH_FROZEN_MINIMUM",
+    "minimum_metric_accepted_samples": "REPLACE_WITH_FROZEN_MINIMUM",
+    "minimum_metric_accepted_fraction": "REPLACE_WITH_FROZEN_FRACTION",
+    "maximum_external_clock_residual_ms": "REPLACE_WITH_FROZEN_LIMIT",
+    "maximum_iphone_clock_residual_ms": "REPLACE_WITH_FROZEN_LIMIT",
+    "maximum_action4_clock_residual_ms": "REPLACE_WITH_FROZEN_LIMIT",
+    "maximum_skeleton_reprojection_rms_px": "REPLACE_WITH_FROZEN_LIMIT",
+    "maximum_board_reprojection_rms_px": "REPLACE_WITH_FROZEN_LIMIT",
+    "maximum_board_pose_residual_p95_m": "REPLACE_WITH_FROZEN_LIMIT",
+    "maximum_board_pose_scale_error_p95_fraction": "REPLACE_WITH_FROZEN_LIMIT",
+    "maximum_board_pose_rejected_fraction": "REPLACE_WITH_FROZEN_FRACTION",
+    "maximum_reconstruction_rejected_fraction": "REPLACE_WITH_FROZEN_FRACTION",
+    "maximum_watch_vision_rms_m_s2": "REPLACE_WITH_EMPIRICAL_LIMIT",
+    "required_metric_ids": [
+      "balance_stability_rms_m",
+      "com_excursion_p95_m",
+      "board_control_jerk_rms_deg_s3",
+      "recovery_latency_median_s",
+      "stance_asymmetry_mean_abs_knee_deg"
+    ]
+  }
 }
