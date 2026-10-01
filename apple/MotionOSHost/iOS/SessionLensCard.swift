@@ -1,3 +1,4 @@
+import MotionOSAppleCapture
 import Charts
 import SwiftUI
 
