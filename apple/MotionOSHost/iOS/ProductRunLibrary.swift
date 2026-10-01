@@ -7,6 +7,7 @@ struct ProductRunRecord: Identifiable, Equatable, Sendable {
     let runID: String
     let protocolKind: String
     let protocolVersion: String
+    let outcome: ProductSessionOutcome
     let captureMode: String?
     let startedAt: Date?
     let sealedAt: Date?
@@ -300,6 +301,14 @@ final class ProductRunLibrary: ObservableObject {
             let failureCount = int(
                 metadata["failure_note_count"]
             ) ?? 0
+            let outcome =
+                productManifest?.resolvedOutcome
+                ?? ProductSessionOutcome(
+                    rawValue:
+                        metadata["run_outcome"] as? String
+                            ?? ""
+                )
+                ?? .completed
 
             return ProductRunRecord(
                 id: runID,
@@ -310,6 +319,7 @@ final class ProductRunLibrary: ObservableObject {
                 protocolVersion:
                     metadata["protocol_version"] as? String
                         ?? "unknown",
+                outcome: outcome,
                 captureMode: productManifest?.captureMode,
                 startedAt: date(
                     metadata["started_at_utc"],
