@@ -392,7 +392,11 @@ response time, is the cross-camera landmark.
 Freeze
 `examples/wrist-fusion-calibration-spec.example.json` before inspecting the
 calibration result. Its windows are measured relative to the first paired
-Watch/vision wrist-acceleration sample on canonical Watch time.
+Watch/vision wrist-acceleration sample on canonical Watch time. The spec also
+references the exact `wrist-fusion-reconstruction-receipt.json`; MotionOS
+verifies that receipt uses the current M0 acquisition profile and that its
+skeleton geometry, correspondences, and Watch-journal hashes match the files
+being calibrated.
 
 Run:
 
@@ -408,8 +412,9 @@ motionos calibrate-wrist-fusion \
 The calibration receipt reports stationary Watch and vision
 acceleration-magnitude RMS, stationary/dynamic cross-modal disagreement,
 acceleration-rate distributions, the frozen rate percentile and margin, and a
-`recommended_wrist_fusion` block. It also hashes the exact geometry,
-correspondence, Watch-journal, and calibration-spec inputs.
+`recommended_wrist_fusion` block. It records the acquisition-profile ID and
+hashes the exact reconstruction receipt, geometry, correspondences,
+Watch-journal, and calibration-spec inputs.
 
 The receipt intentionally does **not** choose the later
 `qualification.maximum_watch_vision_rms_m_s2` gate. That scored-session limit
