@@ -262,7 +262,25 @@ struct CameraCaptureCard: View {
                 .font(.subheadline.weight(.semibold))
             Text(
                 "\(configuration.formatWidth)×\(configuration.formatHeight) · "
-                    + "rear · intrinsics "
+                    + String(
+                        format: "%.0f fps %@",
+                        configuration.configuredFrameRate,
+                        configuration.frameRateLocked
+                            ? "locked"
+                            : "unlocked"
+                    )
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+
+            Text(
+                "stabilization "
+                    + (
+                        configuration.stabilizationLockedOff
+                            ? "off"
+                            : configuration.preferredVideoStabilizationMode
+                    )
+                    + " · intrinsics "
                     + (
                         configuration.intrinsicDeliveryEnabled
                             ? "enabled"
