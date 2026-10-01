@@ -14,27 +14,7 @@ struct IndoBoardSessionView: View {
         ScrollView {
             LazyVStack(spacing: MotionOSDesign.pageSpacing) {
                 hero
-                captureModeCard
-                sourcePreflight
-
-                if camera.phase == .ready
-                    || camera.phase == .recording
-                    || camera.phase == .evidenceReady {
-                    IndoBoardFramingCard()
-                }
-
-                sessionControl
-
-                if session.phase == .running
-                    || session.phase == .finishing {
-                    IndoBoardProtocolRibbon()
-                    IndoBoardLiveSignalCard()
-                    liveProtocol
-                }
-
-                if session.phase == .sealed {
-                    sealedSummary
-                }
+                phaseContent
 
                 if let error = session.errorMessage
                     ?? fieldRun.errorMessage
@@ -42,7 +22,10 @@ struct IndoBoardSessionView: View {
                     errorCard(error)
                 }
 
-                methodology
+                if session.phase != .running
+                    && session.phase != .finishing {
+                    methodology
+                }
             }
             .motionOSPageWidth()
             .padding(.horizontal, MotionOSDesign.pageHorizontalPadding)
@@ -104,6 +87,39 @@ struct IndoBoardSessionView: View {
                 // The coordinator owns product-facing import errors. A user
                 // cancellation requires no error surface.
             }
+        }
+    }
+
+    @ViewBuilder
+    private var phaseContent: some View {
+        switch session.phase {
+        case .idle, .preparing, .ready, .failed:
+            captureModeCard
+            sourcePreflight
+
+            if camera.phase == .ready
+                || camera.phase == .recording {
+                IndoBoardFramingCard()
+            }
+
+            sessionControl
+
+        case .starting:
+            sessionControl
+            SensorSourceStrip()
+
+        case .running, .finishing:
+            sessionControl
+            IndoBoardProtocolRibbon()
+            IndoBoardLiveSignalCard()
+            liveProtocol
+
+        case .watchStopRequired:
+            sessionControl
+            recoveryCard
+
+        case .sealed:
+            sealedSummary
         }
     }
 
@@ -912,6 +928,39 @@ struct IndoBoardSessionView: View {
                 .font(.caption)
                 .foregroundStyle(.green)
             }
+        }
+        .cardStyle()
+    }
+
+    private var recoveryCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            MotionOSSectionHeader(
+                title: "Finish Watch capture",
+                subtitle: "The iPhone and operator evidence are already sealed",
+                systemImage: "applewatch.radiowaves.left.and.right",
+                accent: .yellow
+            )
+
+            Text(
+                "MotionOS could not confirm that the Watch workout stopped. "
+                    + "Open MotionOS on the Watch, stop the capture there, "
+                    + "then recheck. Do not start another product session "
+                    + "until the Watch has left its running state."
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+
+            Button {
+                session.recheckWatchStop(phone: phone)
+            } label: {
+                Label(
+                    "Recheck Watch",
+                    systemImage: "arrow.clockwise"
+                )
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
         }
         .cardStyle()
     }
