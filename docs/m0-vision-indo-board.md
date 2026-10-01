@@ -280,44 +280,59 @@ The rig receipt used by the final pipeline must refer to the exact current-run
 camera sessions and clock-uncertainty artifacts. A passing calibration alone is
 not permission to reuse an old session clock.
 
-### 2. Capture the Indo Board trial
+### 2. Capture a separate Watch ↔ vision calibration run
+
+Keep the qualified iPhone + Action 4 rig fixed. This run is **not** the scored
+Indo Board session and cannot update the longitudinal profile.
 
 In the iPhone app:
 
-1. arm **Indo Board · M0-Vision**;
-2. freeze the feedback condition;
-3. start the Action 4 and confirm it is recording;
-4. start Watch + iPhone capture;
-5. trigger at least three SYNC cues spread through the run and immediately
-   perform a sharp whole-body/board impulse after each cue;
-6. stop the iPhone capture and Watch workout;
+1. arm **Indo Board · M0-Vision** with feedback disabled;
+2. start the Action 4 and confirm it is recording;
+3. start Watch + iPhone capture;
+4. collect at least three Watch-journaled SYNC cues with sharp physical
+   whole-body/wrist impulses spread through the run;
+5. include the stationary and dynamic wrist periods you declared in
+   `examples/wrist-fusion-calibration-spec.example.json`;
+6. stop and seal the iPhone evidence;
 7. import the untouched Action 4 movie;
 8. run **Extract Action 4 2D Pose**.
 
-The iPhone camera now journals both 2D and 3D Vision observations. Every iPhone
-frame also records a host-monotonic timestamp anchor. The Action 4 processor
-preserves source video PTS and writes a hash-bound 2D-pose/frame journal.
+The stationary interval should be genuinely quiet. The dynamic interval should
+contain representative wrist acceleration changes without trying to imitate the
+later scored outcome.
 
-### 3. Normalize clocks
+### 3. Reconstruct only the calibration-run 3D skeleton
 
-MotionOS uses Watch Core Motion time as the canonical analysis clock.
+Fill a copy of
+`examples/wrist-fusion-reconstruction-spec.example.json`. It points to the
+calibration run's sealed vision sidecar, Watch journal, iPhone pose journal,
+Action 4 pose journal, metadata, and the already-qualified camera rig.
+
+Run:
 
 ```bash
-motionos sync-external-camera \
-  vision_session.json \
-  iphone/camera-frames.jsonl \
-  action4/action4-frames.jsonl \
-  action4-clock-sync.json
-
-motionos build-vision-clock-bundle \
-  vision_session.json \
-  watch.jsonl \
-  iphone/camera-frames.jsonl \
-  action4-clock-sync.json \
-  vision-clock-bundle.json
+motionos reconstruct-wrist-fusion-calibration \
+  wrist-fusion-reconstruction-spec.json \
+  derived/wrist-fusion-calibration
 ```
 
-The mappings are:
+This command deliberately stops before board tracking, technique metrics,
+qualification, and longitudinal learning. It produces:
+
+```text
+Action 4 physical-landmark clock fit
+        ↓
+Watch / iPhone / Action 4 → canonical Watch time
+        ↓
+synchronized two-camera 2D pose pairs
+        ↓
+calibrated 3D skeleton geometry
+        ↓
+wrist-fusion-reconstruction-receipt.json
+```
+
+The clock mappings are:
 
 ```text
 iPhone camera PTS ── frame anchors ──> iPhone host monotonic
@@ -327,55 +342,87 @@ Watch time       ── journaled SYNC receipts ──> iPhone host monotonic
                                       └── compose/invert → canonical Watch time
 ```
 
-The cue itself only defines the search window for the iPhone physical-motion
-peak. The cross-camera landmark is the actual whole-body impulse detected in
-both pose streams, avoiding human response latency as the camera offset.
+The cue defines a search window. The physical pose impulse, not human button
+response time, is the cross-camera landmark.
 
-### 3.5. Calibrate Watch ↔ vision fusion on a separate run
+### 4. Derive empirical wrist-fusion parameters
 
-Do **not** invent the Watch/vision fusion uncertainties for the scored session.
-Use a separate reconstructed calibration run with one quiet stationary period
-and one deliberately dynamic wrist-movement period.
-
-Copy and freeze
+Freeze
 `examples/wrist-fusion-calibration-spec.example.json` before inspecting the
-calibration result. The windows are measured relative to the first paired
+calibration result. Its windows are measured relative to the first paired
 Watch/vision wrist-acceleration sample on canonical Watch time.
 
 Run:
 
 ```bash
 motionos calibrate-wrist-fusion \
-  calibration/skeleton-geometry.json \
-  calibration/skeleton-correspondences.json \
+  derived/wrist-fusion-calibration/skeleton-geometry.json \
+  derived/wrist-fusion-calibration/skeleton-correspondences.json \
   calibration/watch.jsonl \
   wrist-fusion-calibration-spec.json \
   wrist-fusion-calibration.json
 ```
 
-The calibration receipt reports:
+The calibration receipt reports stationary Watch and vision
+acceleration-magnitude RMS, stationary/dynamic cross-modal disagreement,
+acceleration-rate distributions, the frozen rate percentile and margin, and a
+`recommended_wrist_fusion` block. It also hashes the exact geometry,
+correspondence, Watch-journal, and calibration-spec inputs.
 
-- stationary Watch acceleration-magnitude RMS relative to zero motion;
-- stationary vision acceleration-magnitude RMS relative to zero motion;
-- stationary and dynamic Watch↔vision disagreement;
-- observed Watch and vision scalar acceleration-rate distributions;
-- the declared acceleration-rate percentile;
-- the predeclared non-shrinking margin factor;
-- the resulting `recommended_wrist_fusion` block;
-- SHA-256 hashes of the exact geometry, correspondence, Watch-journal, and
-  calibration-spec inputs.
+The receipt intentionally does **not** choose the later
+`qualification.maximum_watch_vision_rms_m_s2` gate. That scored-session limit
+must be frozen independently.
 
-Copy the four values from `recommended_wrist_fusion` into the scored pipeline
-spec and set `wrist_fusion_calibration_receipt` to that exact receipt. Desktop
-preflight verifies the copied values match the receipt, so manual drift fails
-closed.
+### 5. Freeze the scored-session qualification plan
 
-The calibration receipt intentionally does **not** choose
-`qualification.maximum_watch_vision_rms_m_s2`. Freeze that scored-session gate
-independently, before looking at the scored run, just like the other
-qualification thresholds.
+Before capturing the scored trial, fill
+`examples/indo-board-qualification-plan-spec.example.json`.
 
-### 4. Preflight, then run the complete reconstruction
+This is the pre-registration boundary. The plan freezes:
+
+- the passing camera-rig receipt;
+- measured Indo Board marker geometry and exact ArUco print receipt;
+- the exact wrist-fusion calibration receipt and its four recommended values;
+- all analysis/reconstruction thresholds;
+- all final session-qualification gates;
+- the required feedback condition;
+- the minimum number of Watch-journaled SYNC landmarks.
+
+Build the frozen plan:
+
+```bash
+motionos build-indo-board-qualification-plan \
+  indo-board-qualification-plan-spec.json \
+  indo-board-qualification-plan.json
+```
+
+Do this **before** the scored session exists. The later scored pipeline spec must
+point to this exact plan, and preflight rejects any threshold, evidence hash,
+feedback condition, fusion parameter, or synchronization requirement that has
+drifted from it.
+
+### 6. Capture the scored Indo Board trial
+
+Now capture the session whose performance will actually be interpreted.
+
+In the iPhone app:
+
+1. arm **Indo Board · M0-Vision**;
+2. select the feedback condition frozen in the qualification plan;
+3. start the Action 4 and confirm it is recording;
+4. start Watch + iPhone capture;
+5. collect at least the frozen minimum number of Watch-journaled SYNC cues,
+   spread across the run, with a sharp physical impulse after each cue;
+6. perform the frozen Indo Board trial protocol;
+7. stop and seal the iPhone evidence;
+8. import the untouched Action 4 movie;
+9. run **Extract Action 4 2D Pose**.
+
+The iPhone camera journals 2D/3D Vision observations plus host-monotonic frame
+anchors. The Action 4 processor preserves original container PTS and writes a
+hash-bound 2D-pose/frame journal.
+
+### 7. Preflight, then run the complete scored reconstruction
 
 Copy and fill `examples/indo-board-pipeline-spec.example.json`. The
 `rig_receipt` must be a passing, current-session rig receipt. The iPhone and
@@ -505,7 +552,7 @@ derived evidence, metrics, quality diagnostics, and the failed gate list, but
 they cannot teach the personal baseline. Re-running the same qualified session
 also remains duplicate-safe and cannot count twice.
 
-### 5. External Action 4 session provenance
+### 8. External Action 4 session provenance
 
 For strict rig/clock evidence, the derived Action 4 journal can be imported as
 its own MotionOS calibration session without pretending it came from
