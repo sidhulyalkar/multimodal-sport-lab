@@ -3,6 +3,19 @@ import Foundation
 import MotionOSAppleCapture
 import UIKit
 
+private enum ExternalVideoImportError: LocalizedError {
+    case conflictingExistingEvidence(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .conflictingExistingEvidence(let filename):
+            "This run already contains a different external movie named "
+                + filename
+                + ". MotionOS will not overwrite sealed evidence."
+        }
+    }
+}
+
 @MainActor
 final class IndoBoardSessionCoordinator: ObservableObject {
     enum CaptureMode: String, CaseIterable, Identifiable, Sendable {
@@ -43,7 +56,9 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         case cameraProfileInvalid
         case insufficientBattery
         case insufficientStorage
+        case watchCaptureAlreadyActive
         case watchDidNotStart
+        case watchIdentityUnavailable
         case watchDidNotStop
         case syncUnavailable
         case fieldRunUnavailable
@@ -60,8 +75,12 @@ final class IndoBoardSessionCoordinator: ObservableObject {
                 "Charge the iPhone above the 20% development preflight margin."
             case .insufficientStorage:
                 "Free at least 5 GB on the iPhone before recording."
+            case .watchCaptureAlreadyActive:
+                "Finish the current Watch capture before starting an Indo Board product session."
             case .watchDidNotStart:
                 "The Watch workout did not reach running state in time."
+            case .watchIdentityUnavailable:
+                "The Watch started, but MotionOS did not receive a fresh capture identity. Stop the Watch capture before retrying."
             case .watchDidNotStop:
                 "The phone could not confirm Watch shutdown. Stop the capture on the Watch, then recheck before starting another session."
             case .syncUnavailable:
@@ -91,6 +110,8 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         IndoBoardProductProtocol.targetDurationSeconds
 
     @Published private(set) var phase: Phase = .idle
+    @Published private(set) var outcome: ProductSessionOutcome?
+    @Published private(set) var activeWatchSessionID: String?
     @Published var captureMode: CaptureMode = .watchAndPhone
     @Published private(set) var startedAt: Date?
     @Published private(set) var cueReceipts: [CueReceipt] = []
@@ -104,6 +125,8 @@ final class IndoBoardSessionCoordinator: ObservableObject {
     private var protocolTask: Task<Void, Never>?
     private var syncTimeoutTask: Task<Void, Never>?
     private var protocolTransitions: Set<String> = []
+    private var sentProtocolCueIDs: Set<String> = []
+    private var lastProtocolCueAttemptAt: [String: Date] = [:]
     private var lastCueAttemptAt: [String: Date] = [:]
 
     var elapsedSeconds: TimeInterval {
@@ -155,6 +178,10 @@ final class IndoBoardSessionCoordinator: ObservableObject {
             fail(SessionError.watchUnavailable)
             return
         }
+        guard watchCaptureAvailable(phone) else {
+            fail(SessionError.watchCaptureAlreadyActive)
+            return
+        }
         guard camera.phase == .ready
                 || camera.phase == .evidenceReady
         else {
@@ -203,8 +230,12 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         errorMessage = nil
         cueReceipts = []
         pendingCueID = nil
+        sentProtocolCueIDs = []
+        lastProtocolCueAttemptAt = [:]
         externalVideoEvidence = nil
         productManifestURL = nil
+        outcome = nil
+        activeWatchSessionID = nil
         startedAt = nil
 
         fieldRun.createRun(kind: .indoBoard)
@@ -215,32 +246,76 @@ final class IndoBoardSessionCoordinator: ObservableObject {
             return
         }
 
-        if phone.state != .running && phone.state != .paused {
-            await phone.startP0()
-        }
+        let previousWatchSessionID =
+            phone.watchCaptureHealth?.sessionID
+        let watchLaunchRequestedAt = Date()
+
+        await phone.startP0(locationType: .indoor)
 
         guard await waitForWatchRunning(phone: phone)
         else {
-            fail(SessionError.watchDidNotStart)
+            await abortStart(
+                error: .watchDidNotStart,
+                phone: phone,
+                camera: camera,
+                fieldRun: fieldRun,
+                pod: pod
+            )
             return
         }
+
+        guard let watchSessionID =
+            await waitForFreshWatchSessionID(
+                phone: phone,
+                after: watchLaunchRequestedAt,
+                excluding: previousWatchSessionID
+            )
+        else {
+            await abortStart(
+                error: .watchIdentityUnavailable,
+                phone: phone,
+                camera: camera,
+                fieldRun: fieldRun,
+                pod: pod
+            )
+            return
+        }
+        activeWatchSessionID = watchSessionID
 
         if camera.phase != .ready && camera.phase != .evidenceReady {
             await camera.prepare()
         }
         guard camera.phase == .ready || camera.phase == .evidenceReady
         else {
-            fail(SessionError.cameraUnavailable)
+            await abortStart(
+                error: .cameraUnavailable,
+                phone: phone,
+                camera: camera,
+                fieldRun: fieldRun,
+                pod: pod
+            )
             return
         }
         guard cameraProfileReady(camera) else {
-            fail(SessionError.cameraProfileInvalid)
+            await abortStart(
+                error: .cameraProfileInvalid,
+                phone: phone,
+                camera: camera,
+                fieldRun: fieldRun,
+                pod: pod
+            )
             return
         }
 
         await camera.startRecording()
         guard camera.phase == .recording else {
-            fail(SessionError.cameraUnavailable)
+            await abortStart(
+                error: .cameraUnavailable,
+                phone: phone,
+                camera: camera,
+                fieldRun: fieldRun,
+                pod: pod
+            )
             return
         }
 
@@ -252,10 +327,13 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         )
         fieldRun.startRun(readiness: readiness)
         guard fieldRun.phase == .running else {
-            if camera.phase == .recording {
-                await camera.stopRecording()
-            }
-            fail(SessionError.fieldRunUnavailable)
+            await abortStart(
+                error: .fieldRunUnavailable,
+                phone: phone,
+                camera: camera,
+                fieldRun: fieldRun,
+                pod: pod
+            )
             return
         }
 
@@ -264,7 +342,9 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         UIApplication.shared.isIdleTimerDisabled = true
         startProtocolTimeline(
             phone: phone,
-            fieldRun: fieldRun
+            camera: camera,
+            fieldRun: fieldRun,
+            pod: pod
         )
     }
 
@@ -275,7 +355,8 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         fieldRun: FieldRunCoordinator
     ) -> String? {
         guard phase == .running,
-              let runID = fieldRun.runID
+              let runID = fieldRun.runID,
+              let watchSessionID = activeWatchSessionID
         else {
             return nil
         }
@@ -299,6 +380,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         let cueID = "sync-\(normalized)-\(UUID().uuidString.prefix(6).lowercased())"
         guard phone.sendSessionSyncCue(
             runID: runID,
+            watchSessionID: watchSessionID,
             cueID: cueID,
             label: normalized
         )
@@ -337,8 +419,10 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         _ acknowledgment: SessionSyncAcknowledgment,
         fieldRun: FieldRunCoordinator
     ) {
-        guard phase == .running,
+        guard (phase == .running || phase == .finishing),
+              fieldRun.phase == .running,
               acknowledgment.runID == fieldRun.runID,
+              acknowledgment.watchSessionID == activeWatchSessionID,
               acknowledgment.cueID == pendingCueID
         else {
             return
@@ -370,35 +454,67 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         pod: EquipmentPodController
     ) async {
         guard phase == .running else { return }
+
+        // Freeze the classification boundary before any shutdown await.
+        // Otherwise a slow Watch stop could make an early user stop appear
+        // to have reached the 120 s protocol target.
+        let finishRequestedElapsed = elapsedSeconds
+        let reachedTarget =
+            IndoBoardProductProtocol.reachedTarget(
+                at: finishRequestedElapsed
+            )
+
         phase = .finishing
         errorMessage = nil
 
         let stopRequested: Bool
-        if let runID = fieldRun.runID {
+        if let runID = fieldRun.runID,
+           let watchSessionID = activeWatchSessionID {
             stopRequested = phone.sendWatchStopRequest(
-                runID: runID
+                runID: runID,
+                watchSessionID: watchSessionID
             )
         } else {
             stopRequested = false
         }
 
-        let watchStopped = stopRequested
-            ? await waitForWatchToLeaveRunning(phone: phone)
-            : false
-
+        // Stop the camera immediately after issuing the Watch stop so
+        // its media endpoint stays close to the 120 s product boundary.
+        // Watch journal finalization can finish asynchronously afterward.
         if camera.phase == .recording {
             await camera.stopRecording()
         }
 
+        var watchStopped = stopRequested
+            ? await waitForWatchToLeaveRunning(phone: phone)
+            : false
+
+        if !watchStopped {
+            watchStopped = watchCaptureStopped(phone)
+        }
+
         if fieldRun.phase == .running || fieldRun.phase == .armed {
-            fieldRun.seal(
-                readiness: readinessSnapshot(
-                    phone: phone,
-                    camera: camera,
-                    pod: pod,
-                    runID: fieldRun.runID ?? "unknown"
-                )
+            let readiness = readinessSnapshot(
+                phone: phone,
+                camera: camera,
+                pod: pod,
+                runID: fieldRun.runID ?? "unknown"
             )
+
+            if reachedTarget {
+                fieldRun.seal(readiness: readiness)
+            } else {
+                fieldRun.abortRun(
+                    reason: String(
+                        format:
+                            "Operator stopped the product session at %.1f s before the %.0f s target.",
+                        finishRequestedElapsed,
+                        IndoBoardProductProtocol
+                            .targetDurationSeconds
+                    ),
+                    readiness: readiness
+                )
+            }
         }
 
         protocolTask?.cancel()
@@ -409,19 +525,14 @@ final class IndoBoardSessionCoordinator: ObservableObject {
 
         if fieldRun.phase == .sealed {
             do {
+                outcome = reachedTarget ? .completed : .aborted
                 productManifestURL = try writeProductManifest(
                     phone: phone,
                     camera: camera,
                     fieldRun: fieldRun
                 )
 
-                if watchStopped
-                    || (
-                        phone.state != .running
-                            && phone.state != .paused
-                            && phone.state != .waitingForMirror
-                            && phone.state != .launchingWatch
-                    ) {
+                if watchStopped || watchCaptureStopped(phone) {
                     phase = .sealed
                 } else {
                     phase = .watchStopRequired
@@ -477,15 +588,29 @@ final class IndoBoardSessionCoordinator: ObservableObject {
                     "original-" + safeName
                 )
 
-                if manager.fileExists(atPath: destination.path) {
-                    try manager.removeItem(at: destination)
-                }
-                try manager.copyItem(
-                    at: sourceURL,
-                    to: destination
+                let sourceDigest = try FileEvidence.digest(
+                    sourceURL
                 )
 
+                if manager.fileExists(atPath: destination.path) {
+                    let existingDigest = try FileEvidence.digest(
+                        destination
+                    )
+                    guard existingDigest == sourceDigest else {
+                        throw ExternalVideoImportError
+                            .conflictingExistingEvidence(safeName)
+                    }
+                } else {
+                    try manager.copyItem(
+                        at: sourceURL,
+                        to: destination
+                    )
+                }
+
                 let digest = try FileEvidence.digest(destination)
+                guard digest == sourceDigest else {
+                    throw CocoaError(.fileReadCorruptFile)
+                }
                 let metadataURL = directory.appendingPathComponent(
                     "external-camera-metadata.json"
                 )
@@ -539,7 +664,10 @@ final class IndoBoardSessionCoordinator: ObservableObject {
                     captureMode: existing.captureMode,
                     targetDurationSeconds: existing.targetDurationSeconds,
                     createdAtUTC: existing.createdAtUTC,
+                    outcome: existing.outcome,
                     watchSessionID: existing.watchSessionID,
+                    watchJournalSHA256: existing.watchJournalSHA256,
+                    watchJournalByteCount: existing.watchJournalByteCount,
                     cameraSessionID: existing.cameraSessionID,
                     operatorJournalSHA256: existing.operatorJournalSHA256,
                     operatorMetadataSHA256: existing.operatorMetadataSHA256,
@@ -574,10 +702,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         }
 
         phone.refreshWatchState()
-        if phone.state != .running
-            && phone.state != .paused
-            && phone.state != .waitingForMirror
-            && phone.state != .launchingWatch {
+        if watchCaptureStopped(phone) {
             phase = .sealed
             errorMessage = nil
         } else {
@@ -599,13 +724,18 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         syncTimeoutTask?.cancel()
         syncTimeoutTask = nil
         protocolTransitions = []
+        sentProtocolCueIDs = []
+        lastProtocolCueAttemptAt = [:]
         lastCueAttemptAt = [:]
         UIApplication.shared.isIdleTimerDisabled = false
         phase = .idle
+        outcome = nil
+        activeWatchSessionID = nil
         startedAt = nil
         cueReceipts = []
         pendingCueID = nil
         externalVideoEvidence = nil
+        externalCameraConfirmed = false
         productManifestURL = nil
         errorMessage = nil
     }
@@ -621,7 +751,9 @@ final class IndoBoardSessionCoordinator: ObservableObject {
 
     private func startProtocolTimeline(
         phone: PhoneSessionCoordinator,
-        fieldRun: FieldRunCoordinator
+        camera: CameraCaptureController,
+        fieldRun: FieldRunCoordinator,
+        pod: EquipmentPodController
     ) {
         protocolTask?.cancel()
         protocolTransitions = []
@@ -641,11 +773,33 @@ final class IndoBoardSessionCoordinator: ObservableObject {
                     return
                 }
 
+                let elapsed = self.elapsedSeconds
                 self.advanceProtocol(
-                    elapsed: self.elapsedSeconds,
+                    elapsed: elapsed,
                     phone: phone,
                     fieldRun: fieldRun
                 )
+
+                if IndoBoardProductProtocol.reachedTarget(
+                    at: elapsed
+                ) {
+                    Task { @MainActor [weak self, weak fieldRun] in
+                        guard let self,
+                              let fieldRun,
+                              self.phase == .running
+                        else {
+                            return
+                        }
+                        await self.finish(
+                            phone: phone,
+                            camera: camera,
+                            fieldRun: fieldRun,
+                            pod: pod
+                        )
+                    }
+                    return
+                }
+
                 try? await Task.sleep(for: .milliseconds(250))
             }
         }
@@ -670,15 +824,13 @@ final class IndoBoardSessionCoordinator: ObservableObject {
                     when: true
                 ) {
                     fieldRun.startBlock(block.id)
-                    if let runID = fieldRun.runID {
-                        _ = phone.sendSessionProtocolCue(
-                            runID: runID,
-                            stepID: block.id,
-                            title: block.title,
-                            instruction: block.instruction
-                        )
-                    }
                 }
+
+                sendProtocolCueIfNeeded(
+                    block,
+                    phone: phone,
+                    fieldRun: fieldRun
+                )
             }
         }
 
@@ -691,6 +843,37 @@ final class IndoBoardSessionCoordinator: ObservableObject {
                 phone: phone,
                 fieldRun: fieldRun
             )
+        }
+    }
+
+    private func sendProtocolCueIfNeeded(
+        _ block: TimedProtocolBlock,
+        phone: PhoneSessionCoordinator,
+        fieldRun: FieldRunCoordinator
+    ) {
+        guard !sentProtocolCueIDs.contains(block.id),
+              let runID = fieldRun.runID,
+              let watchSessionID = activeWatchSessionID,
+              phone.watchReachable
+        else {
+            return
+        }
+
+        let now = Date()
+        if let previous = lastProtocolCueAttemptAt[block.id],
+           now.timeIntervalSince(previous) < 2 {
+            return
+        }
+        lastProtocolCueAttemptAt[block.id] = now
+
+        if phone.sendSessionProtocolCue(
+            runID: runID,
+            watchSessionID: watchSessionID,
+            stepID: block.id,
+            title: block.title,
+            instruction: block.instruction
+        ) {
+            sentProtocolCueIDs.insert(block.id)
         }
     }
 
@@ -752,6 +935,75 @@ final class IndoBoardSessionCoordinator: ObservableObject {
             && configuration.stabilizationLockedOff
     }
 
+    func watchCaptureAvailable(
+        _ phone: PhoneSessionCoordinator
+    ) -> Bool {
+        switch phone.state {
+        case .launchingWatch, .waitingForMirror, .running, .paused:
+            return false
+        default:
+            break
+        }
+
+        guard let watchState = phone.watchPresence?
+            .captureState
+            .lowercased()
+        else {
+            return false
+        }
+
+        return ["idle", "transferred"].contains(watchState)
+    }
+
+    func watchCaptureAvailabilityDetail(
+        _ phone: PhoneSessionCoordinator
+    ) -> String {
+        guard let rawState = phone.watchPresence?.captureState else {
+            return "waiting for Watch status"
+        }
+
+        switch rawState.lowercased() {
+        case "idle", "transferred":
+            return "available for this session"
+        case "journalready", "transferqueued", "transportcomplete":
+            return "previous journal still verifying"
+        case "starting", "running", "paused", "ending":
+            return "another capture is active"
+        case "failed":
+            return "resolve saved Watch evidence first"
+        default:
+            return rawState
+        }
+    }
+
+    private func waitForFreshWatchSessionID(
+        phone: PhoneSessionCoordinator,
+        after launchRequestedAt: Date,
+        excluding priorSessionID: String?,
+        timeoutSeconds: TimeInterval = 10
+    ) async -> String? {
+        let deadline = Date().addingTimeInterval(timeoutSeconds)
+
+        while Date() < deadline {
+            if let health = phone.watchCaptureHealth,
+               health.receivedAt >= launchRequestedAt,
+               !health.sessionID.isEmpty,
+               health.sessionID != priorSessionID,
+               phone.state == .running || phone.state == .paused {
+                return health.sessionID
+            }
+
+            if phone.state == .failed
+                || phone.state == .disconnected {
+                return nil
+            }
+
+            try? await Task.sleep(for: .milliseconds(250))
+        }
+
+        return nil
+    }
+
     private func waitForWatchRunning(
         phone: PhoneSessionCoordinator,
         timeoutSeconds: TimeInterval = 20
@@ -775,15 +1027,36 @@ final class IndoBoardSessionCoordinator: ObservableObject {
     ) async -> Bool {
         let deadline = Date().addingTimeInterval(timeoutSeconds)
         while Date() < deadline {
-            if phone.state != .running
-                && phone.state != .paused
-                && phone.state != .waitingForMirror
-                && phone.state != .launchingWatch {
+            if watchCaptureStopped(phone) {
                 return true
             }
             try? await Task.sleep(for: .milliseconds(250))
         }
-        return false
+        return watchCaptureStopped(phone)
+    }
+
+    private func watchCaptureStopped(
+        _ phone: PhoneSessionCoordinator
+    ) -> Bool {
+        if phone.state == .ended {
+            return true
+        }
+
+        guard let captureState = phone.watchPresence?
+            .captureState
+            .lowercased()
+        else {
+            return false
+        }
+
+        return [
+            "idle",
+            "journalready",
+            "transferqueued",
+            "transportcomplete",
+            "transferred",
+            "failed",
+        ].contains(captureState)
     }
 
     private func readinessSnapshot(
@@ -800,7 +1073,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
             "watch_reachable": String(phone.watchReachable),
             "watch_workout_state": phone.state.rawValue,
             "watch_session_id":
-                phone.watchCaptureHealth?.sessionID ?? "unknown",
+                activeWatchSessionID ?? "unknown",
             "iphone_camera_phase": camera.phase.rawValue,
             "iphone_camera_session_id":
                 camera.sessionID ?? "unknown",
@@ -843,29 +1116,33 @@ final class IndoBoardSessionCoordinator: ObservableObject {
             bundle.metadataURL
         )
 
-        let cameraVideoDigest = try camera.evidenceBundle.map {
-            try FileEvidence.digest($0.videoURL)
-        }
-        let cameraJournalDigest = try camera.evidenceBundle.map {
-            try FileEvidence.digest($0.journalURL)
-        }
-        let cameraMetadataDigest = try camera.evidenceBundle.map {
-            try FileEvidence.digest($0.metadataURL)
-        }
+        let cameraBundle = camera.evidenceBundle
+
+        let latestWatchReceiptMatchesRun =
+            phone.inbox.latestProductRunID == runID
+                && phone.inbox.latestSessionID
+                    == activeWatchSessionID
 
         let manifest = ProductSessionManifest(
             runID: runID,
             captureMode: captureMode.rawValue,
             targetDurationSeconds: Self.targetDurationSeconds,
-            watchSessionID: phone.watchCaptureHealth?.sessionID,
+            outcome: outcome ?? .completed,
+            watchSessionID: activeWatchSessionID,
+            watchJournalSHA256: latestWatchReceiptMatchesRun
+                ? phone.inbox.latestJournalSHA256
+                : nil,
+            watchJournalByteCount: latestWatchReceiptMatchesRun
+                ? phone.inbox.latestJournalByteCount
+                : nil,
             cameraSessionID: camera.sessionID,
             operatorJournalSHA256: operatorJournalDigest.sha256,
             operatorMetadataSHA256: operatorMetadataDigest.sha256,
-            cameraVideoSHA256: cameraVideoDigest?.sha256,
-            cameraJournalSHA256: cameraJournalDigest?.sha256,
-            cameraMetadataSHA256: cameraMetadataDigest?.sha256,
+            cameraVideoSHA256: cameraBundle?.videoSHA256,
+            cameraJournalSHA256: cameraBundle?.journalSHA256,
+            cameraMetadataSHA256: cameraBundle?.metadataSHA256,
             syncReceipts: receipts,
-            externalCameraExpected: requiresExternalCamera,
+            externalCameraExpected: externalCameraConfirmed,
             externalCameraImported: externalVideoEvidence != nil,
             externalCameraSHA256: externalVideoEvidence?.sha256,
             operatorEvidenceSealed: fieldRun.phase == .sealed,
@@ -876,6 +1153,90 @@ final class IndoBoardSessionCoordinator: ObservableObject {
             manifest,
             to: bundle.directory
         )
+    }
+
+    private func abortStart(
+        error: SessionError,
+        phone: PhoneSessionCoordinator,
+        camera: CameraCaptureController,
+        fieldRun: FieldRunCoordinator,
+        pod: EquipmentPodController
+    ) async {
+        outcome = .aborted
+        protocolTask?.cancel()
+        protocolTask = nil
+        syncTimeoutTask?.cancel()
+        syncTimeoutTask = nil
+        UIApplication.shared.isIdleTimerDisabled = false
+
+        let runID = fieldRun.runID ?? "unknown"
+        var watchStopped = true
+
+        var stopRequested = false
+        if phone.state == .running
+            || phone.state == .paused
+            || phone.state == .waitingForMirror
+            || phone.state == .launchingWatch {
+            watchStopped = false
+            if fieldRun.runID != nil,
+               let watchSessionID = activeWatchSessionID {
+                stopRequested = phone.sendWatchStopRequest(
+                    runID: runID,
+                    watchSessionID: watchSessionID
+                )
+            }
+            // Without a fresh Watch capture identity, do not send an
+            // ambiguous remote-stop command into a possibly different run.
+        }
+
+        if camera.phase == .recording {
+            await camera.stopRecording()
+        }
+
+        if stopRequested {
+            watchStopped = await waitForWatchToLeaveRunning(
+                phone: phone
+            )
+        }
+        if !watchStopped {
+            watchStopped = watchCaptureStopped(phone)
+        }
+
+        if fieldRun.phase == .armed
+            || fieldRun.phase == .running {
+            fieldRun.abortRun(
+                reason: error.localizedDescription,
+                readiness: readinessSnapshot(
+                    phone: phone,
+                    camera: camera,
+                    pod: pod,
+                    runID: runID
+                )
+            )
+        }
+
+        if fieldRun.phase == .sealed {
+            productManifestURL = try? writeProductManifest(
+                phone: phone,
+                camera: camera,
+                fieldRun: fieldRun
+            )
+        }
+
+        if watchStopped && fieldRun.phase == .sealed {
+            phase = .sealed
+            errorMessage = nil
+        } else if watchStopped {
+            phase = .failed
+            errorMessage = error.localizedDescription
+        } else {
+            phase = .watchStopRequired
+            errorMessage = (
+                error.localizedDescription
+                    + " "
+                    + SessionError.watchDidNotStop.localizedDescription
+            )
+        }
     }
 
     private func fail(_ error: Error) {

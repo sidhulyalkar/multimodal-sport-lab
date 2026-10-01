@@ -222,6 +222,7 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
     @discardableResult
     func sendSessionProtocolCue(
         runID: String,
+        watchSessionID: String,
         stepID: String,
         title: String,
         instruction: String
@@ -230,6 +231,7 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
             [
                 "motionos_message": "session_protocol_cue_v1",
                 "run_id": runID,
+                "watch_session_id": watchSessionID,
                 "step_id": stepID,
                 "step_title": title,
                 "instruction": instruction,
@@ -239,12 +241,14 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
 
     @discardableResult
     func sendWatchStopRequest(
-        runID: String
+        runID: String,
+        watchSessionID: String
     ) -> Bool {
         transport.sendMessage(
             [
                 "motionos_message": "session_stop_request_v1",
                 "run_id": runID,
+                "watch_session_id": watchSessionID,
             ]
         )
     }
@@ -252,6 +256,7 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
     @discardableResult
     func sendSessionSyncCue(
         runID: String,
+        watchSessionID: String,
         cueID: String,
         label: String
     ) -> Bool {
@@ -259,6 +264,7 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
             [
                 "motionos_message": "session_sync_cue_v1",
                 "run_id": runID,
+                "watch_session_id": watchSessionID,
                 "cue_id": cueID,
                 "label": label,
             ]
@@ -525,7 +531,9 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
         }
     }
 
-    func startP0() async {
+    func startP0(
+        locationType: HKWorkoutSessionLocationType = .outdoor
+    ) async {
         errorMessage = nil
         refreshWatchState()
 
@@ -540,7 +548,7 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
 
         let configuration = HKWorkoutConfiguration()
         configuration.activityType = .other
-        configuration.locationType = .outdoor
+        configuration.locationType = locationType
 
         state = .launchingWatch
         do {

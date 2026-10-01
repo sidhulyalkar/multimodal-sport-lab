@@ -65,6 +65,7 @@ final class WatchSessionController: ObservableObject {
     @Published private(set) var devicePitchRadians: Double?
     @Published private(set) var deviceYawRadians: Double?
     @Published private(set) var visualTelemetryHistory: [VisualTelemetryPoint] = []
+    @Published private(set) var productCueInstruction: String?
     /// Operator diagnostics for late, foreign, or stale events that were not
     /// journaled. Not raw evidence.
     @Published private(set) var captureRejections = CaptureRejectionCounts()
@@ -81,7 +82,7 @@ final class WatchSessionController: ObservableObject {
     private var sessionSyncSequence: UInt64 = 0
     private var productCueTitle: String?
     private var linkedProductRunID: String?
-    private var rejectedProductControlCount: UInt64 = 0
+    @Published private(set) var rejectedProductControlCount: UInt64 = 0
     private var closedJournalURL: URL?
     private var closedJournalEvidence: FileEvidenceDigest?
     private var imuHealth = SampleTimingHealth()
@@ -269,6 +270,7 @@ final class WatchSessionController: ObservableObject {
         heartRateSequence = 0
         sessionSyncSequence = 0
         productCueTitle = nil
+        productCueInstruction = nil
         linkedProductRunID = nil
         rejectedProductControlCount = 0
         finalized = false
@@ -721,6 +723,7 @@ final class WatchSessionController: ObservableObject {
 
         case "session_protocol_cue_v1":
             guard state == .running || state == .paused,
+                  validateProductControlSession(message),
                   let runID = message["run_id"] as? String,
                   bindProductRunID(runID),
                   let title = message["step_title"] as? String
@@ -728,23 +731,28 @@ final class WatchSessionController: ObservableObject {
                 return
             }
             productCueTitle = title
+            productCueInstruction =
+                message["instruction"] as? String
             guidedCueTitle = title
-            WKInterfaceDevice.current().play(.notification)
+            WKInterfaceDevice.current().play(.click)
 
         case "session_stop_request_v1":
             guard state == .running || state == .paused,
+                  validateProductControlSession(message),
                   let runID = message["run_id"] as? String,
                   bindProductRunID(runID)
             else {
                 return
             }
             productCueTitle = nil
+            productCueInstruction = nil
             guidedCueTitle = "FINISHING"
             WKInterfaceDevice.current().play(.stop)
             stop()
 
         case "session_sync_cue_v1":
             guard state == .running || state == .paused,
+                  validateProductControlSession(message),
                   let runID = message["run_id"] as? String,
                   bindProductRunID(runID),
                   let cueID = message["cue_id"] as? String,
@@ -779,7 +787,11 @@ final class WatchSessionController: ObservableObject {
                 }
 
                 self.guidedCueTitle = "SYNC · MOVE NOW"
-                WKInterfaceDevice.current().play(.notification)
+                WKInterfaceDevice.current().play(.directionUp)
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(180))
+                    WKInterfaceDevice.current().play(.click)
+                }
 
                 let acknowledgment: [String: Any] = [
                     "motionos_message": "session_sync_cue_ack_v1",
@@ -806,6 +818,20 @@ final class WatchSessionController: ObservableObject {
         default:
             return
         }
+    }
+
+    private func validateProductControlSession(
+        _ message: [String: Any]
+    ) -> Bool {
+        guard let currentSessionID = sessionID,
+              let targetSessionID =
+                message["watch_session_id"] as? String,
+              targetSessionID == currentSessionID
+        else {
+            rejectedProductControlCount &+= 1
+            return false
+        }
+        return true
     }
 
     @discardableResult

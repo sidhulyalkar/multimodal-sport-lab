@@ -117,7 +117,18 @@ struct ProductRunDetailView: View {
                 .foregroundStyle(.secondary)
             }
 
-            HStack(spacing: 8) {
+            FlowLayout(spacing: 8) {
+                MotionOSStatusBadge(
+                    title: run.outcome == .completed
+                        ? "COMPLETE"
+                        : "ABORTED",
+                    systemImage: run.outcome == .completed
+                        ? "checkmark.seal.fill"
+                        : "exclamationmark.triangle.fill",
+                    color: run.outcome == .completed
+                        ? .green
+                        : .yellow
+                )
                 MotionOSStatusBadge(
                     title: run.captureModeLabel,
                     systemImage: "scope",

@@ -1,3 +1,4 @@
+import MotionOSAppleCapture
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -270,6 +271,13 @@ struct IndoBoardSessionView: View {
                     : "open MotionOS on Watch",
                 ready: phone.watchReachable,
                 symbol: "dot.radiowaves.left.and.right"
+            )
+
+            readinessRow(
+                title: "Watch capture",
+                detail: session.watchCaptureAvailabilityDetail(phone),
+                ready: session.watchCaptureAvailable(phone),
+                symbol: "record.circle"
             )
 
             readinessRow(
@@ -593,9 +601,11 @@ struct IndoBoardSessionView: View {
                     }
                 } label: {
                     Label(
-                        elapsed >= 110
+                        elapsed
+                            >= IndoBoardProductProtocol
+                                .targetDurationSeconds
                             ? "Finish & Seal Session"
-                            : "Finish Early & Seal",
+                            : "Stop Early & Preserve Attempt",
                         systemImage: "stop.circle.fill"
                     )
                     .frame(maxWidth: .infinity)
@@ -799,11 +809,28 @@ struct IndoBoardSessionView: View {
     private var sealedSummary: some View {
         VStack(alignment: .leading, spacing: 12) {
             MotionOSSectionHeader(
-                title: "Capture sealed",
-                subtitle: "Raw sources remain independent and hashable",
-                systemImage: "checkmark.seal.fill",
-                accent: .green
+                title: session.outcome == .aborted
+                    ? "Attempt preserved"
+                    : "Capture sealed",
+                subtitle: session.outcome == .aborted
+                    ? "Stopped early or failed to start; available evidence remains inspectable"
+                    : "Raw sources remain independent and hashable",
+                systemImage: session.outcome == .aborted
+                    ? "exclamationmark.triangle.fill"
+                    : "checkmark.seal.fill",
+                accent: session.outcome == .aborted
+                    ? .yellow
+                    : .green
             )
+
+            if session.outcome == .aborted {
+                Label(
+                    "This attempt is excluded from longitudinal comparisons.",
+                    systemImage: "chart.line.downtrend.xyaxis"
+                )
+                .font(.caption)
+                .foregroundStyle(.yellow)
+            }
 
             VStack(spacing: 8) {
                 completionRow(
@@ -857,7 +884,9 @@ struct IndoBoardSessionView: View {
                     ProductRunDetailView(run: run)
                 } label: {
                     Label(
-                        "Review Complete Session",
+                        session.outcome == .aborted
+                            ? "Review Preserved Attempt"
+                            : "Review Complete Session",
                         systemImage: "chart.xyaxis.line"
                     )
                     .frame(maxWidth: .infinity)
@@ -996,6 +1025,42 @@ struct IndoBoardSessionView: View {
                 )
                 .font(.caption)
                 .foregroundStyle(.green)
+            }
+
+            Divider()
+
+            if session.externalCameraConfirmed
+                && session.externalVideoEvidence == nil {
+                Button {
+                    session.reset()
+                    runLibrary.refresh()
+                } label: {
+                    Label(
+                        "Start Another Without Action 4",
+                        systemImage: "arrow.counterclockwise"
+                    )
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+
+                Text(
+                    "The current run stays preserved in Sessions with its "
+                        + "planned Action 4 source marked incomplete."
+                )
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            } else {
+                Button {
+                    session.reset()
+                    runLibrary.refresh()
+                } label: {
+                    Label(
+                        "Prepare Another Session",
+                        systemImage: "arrow.counterclockwise"
+                    )
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
             }
         }
         .cardStyle()
@@ -1252,6 +1317,7 @@ struct IndoBoardSessionView: View {
         phone.watchPaired
             && phone.watchAppInstalled
             && phone.watchReachable
+            && session.watchCaptureAvailable(phone)
             && (
                 camera.phase == .ready
                     || camera.phase == .evidenceReady

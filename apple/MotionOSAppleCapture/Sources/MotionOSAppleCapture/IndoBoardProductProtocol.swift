@@ -124,6 +124,12 @@ public enum IndoBoardProductProtocol {
         ),
     ]
 
+    public static func reachedTarget(
+        at elapsedSeconds: Double
+    ) -> Bool {
+        elapsedSeconds >= targetDurationSeconds
+    }
+
     public static func activeBlock(
         at elapsedSeconds: Double
     ) -> TimedProtocolBlock? {

@@ -16,7 +16,8 @@ struct WatchContentView: View {
                     stateCard
                 }
 
-                if controller.captureRejections.total > 0 {
+                if controller.captureRejections.total > 0
+                    || controller.rejectedProductControlCount > 0 {
                     rejectionDiagnostics
                 }
 
@@ -253,6 +254,10 @@ struct WatchContentView: View {
                 }
             }
 
+            if let cue = controller.guidedCueTitle {
+                protocolCueCard(cue)
+            }
+
             WatchMotionTrace(
                 points: controller.visualTelemetryHistory,
                 currentUserAccelerationG: controller.userAccelerationG,
@@ -311,15 +316,6 @@ struct WatchContentView: View {
                 }
             }
 
-            if let cue = controller.guidedCueTitle {
-                Label(cue, systemImage: "list.clipboard.fill")
-                    .font(.caption2.weight(.semibold))
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: .infinity)
-                    .padding(7)
-                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 10))
-            }
-
             HStack(spacing: 7) {
                 Button {
                     if controller.state == .running {
@@ -350,6 +346,52 @@ struct WatchContentView: View {
         .panelStyle()
     }
 
+    private func protocolCueCard(
+        _ title: String
+    ) -> some View {
+        let isSync = title == "SYNC · MOVE NOW"
+        let detail = isSync
+            ? "Sharp arm gesture now. Keep the board near neutral."
+            : controller.productCueInstruction
+
+        return VStack(spacing: 4) {
+            HStack(spacing: 5) {
+                Image(
+                    systemName: isSync
+                        ? "bolt.fill"
+                        : "figure.surfing"
+                )
+                Text(isSync ? "SYNC" : "SESSION")
+            }
+            .font(.system(size: 9, weight: .bold))
+            .foregroundStyle(isSync ? .cyan : .secondary)
+
+            Text(title)
+                .font(.caption.weight(.bold))
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if let detail,
+               !detail.isEmpty {
+                Text(detail)
+                    .font(.system(size: 9))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(8)
+        .background(
+            (isSync ? Color.cyan : Color.primary)
+                .opacity(isSync ? 0.12 : 0.055),
+            in: RoundedRectangle(
+                cornerRadius: 11,
+                style: .continuous
+            )
+        )
+    }
+
     private var rejectionDiagnostics: some View {
         let value = controller.captureRejections
         return VStack(alignment: .leading, spacing: 3) {
@@ -358,7 +400,8 @@ struct WatchContentView: View {
             Text(
                 "\(value.afterShutdown) late · "
                     + "\(value.sessionMismatch &+ value.noActiveSession) foreign · "
-                    + "\(value.staleMotionGeneration) stale"
+                    + "\(value.staleMotionGeneration) stale · "
+                    + "\(controller.rejectedProductControlCount) control"
             )
             .font(.system(.caption2, design: .monospaced))
             .foregroundStyle(.secondary)

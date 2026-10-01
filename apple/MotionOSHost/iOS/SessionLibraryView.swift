@@ -69,12 +69,20 @@ struct SessionLibraryView: View {
 
             HStack(spacing: 8) {
                 MotionOSStatusBadge(
-                    title: "\(runLibrary.runs.count) complete runs",
+                    title: "\(completedRunCount) complete",
                     systemImage: "checkmark.seal",
-                    color: runLibrary.runs.isEmpty
+                    color: completedRunCount == 0
                         ? .secondary
                         : .green
                 )
+
+                if abortedRunCount > 0 {
+                    MotionOSStatusBadge(
+                        title: "\(abortedRunCount) aborted",
+                        systemImage: "exclamationmark.triangle",
+                        color: .yellow
+                    )
+                }
                 MotionOSStatusBadge(
                     title: "\(inbox.sessions.count) Watch",
                     systemImage: "applewatch",
@@ -104,10 +112,16 @@ struct SessionLibraryView: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     MotionOSSectionHeader(
-                        title: "Latest complete run",
+                        title: run.outcome == .completed
+                            ? "Latest complete run"
+                            : "Latest aborted attempt",
                         subtitle: run.protocolKind,
-                        systemImage: "figure.surfing",
-                        accent: .indigo
+                        systemImage: run.outcome == .completed
+                            ? "figure.surfing"
+                            : "exclamationmark.triangle.fill",
+                        accent: run.outcome == .completed
+                            ? .indigo
+                            : .yellow
                     )
 
                     Spacer(minLength: 0)
@@ -306,8 +320,8 @@ struct SessionLibraryView: View {
         if !runLibrary.runs.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
                 MotionOSSectionHeader(
-                    title: "Complete sessions",
-                    subtitle: "Protocol + linked source evidence",
+                    title: "Product sessions",
+                    subtitle: "Completed runs and inspectable aborted attempts",
                     systemImage: "figure.surfing",
                     accent: .indigo
                 )
@@ -361,9 +375,17 @@ struct SessionLibraryView: View {
             }
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(run.protocolKind)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
+                HStack(spacing: 6) {
+                    Text(run.protocolKind)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+
+                    if run.outcome == .aborted {
+                        Text("ABORTED")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.yellow)
+                    }
+                }
 
                 HStack(spacing: 5) {
                     if let date = run.startedAt ?? run.sealedAt {
@@ -408,6 +430,18 @@ struct SessionLibraryView: View {
                 .foregroundStyle(.tertiary)
         }
         .contentShape(Rectangle())
+    }
+
+    private var completedRunCount: Int {
+        runLibrary.runs.filter {
+            $0.outcome == .completed
+        }.count
+    }
+
+    private var abortedRunCount: Int {
+        runLibrary.runs.filter {
+            $0.outcome == .aborted
+        }.count
     }
 
     private func sourceDot(

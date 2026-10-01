@@ -121,6 +121,8 @@ final class MotionOSAppleCaptureTests: XCTestCase {
             targetDurationSeconds: 120,
             createdAtUTC: "2026-10-01T17:00:00Z",
             watchSessionID: "watch-001",
+            watchJournalSHA256: "watch-journal",
+            watchJournalByteCount: 4_096,
             cameraSessionID: "camera-001",
             operatorJournalSHA256: "op-journal",
             operatorMetadataSHA256: "op-meta",
@@ -154,7 +156,49 @@ final class MotionOSAppleCaptureTests: XCTestCase {
             ProductSessionManifest.schemaVersion
         )
         XCTAssertEqual(decoded.syncReceipts.first?.label, "start")
+        XCTAssertEqual(decoded.watchJournalSHA256, "watch-journal")
+        XCTAssertEqual(decoded.watchJournalByteCount, 4_096)
         XCTAssertTrue(decoded.claimBoundary.contains("does not itself prove"))
+    }
+
+    func testProductSessionManifestOutcomeRoundTripAndLegacyDefault() throws {
+        let aborted = ProductSessionManifest(
+            runID: "run-aborted",
+            captureMode: "Watch + iPhone",
+            targetDurationSeconds: 120,
+            outcome: .aborted,
+            watchSessionID: "watch-aborted",
+            cameraSessionID: nil,
+            syncReceipts: [],
+            externalCameraExpected: false,
+            externalCameraImported: false,
+            externalCameraSHA256: nil,
+            operatorEvidenceSealed: true,
+            cameraEvidenceSealed: false
+        )
+
+        let encoded = try JSONEncoder().encode(aborted)
+        let decoded = try JSONDecoder().decode(
+            ProductSessionManifest.self,
+            from: encoded
+        )
+        XCTAssertEqual(decoded.resolvedOutcome, .aborted)
+
+        var legacyObject = try XCTUnwrap(
+            try JSONSerialization.jsonObject(
+                with: encoded
+            ) as? [String: Any]
+        )
+        legacyObject.removeValue(forKey: "outcome")
+        let legacyData = try JSONSerialization.data(
+            withJSONObject: legacyObject,
+            options: [.sortedKeys]
+        )
+        let legacy = try JSONDecoder().decode(
+            ProductSessionManifest.self,
+            from: legacyData
+        )
+        XCTAssertEqual(legacy.resolvedOutcome, .completed)
     }
 
     func testProductSessionManifestStoreWritesAtomicArtifact() throws {
@@ -226,6 +270,18 @@ final class MotionOSAppleCaptureTests: XCTestCase {
         XCTAssertEqual(
             acknowledged,
             IndoBoardProductProtocol.blocks[0].instruction
+        )
+    }
+
+    func testIndoBoardProductProtocolCompletionThreshold() {
+        XCTAssertFalse(
+            IndoBoardProductProtocol.reachedTarget(at: 119.999)
+        )
+        XCTAssertTrue(
+            IndoBoardProductProtocol.reachedTarget(at: 120.0)
+        )
+        XCTAssertTrue(
+            IndoBoardProductProtocol.reachedTarget(at: 121.0)
         )
     }
 
