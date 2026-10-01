@@ -104,11 +104,11 @@ struct LiveTelemetryDeck: View {
 
             GridRow {
                 metricTile(
-                    label: "DYNAMIC",
-                    value: health?.motionDeltaG.map {
+                    label: "USER ACCEL",
+                    value: health?.userAccelerationG.map {
                         String(format: "%.2f", $0)
                     } ?? "—",
-                    unit: "Δg",
+                    unit: "g",
                     symbol: "figure.run",
                     accent: .indigo
                 )
@@ -154,14 +154,14 @@ struct LiveTelemetryDeck: View {
 
     private var motionChart: some View {
         let points = coordinator.watchTelemetryHistory.filter {
-            $0.motionDeltaG != nil
+            $0.userAccelerationG != nil
         }
 
         return Chart(points) { point in
-            if let value = point.motionDeltaG {
+            if let value = point.userAccelerationG {
                 AreaMark(
                     x: .value("Time", point.timestamp),
-                    y: .value("Dynamic acceleration", value)
+                    y: .value("User acceleration", value)
                 )
                 .interpolationMethod(.catmullRom)
                 .foregroundStyle(
@@ -177,7 +177,7 @@ struct LiveTelemetryDeck: View {
 
                 LineMark(
                     x: .value("Time", point.timestamp),
-                    y: .value("Dynamic acceleration", value)
+                    y: .value("User acceleration", value)
                 )
                 .interpolationMethod(.catmullRom)
                 .lineStyle(.init(lineWidth: 2.3, lineCap: .round))
@@ -196,7 +196,7 @@ struct LiveTelemetryDeck: View {
             }
         }
         .frame(height: 150)
-        .accessibilityLabel("Dynamic acceleration history")
+        .accessibilityLabel("User acceleration history")
     }
 
     private var heartChart: some View {
