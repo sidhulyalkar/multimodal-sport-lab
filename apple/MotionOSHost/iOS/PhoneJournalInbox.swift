@@ -321,6 +321,17 @@ final class PhoneJournalInbox: ObservableObject {
             )
             : nil
 
+        if let productRunID {
+            try Self.bindWatchEvidenceToProductManifest(
+                productRunID: productRunID,
+                watchSessionID: sessionID,
+                journalSHA256: incoming.sha256,
+                journalByteCount: incoming.byteCount,
+                documents: documents,
+                manager: manager
+            )
+        }
+
         return JournalIngestReceipt(
             sessionID: sessionID,
             journalURL: destination,
@@ -331,6 +342,80 @@ final class PhoneJournalInbox: ObservableObject {
             captureOrigin: captureOrigin,
             productRunID: productRunID,
             transferDiagnostics: diagnostics
+        )
+    }
+
+    nonisolated private static func bindWatchEvidenceToProductManifest(
+        productRunID: String,
+        watchSessionID: String,
+        journalSHA256: String,
+        journalByteCount: UInt64,
+        documents: URL,
+        manager: FileManager
+    ) throws {
+        let runDirectory = documents
+            .appendingPathComponent(
+                "MotionOSRuns",
+                isDirectory: true
+            )
+            .appendingPathComponent(
+                productRunID,
+                isDirectory: true
+            )
+        let manifestURL = runDirectory.appendingPathComponent(
+            "product-session.json"
+        )
+
+        guard manager.fileExists(atPath: manifestURL.path) else {
+            return
+        }
+
+        let existing = try ProductSessionManifestStore.load(
+            from: manifestURL
+        )
+        guard existing.runID == productRunID else {
+            throw InboxError.productRunManifestMismatch(
+                expectedRunID: productRunID,
+                actualRunID: existing.runID
+            )
+        }
+
+        if let expectedWatchSessionID = existing.watchSessionID,
+           expectedWatchSessionID != watchSessionID {
+            throw InboxError.productRunWatchMismatch(
+                runID: productRunID,
+                expectedWatchSessionID: expectedWatchSessionID,
+                receivedWatchSessionID: watchSessionID
+            )
+        }
+
+        let updated = ProductSessionManifest(
+            runID: existing.runID,
+            captureMode: existing.captureMode,
+            targetDurationSeconds: existing.targetDurationSeconds,
+            createdAtUTC: existing.createdAtUTC,
+            outcome: existing.outcome,
+            watchSessionID:
+                existing.watchSessionID ?? watchSessionID,
+            watchJournalSHA256: journalSHA256,
+            watchJournalByteCount: journalByteCount,
+            cameraSessionID: existing.cameraSessionID,
+            operatorJournalSHA256: existing.operatorJournalSHA256,
+            operatorMetadataSHA256: existing.operatorMetadataSHA256,
+            cameraVideoSHA256: existing.cameraVideoSHA256,
+            cameraJournalSHA256: existing.cameraJournalSHA256,
+            cameraMetadataSHA256: existing.cameraMetadataSHA256,
+            syncReceipts: existing.syncReceipts,
+            externalCameraExpected: existing.externalCameraExpected,
+            externalCameraImported: existing.externalCameraImported,
+            externalCameraSHA256: existing.externalCameraSHA256,
+            operatorEvidenceSealed: existing.operatorEvidenceSealed,
+            cameraEvidenceSealed: existing.cameraEvidenceSealed
+        )
+
+        _ = try ProductSessionManifestStore.write(
+            updated,
+            to: runDirectory
         )
     }
 
@@ -468,6 +553,15 @@ final class PhoneJournalInbox: ObservableObject {
             existingSHA256: String,
             incomingSHA256: String
         )
+        case productRunManifestMismatch(
+            expectedRunID: String,
+            actualRunID: String
+        )
+        case productRunWatchMismatch(
+            runID: String,
+            expectedWatchSessionID: String,
+            receivedWatchSessionID: String
+        )
 
         var errorDescription: String? {
             switch self {
@@ -482,6 +576,20 @@ final class PhoneJournalInbox: ObservableObject {
             ):
                 "Session \(sessionID) already exists with different bytes "
                     + "(existing \(existingSHA256), incoming \(incomingSHA256))."
+            case .productRunManifestMismatch(
+                let expectedRunID,
+                let actualRunID
+            ):
+                "Product run directory \(expectedRunID) contains a manifest "
+                    + "for \(actualRunID). Watch evidence was not acknowledged."
+            case .productRunWatchMismatch(
+                let runID,
+                let expectedWatchSessionID,
+                let receivedWatchSessionID
+            ):
+                "Product run \(runID) expects Watch session "
+                    + "\(expectedWatchSessionID), but received "
+                    + "\(receivedWatchSessionID). Watch evidence was not acknowledged."
             }
         }
     }
