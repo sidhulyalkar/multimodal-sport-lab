@@ -175,20 +175,6 @@ final class ProductRunLibrary: ObservableObject {
                 productManifest = nil
             }
 
-            let manifestURL = directory.appendingPathComponent(
-                "product-session.json"
-            )
-            let productManifest: ProductSessionManifest?
-            if manager.fileExists(atPath: manifestURL.path),
-               let manifestData = try? Data(contentsOf: manifestURL) {
-                productManifest = try? decoder.decode(
-                    ProductSessionManifest.self,
-                    from: manifestData
-                )
-            } else {
-                productManifest = nil
-            }
-
             let startReadiness = stringMap(
                 metadata["start_readiness"]
             )
