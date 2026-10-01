@@ -4,6 +4,7 @@ import math
 import pytest
 
 import motionos.wrist_fusion_calibration as calibration
+from motionos.provenance import sha256_file
 from motionos.wrist_fusion_calibration import (
     calibrate_wrist_fusion,
     validate_wrist_fusion_calibration_spec,
@@ -14,6 +15,7 @@ def _write_inputs(tmp_path):
     geometry = tmp_path / "geometry.json"
     correspondences = tmp_path / "correspondences.json"
     watch = tmp_path / "watch.jsonl"
+    reconstruction = tmp_path / "reconstruction.json"
     spec = tmp_path / "spec.json"
 
     geometry.write_text('{"fixture":"geometry"}\n', encoding="utf-8")
@@ -22,11 +24,34 @@ def _write_inputs(tmp_path):
         encoding="utf-8",
     )
     watch.write_text("fixture-watch\n", encoding="utf-8")
+    reconstruction.write_text(
+        json.dumps(
+            {
+                "schema_version":
+                    "motionos.wrist-fusion-reconstruction.v1",
+                "acquisition_profile_id":
+                    "m0-indo-board-two-camera-v1",
+                "input_sha256": {
+                    "watch_journal": sha256_file(watch),
+                },
+                "artifacts": {
+                    "skeleton_geometry": {
+                        "sha256": sha256_file(geometry),
+                    },
+                    "skeleton_correspondences": {
+                        "sha256": sha256_file(correspondences),
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
     spec.write_text(
         json.dumps(
             {
                 "schema_version":
                     "motionos.wrist-fusion-calibration-spec.v1",
+                "reconstruction_receipt": reconstruction.name,
                 "stationary_window_s": [0.0, 0.9],
                 "dynamic_window_s": [2.0, 5.5],
                 "maximum_time_delta_ms": 5.0,
@@ -205,3 +230,16 @@ def test_calibration_rejects_insufficient_stationary_pairs(
             spec,
             tmp_path / "out.json",
         )
+
+
+
+def test_calibration_rejects_reconstruction_profile_mismatch(tmp_path):
+    _geometry, _correspondences, _watch, spec = _write_inputs(tmp_path)
+    raw = json.loads(spec.read_text(encoding="utf-8"))
+    receipt = tmp_path / raw["reconstruction_receipt"]
+    document = json.loads(receipt.read_text(encoding="utf-8"))
+    document["acquisition_profile_id"] = "different-profile"
+    receipt.write_text(json.dumps(document), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="acquisition profile mismatch"):
+        validate_wrist_fusion_calibration_spec(spec)
