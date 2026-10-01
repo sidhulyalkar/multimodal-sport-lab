@@ -706,6 +706,15 @@ final class WatchSessionController: ObservableObject {
             guidedCueTitle = title
             WKInterfaceDevice.current().play(.notification)
 
+        case "session_protocol_cue_v1":
+            guard state == .running || state == .paused,
+                  let title = message["step_title"] as? String
+            else {
+                return
+            }
+            guidedCueTitle = title
+            WKInterfaceDevice.current().play(.notification)
+
         case "session_stop_request_v1":
             guard state == .running || state == .paused else {
                 return
