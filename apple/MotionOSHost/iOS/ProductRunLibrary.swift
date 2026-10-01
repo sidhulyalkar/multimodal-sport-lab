@@ -185,6 +185,10 @@ final class ProductRunLibrary: ObservableObject {
                 productManifest?.watchSessionID
                     ?? sealReadiness["watch_session_id"]
                     ?? startReadiness["watch_session_id"]
+            ) ?? watchSessionIDLinked(
+                to: runID,
+                documents: documents,
+                manager: manager
             )
             let cameraSessionID = usefulIdentifier(
                 productManifest?.cameraSessionID
@@ -338,6 +342,55 @@ final class ProductRunLibrary: ObservableObject {
             ($0.sealedAt ?? $0.startedAt ?? .distantPast)
                 > ($1.sealedAt ?? $1.startedAt ?? .distantPast)
         }
+    }
+
+    private static func watchSessionIDLinked(
+        to runID: String,
+        documents: URL,
+        manager: FileManager
+    ) -> String? {
+        let root = documents.appendingPathComponent(
+            "MotionOSInbox",
+            isDirectory: true
+        )
+        guard manager.fileExists(atPath: root.path),
+              let directories = try? manager.contentsOfDirectory(
+                at: root,
+                includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles]
+              )
+        else {
+            return nil
+        }
+
+        var matches: [String] = []
+        for directory in directories {
+            let hostURL = directory.appendingPathComponent(
+                "iphone-host.json"
+            )
+            guard let data = try? Data(contentsOf: hostURL),
+                  let object = try? JSONSerialization.jsonObject(
+                    with: data
+                  ) as? [String: Any],
+                  let transfer =
+                    object["transfer_metadata"] as? [String: Any],
+                  transfer["product_run_id"] as? String == runID
+            else {
+                continue
+            }
+
+            let sessionID =
+                object["session_id"] as? String
+                    ?? directory.lastPathComponent
+            matches.append(sessionID)
+        }
+
+        let unique = Set(matches)
+        // Fail closed if multiple Watch sessions claim the same product run.
+        guard unique.count == 1 else {
+            return nil
+        }
+        return unique.first
     }
 
     private static func stringMap(
