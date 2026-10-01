@@ -9,6 +9,7 @@ struct PhoneContentView: View {
             ScrollView {
                 LazyVStack(spacing: 14) {
                     header
+                    SensorSourceStrip()
                     LiveTelemetryDeck()
                     controls
                     readiness
