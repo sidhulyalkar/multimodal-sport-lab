@@ -7,6 +7,7 @@ struct ProductRunRecord: Identifiable, Equatable, Sendable {
     let runID: String
     let protocolKind: String
     let protocolVersion: String
+    let outcome: ProductSessionOutcome
     let captureMode: String?
     let startedAt: Date?
     let sealedAt: Date?
@@ -75,9 +76,13 @@ final class ProductRunLibrary: ObservableObject {
     @Published private(set) var runs: [ProductRunRecord] = []
     @Published private(set) var isLoading = false
     @Published private(set) var errorMessage: String?
+    private var refreshPending = false
 
     func refresh() {
-        guard !isLoading else { return }
+        if isLoading {
+            refreshPending = true
+            return
+        }
         isLoading = true
 
         Task { [weak self] in
@@ -93,6 +98,7 @@ final class ProductRunLibrary: ObservableObject {
                 self.runs = values
                 self.isLoading = false
                 self.errorMessage = nil
+                self.runPendingRefreshIfNeeded()
             } catch {
                 guard let self else { return }
                 self.isLoading = false
@@ -100,8 +106,15 @@ final class ProductRunLibrary: ObservableObject {
                     "Run library refresh failed: "
                         + error.localizedDescription
                 )
+                self.runPendingRefreshIfNeeded()
             }
         }
+    }
+
+    private func runPendingRefreshIfNeeded() {
+        guard refreshPending else { return }
+        refreshPending = false
+        refresh()
     }
 
     nonisolated private static func loadRuns() throws -> [ProductRunRecord] {
@@ -288,6 +301,14 @@ final class ProductRunLibrary: ObservableObject {
             let failureCount = int(
                 metadata["failure_note_count"]
             ) ?? 0
+            let outcome =
+                productManifest?.resolvedOutcome
+                ?? ProductSessionOutcome(
+                    rawValue:
+                        metadata["run_outcome"] as? String
+                            ?? ""
+                )
+                ?? .completed
 
             return ProductRunRecord(
                 id: runID,
@@ -298,6 +319,7 @@ final class ProductRunLibrary: ObservableObject {
                 protocolVersion:
                     metadata["protocol_version"] as? String
                         ?? "unknown",
+                outcome: outcome,
                 captureMode: productManifest?.captureMode,
                 startedAt: date(
                     metadata["started_at_utc"],
