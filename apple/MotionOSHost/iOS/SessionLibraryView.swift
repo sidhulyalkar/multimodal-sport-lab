@@ -661,7 +661,12 @@ struct SessionLibraryView: View {
 
 private struct RecoveredSessionDetailView: View {
     let session: RecoveredWatchSession
+
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var inbox: PhoneJournalInbox
+    @EnvironmentObject private var runLibrary: ProductRunLibrary
     @State private var signal = Signal.acceleration
+    @State private var confirmDelete = false
 
     enum Signal: String, CaseIterable, Identifiable {
         case acceleration = "Acceleration"
@@ -904,8 +909,49 @@ private struct RecoveredSessionDetailView: View {
                     systemImage: "square.and.arrow.up"
                 )
             }
+
+            Divider()
+
+            Button(role: .destructive) {
+                confirmDelete = true
+            } label: {
+                Label(
+                    "Delete Recording",
+                    systemImage: "trash"
+                )
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+
+            if session.productRunID != nil {
+                Text(
+                    "This Watch recording is linked to a product session. "
+                        + "Deleting it keeps the rest of that session but removes "
+                        + "its Watch evidence."
+                )
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            }
         }
         .cardStyle()
+        .confirmationDialog(
+            "Delete this recording?",
+            isPresented: $confirmDelete,
+            titleVisibility: .visible
+        ) {
+            Button("Delete Recording", role: .destructive) {
+                if inbox.deleteSession(session) {
+                    runLibrary.refresh()
+                    dismiss()
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(
+                "This permanently removes the recovered Watch recording "
+                    + "from this iPhone."
+            )
+        }
     }
 
     private func metric(
