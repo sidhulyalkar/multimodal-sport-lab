@@ -4,6 +4,7 @@ import json
 import math
 from pathlib import Path
 
+from .indo_board_acquisition import ACQUISITION_PROFILE_ID
 from .indo_board_qualification import validate_qualification_contract
 from .provenance import sha256_file
 
@@ -111,6 +112,7 @@ def build_indo_board_qualification_plan(
         "plan_id": plan_id,
         "source_spec_sha256": sha256_file(source),
         "frozen_before_scored_capture": True,
+        "acquisition_profile_id": ACQUISITION_PROFILE_ID,
         "evidence": {
             "rig_receipt": _evidence_entry(rig_path),
             "board_marker_layout": _evidence_entry(layout_path),
@@ -160,6 +162,11 @@ def validate_indo_board_qualification_plan(
         )
     if not str(plan.get("plan_id", "")).strip():
         raise ValueError("qualification plan requires plan_id")
+    if plan.get("acquisition_profile_id") != ACQUISITION_PROFILE_ID:
+        raise ValueError(
+            "qualification plan acquisition profile does not match "
+            "the current M0-Vision profile"
+        )
 
     evidence = _mapping(plan, "evidence")
     for key in (
