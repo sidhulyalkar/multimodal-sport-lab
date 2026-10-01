@@ -4,6 +4,7 @@ struct WatchContentView: View {
     @EnvironmentObject private var controller: WatchSessionController
     @State private var confirmStop = false
     @State private var confirmDelete = false
+    @State private var showDetails = false
 
     var body: some View {
         ScrollView {
@@ -17,16 +18,11 @@ struct WatchContentView: View {
                     stateCard
                 }
 
-                if controller.captureRejections.total > 0
-                    || controller.rejectedProductControlCount > 0 {
-                    rejectionDiagnostics
-                }
-
                 if let error = controller.errorMessage {
                     errorCard(error)
                 }
 
-                buildFooter
+                detailsSection
             }
             .padding(.horizontal, 5)
             .padding(.bottom, 8)
@@ -105,49 +101,35 @@ struct WatchContentView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    /// Idle answers only: ready? iPhone? Health? Can I record?
     private var readinessCard: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("READY")
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Circle()
-                    .fill(readinessColor)
-                    .frame(width: 7, height: 7)
-            }
-
             readinessRow(
                 title: "iPhone",
-                value: controller.phoneLinkLabel,
-                symbol: controller.phoneReachable
-                    ? "iphone.radiowaves.left.and.right"
-                    : "iphone",
-                ready: controller.companionAppInstalled
-                    || controller.phoneReachable
+                value: phoneLinked ? "Ready" : "Open app",
+                symbol: "iphone",
+                ready: phoneLinked
             )
 
             readinessRow(
-                title: "Workout",
-                value: controller.healthAuthorizationLabel,
+                title: "Health",
+                value: controller.healthAccessReady ? "On" : "Off",
                 symbol: "heart.fill",
                 ready: controller.healthAccessReady
             )
 
-            if let battery = controller.watchBatteryLevel {
+            if let battery = controller.watchBatteryLevel, battery < 0.20 {
                 readinessRow(
-                    title: "Watch battery",
+                    title: "Battery",
                     value: String(format: "%.0f%%", battery * 100),
-                    symbol: battery >= 0.20
-                        ? "battery.100percent"
-                        : "battery.25percent",
-                    ready: battery >= 0.20
+                    symbol: "battery.25percent",
+                    ready: false
                 )
             }
 
             if controller.pendingTransferCount > 0 {
                 readinessRow(
-                    title: "Background sync",
+                    title: "Syncing",
                     value: controller.pendingTransferCount == 1
                         ? "1 recording"
                         : "\(controller.pendingTransferCount) recordings",
@@ -164,28 +146,25 @@ struct WatchContentView: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
+                .tint(.pink)
             } else if controller.canStartCapture {
                 Button {
                     Task { await controller.startLocalSensorCheck() }
                 } label: {
-                    Label("Run Sensor Check", systemImage: "waveform.path.ecg")
+                    Label("Sensor Check", systemImage: "record.circle")
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.borderedProminent)
+                .tint(.red)
             }
-
-            Text(
-                controller.companionAppInstalled
-                    || controller.phonePresenceConfirmed
-                    || controller.phoneReachable
-                    ? "MotionOS is ready. Record here or start a coordinated session from iPhone."
-                    : "Open MotionOS on the paired iPhone once to finish app detection."
-            )
-            .font(.caption2)
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
         }
         .panelStyle()
+    }
+
+    private var phoneLinked: Bool {
+        controller.companionAppInstalled
+            || controller.phonePresenceConfirmed
+            || controller.phoneReachable
     }
 
     @ViewBuilder
@@ -334,56 +313,33 @@ struct WatchContentView: View {
 
             HStack(spacing: 6) {
                 metricTile(
+                    title: "MOTION",
+                    value: controller.userAccelerationG.map {
+                        String(format: "%.2f", $0)
+                    } ?? "—",
+                    unit: "g"
+                )
+
+                metricTile(
                     title: "HEART",
                     value: controller.heartRateBPM.map {
                         "\(Int($0.rounded()))"
                     } ?? "—",
                     unit: "BPM"
                 )
-
-                metricTile(
-                    title: "IMU RATE",
-                    value: controller.recentMedianIMUHz.map {
-                        String(format: "%.1f", $0)
-                    } ?? "—",
-                    unit: "Hz"
-                )
             }
 
-            HStack(spacing: 6) {
-                metricTile(
-                    title: "SAMPLES",
-                    value: "\(controller.imuSampleCount)",
-                    unit: "IMU"
-                )
+            Label(streamText, systemImage: streamClean ? "checkmark.shield" : "exclamationmark.triangle")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(streamClean ? Color.secondary : Color.orange)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
-                metricTile(
-                    title: "MAX GAP",
-                    value: String(format: "%.0f", controller.maxIMUGapMS),
-                    unit: "ms"
-                )
+            if let battery = controller.watchBatteryLevel, battery < 0.20 {
+                Label(String(format: "Battery %.0f%%", battery * 100), systemImage: "battery.25percent")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.yellow)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
-
-            HStack(spacing: 6) {
-                statusChip(
-                    controller.phoneReachable ? "iPhone live" : "iPhone background",
-                    symbol: controller.phoneReachable
-                        ? "iphone.radiowaves.left.and.right"
-                        : "iphone",
-                    color: controller.phoneReachable ? .green : .secondary
-                )
-
-                if let battery = controller.watchBatteryLevel {
-                    statusChip(
-                        String(format: "%.0f%%", battery * 100),
-                        symbol: battery >= 0.20
-                            ? "battery.100percent"
-                            : "battery.25percent",
-                        color: battery >= 0.20 ? .secondary : .yellow
-                    )
-                }
-            }
-
         }
         .panelStyle()
     }
@@ -434,22 +390,74 @@ struct WatchContentView: View {
         )
     }
 
-    private var rejectionDiagnostics: some View {
-        let value = controller.captureRejections
-        return VStack(alignment: .leading, spacing: 3) {
-            Label("Capture diagnostics", systemImage: "exclamationmark.triangle.fill")
-                .font(.caption2.weight(.semibold))
-            Text(
-                "\(value.afterShutdown) late · "
-                    + "\(value.sessionMismatch &+ value.noActiveSession) foreign · "
-                    + "\(value.staleMotionGeneration) stale · "
-                    + "\(controller.rejectedProductControlCount) control"
-            )
-            .font(.system(.caption2, design: .monospaced))
-            .foregroundStyle(.secondary)
+    private var streamClean: Bool {
+        controller.nonMonotonicIMUCount == 0 && controller.maxIMUGapMS <= 100
+    }
+
+    private var streamText: String {
+        let rate = controller.recentMedianIMUHz.map { String(format: "%.1f Hz", $0) } ?? "IMU —"
+        if controller.nonMonotonicIMUCount > 0 {
+            return "\(rate) · time reversals"
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .panelStyle()
+        if controller.maxIMUGapMS > 100 {
+            return "\(rate) · " + String(format: "gap %.0f ms", controller.maxIMUGapMS)
+        }
+        return "\(rate) · stream clean"
+    }
+
+    /// Engineering detail stays one tap away and out of the primary flow.
+    private var detailsSection: some View {
+        VStack(spacing: 6) {
+            Button {
+                showDetails.toggle()
+            } label: {
+                Label(showDetails ? "Hide Details" : "Details", systemImage: "info.circle")
+                    .font(.caption2)
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .frame(minHeight: 32)
+
+            if showDetails {
+                let rejections = controller.captureRejections
+                VStack(alignment: .leading, spacing: 3) {
+                    detailLine("IMU samples", "\(controller.imuSampleCount)")
+                    detailLine("Max gap", String(format: "%.0f ms", controller.maxIMUGapMS))
+                    detailLine("Phone link", controller.phoneReachable ? "live" : "background")
+                    detailLine(
+                        "Live preview",
+                        "\(controller.liveTelemetryAttemptedCount) sent · "
+                            + "\(controller.liveTelemetryDroppedCount) dropped"
+                    )
+                    detailLine(
+                        "Not journaled",
+                        "\(rejections.afterShutdown) late · "
+                            + "\(rejections.sessionMismatch &+ rejections.noActiveSession) foreign · "
+                            + "\(rejections.staleMotionGeneration) stale · "
+                            + "\(controller.rejectedProductControlCount) control"
+                    )
+                    if let battery = controller.watchBatteryLevel {
+                        detailLine("Battery", String(format: "%.0f%%", battery * 100))
+                    }
+                    detailLine("Build", buildString)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .panelStyle()
+            }
+        }
+    }
+
+    private func detailLine(_ title: String, _ value: String) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title)
+                .font(.system(size: 9))
+                .foregroundStyle(.secondary)
+            Spacer(minLength: 4)
+            Text(value)
+                .font(.system(size: 9, design: .monospaced))
+                .multilineTextAlignment(.trailing)
+        }
     }
 
     private func errorCard(_ message: String) -> some View {
@@ -599,31 +607,14 @@ struct WatchContentView: View {
         .background(.quaternary, in: RoundedRectangle(cornerRadius: 11))
     }
 
-    private func statusChip(
-        _ title: String,
-        symbol: String,
-        color: Color
-    ) -> some View {
-        Label(title, systemImage: symbol)
-            .font(.system(size: 9, weight: .semibold))
-            .foregroundStyle(color)
-            .lineLimit(1)
-            .minimumScaleFactor(0.75)
-            .frame(maxWidth: .infinity)
-    }
-
-    private var buildFooter: some View {
+    private var buildString: String {
         let version = Bundle.main.object(
             forInfoDictionaryKey: "CFBundleShortVersionString"
         ) as? String ?? "?"
         let build = Bundle.main.object(
             forInfoDictionaryKey: "CFBundleVersion"
         ) as? String ?? "?"
-
-        return Text("MotionOS v\(version) · b\(build)")
-            .font(.system(size: 8, design: .monospaced))
-            .foregroundStyle(.tertiary)
-            .padding(.top, 2)
+        return "v\(version) · b\(build)"
     }
 
     private var isCaptureActive: Bool {
@@ -682,13 +673,6 @@ struct WatchContentView: View {
         default:
             .secondary
         }
-    }
-
-    private var readinessColor: Color {
-        controller.healthAccessReady
-            && (controller.companionAppInstalled || controller.phoneReachable)
-            ? .green
-            : .yellow
     }
 
     private func captureLiveColor(at date: Date) -> Color {

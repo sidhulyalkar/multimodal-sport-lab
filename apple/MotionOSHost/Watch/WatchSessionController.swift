@@ -95,7 +95,13 @@ final class WatchSessionController: ObservableObject {
     private var closedJournalURL: URL?
     private var closedJournalEvidence: FileEvidenceDigest?
     private var imuHealth = SampleTimingHealth()
-    private var lastTelemetrySentAt = Date.distantPast
+    /// Disposable 4 Hz iPhone preview. Never queued or retried; the journal
+    /// above is the evidence.
+    private var livePublisher = LiveTelemetryPublisher()
+    private var lastHeartRateAt: Date?
+    private var lastBatteryReadAt = Date.distantPast
+    private let liveHeartRateMaxAge: TimeInterval = 15
+    private let batteryReadInterval: TimeInterval = 30
     private var lastTransferQueueAttemptAt = Date.distantPast
     private var lastPhonePresenceRequestAt = Date.distantPast
     private let automaticTransferRetryInterval: TimeInterval = 15
@@ -295,7 +301,9 @@ final class WatchSessionController: ObservableObject {
         closedJournalEvidence = nil
         lastTransferredURL = nil
         imuHealth = SampleTimingHealth()
-        lastTelemetrySentAt = .distantPast
+        livePublisher.end()
+        lastHeartRateAt = nil
+        lastBatteryReadAt = .distantPast
         lastTransferQueueAttemptAt = .distantPast
         admission = CaptureEventAdmission()
         captureRejections = admission.rejections
@@ -312,6 +320,7 @@ final class WatchSessionController: ObservableObject {
             )
             self.journal = journal
             admission.begin(sessionID: id)
+            livePublisher.begin(sessionID: id)
 
             let requestedMotionHz = 50.0
             let device = WKInterfaceDevice.current()
@@ -396,6 +405,7 @@ final class WatchSessionController: ObservableObject {
 
     func stop() {
         guard state == .running || state == .paused else { return }
+        livePublisher.end()
         state = .ending
         WKInterfaceDevice.current().play(.stop)
         publishPresence()
@@ -669,7 +679,7 @@ final class WatchSessionController: ObservableObject {
                         imuHealth.nonMonotonicCount
                     appendVisualTelemetryPoint()
                 }
-                publishCaptureHealthIfNeeded()
+                publishLiveTelemetryIfDue()
             }
 
             // finalizeAndTransfer() publishes the authoritative closed count.
@@ -698,6 +708,7 @@ final class WatchSessionController: ObservableObject {
 
         heartRateBPM = bpm
         heartRateEventCount += 1
+        lastHeartRateAt = Date()
         let event = SensorEnvelope(
             sessionID: id,
             deviceID: "apple-watch",
@@ -721,6 +732,7 @@ final class WatchSessionController: ObservableObject {
         guard !finalized else { return }
         finalized = true
         motion.stop()
+        livePublisher.end()
 
         // Shutdown boundary: before the first await, stop admitting events and
         // detach the journal. Appends admitted earlier are drained by close().
@@ -1222,71 +1234,66 @@ final class WatchSessionController: ObservableObject {
         }
     }
 
-    private func publishCaptureHealthIfNeeded() {
-        let now = Date()
-        guard now.timeIntervalSince(lastTelemetrySentAt) >= 2.0,
-              let id = sessionID
+    /// At most one disposable snapshot per 0.25 s slot, attempted only while
+    /// the iPhone is reachable. An unreachable slot is dropped, so a missing
+    /// iPhone can never turn the 50 Hz IMU path into a send loop.
+    private func publishLiveTelemetryIfDue() {
+        let activity: LiveTelemetrySnapshot.Activity
+        switch state {
+        case .running:
+            activity = .recording
+        case .paused:
+            activity = .paused
+        default:
+            return
+        }
+
+        let monotonicNS = MonotonicClock.nowNS()
+        guard let id = sessionID,
+              let slot = livePublisher.takeSlot(
+                at: Double(monotonicNS) / 1_000_000_000,
+                channelAvailable: transport.canDeliverLiveTelemetry
+              )
         else {
             return
         }
 
-        let device = WKInterfaceDevice.current()
-        let battery = device.batteryLevel
-        watchBatteryLevel = battery >= 0
-            ? Double(battery)
-            : nil
-        refreshCaptureRejections()
-
-        var message: [String: Any] = [
-            "motionos_message": "watch_capture_health_v1",
-            "session_id": id,
-            "sent_at_unix_s": now.timeIntervalSince1970,
-            "imu_sample_count": imuSampleCount,
-            "hr_event_count": heartRateEventCount,
-            "max_imu_gap_ms": maxIMUGapMS,
-            "non_monotonic_imu_count": nonMonotonicIMUCount,
-            // Additive diagnostics; older receivers ignore unknown keys.
-            "rejected_after_shutdown_count":
-                captureRejections.afterShutdown,
-            "rejected_session_mismatch_count":
-                captureRejections.sessionMismatch,
-            "rejected_no_session_count":
-                captureRejections.noActiveSession,
-            "rejected_stale_motion_count":
-                captureRejections.staleMotionGeneration,
-        ]
-        if let observedIMUHz {
-            message["observed_imu_hz"] = observedIMUHz
-        }
-        if let recentMedianIMUHz {
-            message["recent_median_imu_hz"] = recentMedianIMUHz
-        }
-        if let heartRateBPM {
-            message["heart_rate_bpm"] = heartRateBPM
-        }
-        if let watchBatteryLevel {
-            message["watch_battery_level_fraction"] =
-                watchBatteryLevel
-        }
-        if let userAccelerationG {
-            message["user_acceleration_g"] = userAccelerationG
-        }
-        if let rotationRateRadS {
-            message["rotation_rate_rad_s"] = rotationRateRadS
-        }
-        if let deviceRollRadians {
-            message["device_roll_rad"] = deviceRollRadians
-        }
-        if let devicePitchRadians {
-            message["device_pitch_rad"] = devicePitchRadians
-        }
-        if let deviceYawRadians {
-            message["device_yaw_rad"] = deviceYawRadians
+        let now = Date()
+        if now.timeIntervalSince(lastBatteryReadAt) >= batteryReadInterval {
+            lastBatteryReadAt = now
+            let battery = WKInterfaceDevice.current().batteryLevel
+            watchBatteryLevel = battery >= 0 ? Double(battery) : nil
         }
 
-        if transport.sendMessage(message) {
-            lastTelemetrySentAt = now
+        let freshHeartRate = lastHeartRateAt.flatMap { at in
+            now.timeIntervalSince(at) <= liveHeartRateMaxAge ? heartRateBPM : nil
         }
+
+        let snapshot = LiveTelemetrySnapshot(
+            sessionID: id,
+            sequence: slot.sequence,
+            sourceMonotonicNS: monotonicNS,
+            sourceSentAt: now,
+            activity: activity,
+            elapsedSeconds: startedAt.map { max(0, now.timeIntervalSince($0)) },
+            imuSampleCount: imuHealth.sampleCount,
+            effectiveIMUHz: imuHealth.effectiveHz,
+            recentMedianIMUHz: imuHealth.recentMedianHz,
+            maxIMUGapMS: imuHealth.maxGapMS,
+            nonMonotonicIMUCount: imuHealth.nonMonotonicCount,
+            motion: slot.motion,
+            heartRateBPM: freshHeartRate,
+            watchBatteryFraction: watchBatteryLevel
+        )
+        transport.sendLiveTelemetry(snapshot.message)
+    }
+
+    var liveTelemetryAttemptedCount: UInt64 {
+        livePublisher.attemptedCount
+    }
+
+    var liveTelemetryDroppedCount: UInt64 {
+        livePublisher.droppedUnavailableCount
     }
 
     private func updateVisualTelemetry(
@@ -1304,6 +1311,12 @@ final class WatchSessionController: ObservableObject {
         deviceRollRadians = number(event.payload["roll"])
         devicePitchRadians = number(event.payload["pitch"])
         deviceYawRadians = number(event.payload["yaw"])
+        livePublisher.observe(
+            derived,
+            roll: deviceRollRadians,
+            pitch: devicePitchRadians,
+            yaw: deviceYawRadians
+        )
     }
 
     private func appendVisualTelemetryPoint() {
