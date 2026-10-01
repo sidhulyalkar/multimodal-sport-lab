@@ -17,6 +17,25 @@ struct WatchLiveCaptureHealth: Equatable, Sendable {
     let nonMonotonicIMUCount: UInt64
     let heartRateBPM: Double?
     let watchBatteryLevel: Double?
+    let motionDeltaG: Double?
+    let rotationRateRadS: Double?
+    let rollRadians: Double?
+    let pitchRadians: Double?
+    let yawRadians: Double?
+}
+
+struct WatchTelemetryPoint: Identifiable, Equatable, Sendable {
+    let id = UUID()
+    let timestamp: Date
+    let sessionID: String
+    let imuHz: Double?
+    let maxGapMS: Double
+    let heartRateBPM: Double?
+    let motionDeltaG: Double?
+    let rotationRateRadS: Double?
+    let rollRadians: Double?
+    let pitchRadians: Double?
+    let yawRadians: Double?
 }
 
 struct WatchPresence: Equatable, Sendable {
@@ -54,6 +73,7 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
     @Published private(set) var watchReachable = false
     @Published private(set) var watchCaptureHealth: WatchLiveCaptureHealth?
     @Published private(set) var watchPresence: WatchPresence?
+    @Published private(set) var watchTelemetryHistory: [WatchTelemetryPoint] = []
     @Published private(set) var iPhoneBatteryLevel: Double?
     @Published private(set) var iPhoneAvailableStorageBytes: Int64?
     @Published private(set) var errorMessage: String?
@@ -132,6 +152,7 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
             // Never carry a prior Watch's handshake into the new session.
             watchPresence = nil
             watchCaptureHealth = nil
+            watchTelemetryHistory = []
         } else {
             ingestWatchPresence(session.receivedApplicationContext)
             publishPhonePresence()
@@ -245,27 +266,66 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
             Date(timeIntervalSince1970: $0)
         }
 
+        let receivedAt = Date()
+        let previousSessionID = watchCaptureHealth?.sessionID
+        let motionDeltaG = Self.double(message["motion_delta_g"])
+        let rotationRateRadS = Self.double(
+            message["rotation_rate_rad_s"]
+        )
+        let rollRadians = Self.double(message["device_roll_rad"])
+        let pitchRadians = Self.double(message["device_pitch_rad"])
+        let yawRadians = Self.double(message["device_yaw_rad"])
+        let heartRateBPM = Self.double(message["heart_rate_bpm"])
+        let recentMedianIMUHz = Self.double(
+            message["recent_median_imu_hz"]
+        )
+
+        if previousSessionID != nil && previousSessionID != sessionID {
+            watchTelemetryHistory = []
+        }
+
         watchCaptureHealth = WatchLiveCaptureHealth(
             sessionID: sessionID,
-            receivedAt: Date(),
+            receivedAt: receivedAt,
             sourceSentAt: sentAt,
             imuSampleCount: imuSamples,
             heartRateEventCount: hrEvents,
             observedIMUHz: Self.double(
                 message["observed_imu_hz"]
             ),
-            recentMedianIMUHz: Self.double(
-                message["recent_median_imu_hz"]
-            ),
+            recentMedianIMUHz: recentMedianIMUHz,
             maxIMUGapMS: maxGap,
             nonMonotonicIMUCount: nonMonotonic,
-            heartRateBPM: Self.double(
-                message["heart_rate_bpm"]
-            ),
+            heartRateBPM: heartRateBPM,
             watchBatteryLevel: Self.double(
                 message["watch_battery_level_fraction"]
+            ),
+            motionDeltaG: motionDeltaG,
+            rotationRateRadS: rotationRateRadS,
+            rollRadians: rollRadians,
+            pitchRadians: pitchRadians,
+            yawRadians: yawRadians
+        )
+
+        watchTelemetryHistory.append(
+            WatchTelemetryPoint(
+                timestamp: sentAt ?? receivedAt,
+                sessionID: sessionID,
+                imuHz: recentMedianIMUHz,
+                maxGapMS: maxGap,
+                heartRateBPM: heartRateBPM,
+                motionDeltaG: motionDeltaG,
+                rotationRateRadS: rotationRateRadS,
+                rollRadians: rollRadians,
+                pitchRadians: pitchRadians,
+                yawRadians: yawRadians
             )
         )
+        if watchTelemetryHistory.count > 120 {
+            watchTelemetryHistory.removeFirst(
+                watchTelemetryHistory.count - 120
+            )
+        }
     }
 
     private func publishPhonePresence() {
