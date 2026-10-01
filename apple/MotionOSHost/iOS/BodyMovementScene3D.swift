@@ -1,6 +1,7 @@
 import MotionOSAppleCapture
 import SceneKit
 import SwiftUI
+import UIKit
 import simd
 
 enum BodySceneViewpoint: String, CaseIterable, Identifiable {
@@ -77,7 +78,7 @@ struct BodyMovementSceneCard: View {
             Spacer(minLength: 4)
 
             if let bodyHeight = camera.latestPoseFrame?.bodyHeightM {
-                Text(String(format: "%.2f m", bodyHeight))
+                Text(String(format: "Vision ~%.2f m", bodyHeight))
                     .font(.system(.caption, design: .monospaced))
                     .foregroundStyle(.secondary)
             }
