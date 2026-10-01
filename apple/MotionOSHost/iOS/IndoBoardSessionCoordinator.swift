@@ -18,6 +18,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
     enum SessionError: LocalizedError {
         case watchUnavailable
         case cameraUnavailable
+        case cameraProfileInvalid
         case insufficientBattery
         case insufficientStorage
         case watchDidNotStart
@@ -30,6 +31,8 @@ final class IndoBoardSessionCoordinator: ObservableObject {
                 "The paired MotionOS Watch must be installed and reachable."
             case .cameraUnavailable:
                 "Prepare the iPhone camera before starting the Indo Board session."
+            case .cameraProfileInvalid:
+                "The iPhone camera must be 1920×1080 at a locked 30 fps with video stabilization off."
             case .insufficientBattery:
                 "Charge the iPhone above the 20% development preflight margin."
             case .insufficientStorage:
@@ -117,6 +120,10 @@ final class IndoBoardSessionCoordinator: ObservableObject {
             fail(SessionError.cameraUnavailable)
             return
         }
+        guard cameraProfileReady(camera) else {
+            fail(SessionError.cameraProfileInvalid)
+            return
+        }
         guard (phone.iPhoneBatteryLevel ?? 0) >= 0.20 else {
             fail(SessionError.insufficientBattery)
             return
@@ -173,6 +180,10 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         guard camera.phase == .ready || camera.phase == .evidenceReady
         else {
             fail(SessionError.cameraUnavailable)
+            return
+        }
+        guard cameraProfileReady(camera) else {
+            fail(SessionError.cameraProfileInvalid)
             return
         }
 
@@ -558,6 +569,20 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         }
         protocolTransitions.insert(id)
         action()
+    }
+
+    func cameraProfileReady(
+        _ camera: CameraCaptureController
+    ) -> Bool {
+        guard let configuration = camera.configuration else {
+            return false
+        }
+
+        return configuration.formatWidth == 1_920
+            && configuration.formatHeight == 1_080
+            && configuration.frameRateLocked
+            && abs(configuration.configuredFrameRate - 30.0) < 0.01
+            && configuration.stabilizationLockedOff
     }
 
     private func waitForWatchRunning(
