@@ -22,6 +22,22 @@ struct MotionOSiOSApp: App {
                 .environmentObject(guidedP0)
                 .environmentObject(indoBoardSession)
                 .environmentObject(runLibrary)
+                .task {
+                    coordinator.inbox.refreshCatalog()
+                    runLibrary.refresh()
+                }
+                .onChange(
+                    of: coordinator.inbox.latestSessionID
+                ) { _, _ in
+                    runLibrary.refresh()
+                }
+                .onChange(
+                    of: indoBoardSession.phase
+                ) { _, phase in
+                    if phase == .sealed {
+                        runLibrary.refresh()
+                    }
+                }
         }
     }
 }
