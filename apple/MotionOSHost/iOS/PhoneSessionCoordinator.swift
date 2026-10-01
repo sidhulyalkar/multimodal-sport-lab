@@ -354,10 +354,10 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
             return "MotionOS detected recently"
         }
         if systemWatchAppInstalled {
-            return "MotionOS installed"
+            return "Open MotionOS on the Watch once"
         }
         if watchPaired {
-            return "Open MotionOS on the Watch once"
+            return "Install or open MotionOS on the Watch"
         }
         return "Pair an Apple Watch with this iPhone"
     }
@@ -367,7 +367,6 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
             && (
                 watchReachable
                     || hasRecentWatchPresence()
-                    || systemWatchAppInstalled
             )
     }
 
