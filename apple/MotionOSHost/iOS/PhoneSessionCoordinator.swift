@@ -94,6 +94,8 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
     private let healthStore = HKHealthStore()
     private let transport = WatchConnectivityTransport()
     private var mirroredSession: HKWorkoutSession?
+    private var lastWatchPresenceRequestAt = Date.distantPast
+    private let watchPresenceRequestMinimumInterval: TimeInterval = 5
 
     override init() {
         super.init()
@@ -119,6 +121,9 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
             // WCSession's received file URL is temporary, so verify/copy it
             // while handling the callback rather than retaining the source URL.
             Task { @MainActor in
+                defer {
+                    try? FileManager.default.removeItem(at: url)
+                }
                 if let receipt = self.inbox.ingest(
                     fileURL: url,
                     metadata: metadata
@@ -181,6 +186,8 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
                     || hasRecentWatchPresence()
                     || session.isReachable
             )
+
+        requestWatchPresenceIfNeeded()
         refreshHostReadiness()
     }
 
@@ -295,6 +302,63 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
     ) -> Bool {
         guard let age = watchPresenceAge(at: date) else { return false }
         return age <= maxAge
+    }
+
+    var watchConnectionLabel: String {
+        if state == .running || state == .paused {
+            return "Watch recording"
+        }
+        if watchReachable {
+            return "Watch connected"
+        }
+        if hasRecentWatchPresence() || watchAppInstalled {
+            return "Watch ready"
+        }
+        if watchPaired {
+            return "Watch paired"
+        }
+        return "Watch setup"
+    }
+
+    var watchConnectionDetail: String {
+        if watchReachable {
+            return "Live link"
+        }
+        if hasRecentWatchPresence() {
+            return "Background ready"
+        }
+        if watchAppInstalled {
+            return "Companion installed"
+        }
+        if watchPaired {
+            return "Waiting for companion"
+        }
+        return "No active paired Watch"
+    }
+
+    var watchConnectionReady: Bool {
+        watchPaired && watchAppInstalled
+    }
+
+    private func requestWatchPresenceIfNeeded(
+        at date: Date = Date()
+    ) {
+        guard watchReachable,
+              date.timeIntervalSince(lastWatchPresenceRequestAt)
+                >= watchPresenceRequestMinimumInterval
+        else {
+            return
+        }
+
+        let sent = transport.sendMessage(
+            [
+                "motionos_message": "watch_presence_request_v1",
+                "sent_at_unix_s": date.timeIntervalSince1970,
+            ]
+        )
+        if sent {
+            lastWatchPresenceRequestAt = date
+        }
     }
 
     private func ingestWatchMessage(
