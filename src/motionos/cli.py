@@ -54,6 +54,7 @@ from .indo_board_pipeline import (
     validate_indo_board_pipeline_spec,
 )
 from .indo_board_plan import build_indo_board_qualification_plan
+from .indo_board_status import build_indo_board_status
 from .insole import (
     import_opengo_text_export,
     write_p2_capture_receipt,
@@ -565,6 +566,17 @@ def _parser() -> argparse.ArgumentParser:
     vision_clock.add_argument("iphone_journal")
     vision_clock.add_argument("external_sync")
     vision_clock.add_argument("output")
+
+    indo_status = sub.add_parser(
+        "indo-board-status",
+        help=(
+            "summarize frozen-plan, scored-preflight, processing, and "
+            "qualification state for the M0-Vision Indo Board workflow"
+        ),
+    )
+    indo_status.add_argument("plan")
+    indo_status.add_argument("--pipeline")
+    indo_status.add_argument("--results")
 
     wrist_reconstruction = sub.add_parser(
         "reconstruct-wrist-fusion-calibration",
@@ -1136,6 +1148,15 @@ def main(argv: list[str] | None = None) -> int:
             args.iphone_journal,
             args.external_sync,
             args.output,
+        )
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+
+    if args.command == "indo-board-status":
+        result = build_indo_board_status(
+            args.plan,
+            pipeline_spec_path=args.pipeline,
+            results_directory=args.results,
         )
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0
