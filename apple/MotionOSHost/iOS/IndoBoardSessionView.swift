@@ -191,28 +191,43 @@ struct IndoBoardSessionView: View {
     private var captureModeCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             MotionOSSectionHeader(
-                title: "Capture mode",
-                subtitle: "Choose how rich this session should be before preflight",
-                systemImage: "slider.horizontal.3",
+                title: "Capture sources",
+                subtitle: "Watch + iPhone are the core session",
+                systemImage: "point.3.connected.trianglepath.dotted",
                 accent: .purple
             )
 
-            Picker(
-                "Capture mode",
-                selection: $session.captureMode
+            HStack(spacing: 8) {
+                requirementPill(
+                    "Watch",
+                    symbol: "applewatch",
+                    required: true
+                )
+                requirementPill(
+                    "iPhone Vision",
+                    symbol: "camera.fill",
+                    required: true
+                )
+            }
+
+            Divider()
+
+            Toggle(
+                isOn: externalCameraEnabled
             ) {
-                ForEach(
-                    IndoBoardSessionCoordinator.CaptureMode.allCases
-                ) { mode in
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Add external calibration camera")
+                        .font(.subheadline.weight(.semibold))
                     Text(
-                        mode == .watchAndPhone
-                            ? "Standard"
-                            : "Multiview"
+                        "Optional high-fidelity teacher view. For the current "
+                            + "Action 4 workflow, start the camera manually and "
+                            + "import the untouched movie after the session."
                     )
-                    .tag(mode)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .pickerStyle(.segmented)
             .disabled(
                 session.phase == .starting
                     || session.phase == .running
@@ -220,27 +235,13 @@ struct IndoBoardSessionView: View {
                     || session.phase == .watchStopRequired
             )
 
-            Text(session.captureMode.subtitle)
+            if session.requiresExternalCamera {
+                Label(
+                    "Action 4 · 4K 16:9 · 60 fps · EIS off · fixed tripod",
+                    systemImage: "video.fill"
+                )
                 .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            HStack(spacing: 7) {
-                requirementPill(
-                    "Watch",
-                    symbol: "applewatch",
-                    required: true
-                )
-                requirementPill(
-                    "iPhone",
-                    symbol: "camera.fill",
-                    required: true
-                )
-                requirementPill(
-                    "Action 4",
-                    symbol: "video.fill",
-                    required: session.requiresExternalCamera
-                )
+                .foregroundStyle(.purple)
             }
         }
         .cardStyle()
@@ -265,11 +266,9 @@ struct IndoBoardSessionView: View {
             )
 
             readinessRow(
-                title: "Live Watch link",
-                detail: phone.watchReachable
-                    ? "reachable"
-                    : "open MotionOS on Watch",
-                ready: phone.watchReachable,
+                title: "Watch link",
+                detail: phone.watchConnectionDetail,
+                ready: phone.watchConnectionReady,
                 symbol: "dot.radiowaves.left.and.right"
             )
 
@@ -318,35 +317,6 @@ struct IndoBoardSessionView: View {
                 ready: (phone.iPhoneAvailableStorageBytes ?? 0)
                     >= 5_000_000_000,
                 symbol: "internaldrive"
-            )
-
-            Toggle(
-                isOn: $session.externalCameraConfirmed
-            ) {
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
-                        Text("Action 4 recording")
-                            .font(.subheadline.weight(.medium))
-                        if session.requiresExternalCamera {
-                            Text("REQUIRED")
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundStyle(.purple)
-                        }
-                    }
-                    Text(
-                        session.requiresExternalCamera
-                            ? "Before MotionOS: 4K 16:9 · 60 fps · EIS off · no digital zoom · Standard/Dewarp FOV · rigid tripod. The untouched movie is imported after sealing."
-                            : "Optional enrichment. Enable this only if you are also recording the Action 4."
-                    )
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                }
-            }
-            .disabled(
-                session.phase == .running
-                    || session.phase == .starting
-                    || session.phase == .finishing
-                    || session.phase == .watchStopRequired
             )
 
             HStack(spacing: 8) {
@@ -1308,22 +1278,27 @@ struct IndoBoardSessionView: View {
     }
 
     private var watchDetail: String {
-        if phone.watchReachable {
-            return "connected"
-        }
-        if phone.hasRecentWatchPresence() {
-            return "handshake seen"
-        }
-        if phone.watchAppInstalled {
-            return "installed"
-        }
-        return "not ready"
+        phone.watchConnectionDetail
+    }
+
+    private var externalCameraEnabled: Binding<Bool> {
+        Binding(
+            get: {
+                session.requiresExternalCamera
+                    && session.externalCameraConfirmed
+            },
+            set: { enabled in
+                session.captureMode = enabled
+                    ? .multiviewCalibration
+                    : .watchAndPhone
+                session.externalCameraConfirmed = enabled
+            }
+        )
     }
 
     private var preflightReady: Bool {
         phone.watchPaired
             && phone.watchAppInstalled
-            && phone.watchReachable
             && session.watchCaptureAvailable(phone)
             && session.watchWorkoutAccessReady(phone)
             && (
