@@ -82,7 +82,7 @@ final class WatchSessionController: ObservableObject {
     private var sessionSyncSequence: UInt64 = 0
     private var productCueTitle: String?
     private var linkedProductRunID: String?
-    private var rejectedProductControlCount: UInt64 = 0
+    @Published private(set) var rejectedProductControlCount: UInt64 = 0
     private var closedJournalURL: URL?
     private var closedJournalEvidence: FileEvidenceDigest?
     private var imuHealth = SampleTimingHealth()
