@@ -355,8 +355,8 @@ def _required_metric_ids(
 
 def _minimum_gate(
     gate_id: str,
-    observed: int | float,
-    threshold: int | float,
+    observed: float,
+    threshold: float,
 ) -> dict[str, object]:
     return {
         "gate_id": gate_id,
@@ -369,8 +369,8 @@ def _minimum_gate(
 
 def _maximum_gate(
     gate_id: str,
-    observed: int | float,
-    threshold: int | float,
+    observed: float,
+    threshold: float,
 ) -> dict[str, object]:
     return {
         "gate_id": gate_id,
