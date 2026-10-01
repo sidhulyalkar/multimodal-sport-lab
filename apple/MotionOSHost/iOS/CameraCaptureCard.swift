@@ -272,15 +272,30 @@ struct CameraCaptureCard: View {
             .font(.caption)
             .foregroundStyle(.secondary)
 
-            Text(
-                String(
-                    format: "format range %.1f–%.1f fps",
-                    configuration.minFrameRate,
-                    configuration.maxFrameRate
+            HStack(spacing: 6) {
+                Label(
+                    String(
+                        format: "%.0f fps locked",
+                        configuration.configuredFrameRate
+                    ),
+                    systemImage: configuration.frameRateLocked
+                        ? "lock.fill"
+                        : "exclamationmark.triangle.fill"
                 )
-            )
+                .foregroundStyle(
+                    configuration.frameRateLocked ? .green : .yellow
+                )
+
+                Text(
+                    String(
+                        format: "· format range %.1f–%.1f fps",
+                        configuration.minFrameRate,
+                        configuration.maxFrameRate
+                    )
+                )
+                .foregroundStyle(.secondary)
+            }
             .font(.caption)
-            .foregroundStyle(.secondary)
         }
     }
 
