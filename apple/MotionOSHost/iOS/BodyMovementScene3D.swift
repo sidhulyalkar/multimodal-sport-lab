@@ -207,6 +207,12 @@ struct BodyMovementSceneCard: View {
             )
 
             interpretationRow(
+                title: "Pelvis offset",
+                value: pelvisSupportOffsetText,
+                symbol: "arrow.left.and.right"
+            )
+
+            interpretationRow(
                 title: "Muscle load",
                 value: hasMuscleModel
                     ? "Model estimate available"
@@ -250,6 +256,27 @@ struct BodyMovementSceneCard: View {
         return "Unavailable"
     }
 
+    private var pelvisSupportOffsetText: String {
+        guard let pelvis = displayFrame.pelvisReference?.position,
+              displayFrame.supportPoints.count >= 2
+        else {
+            return "Unavailable"
+        }
+
+        let a = displayFrame.supportPoints[0]
+        let b = displayFrame.supportPoints[1]
+        let centerX = (a.x + b.x) / 2
+        let centerZ = (a.z + b.z) / 2
+        let dx = pelvis.x - centerX
+        let dz = pelvis.z - centerZ
+        let centimeters = sqrt(dx * dx + dz * dz) * 100
+
+        return String(
+            format: "%.1f cm · geometric proxy",
+            centimeters
+        )
+    }
+
     private var claimBoundary: String {
         if isReferenceFrame {
             return "The body shown is a neutral reference pose, not a measurement. "
@@ -261,9 +288,10 @@ struct BodyMovementSceneCard: View {
                 + "geometry estimate. Muscle shading is model-estimated and is not EMG."
         }
 
-        return "Skeleton geometry comes from Vision 3D. The orange marker is a pelvis "
-            + "reference, not center of mass. Support is an ankle/foot geometry estimate. "
-            + "No muscle activation is inferred unless an explicit model supplies it."
+        return "Skeleton geometry comes from Vision 3D. The orange marker and "
+            + "pelvis-to-support offset are geometric references, not center of mass or "
+            + "a balance score. Support is an ankle/foot estimate. No muscle activation "
+            + "is inferred unless an explicit model supplies it."
     }
 
     private var displayFrame: BodyMovementFrame {
@@ -881,6 +909,30 @@ private struct BodyMovementScene3D: UIViewRepresentable {
                 floorY: floorY,
                 isReference: isReference
             )
+
+            if let pelvis = frame.pelvisReference?.position {
+                let supportCenter = MotionVector3(
+                    (a.x + b.x) / 2,
+                    floorY + 0.012,
+                    (a.z + b.z) / 2
+                )
+                let pelvisProjection = MotionVector3(
+                    pelvis.x,
+                    floorY + 0.012,
+                    pelvis.z
+                )
+                let offset = cylinderNode(
+                    radius: 0.004,
+                    color: .systemOrange,
+                    opacity: isReference ? 0.18 : 0.55
+                )
+                positionCylinder(
+                    offset,
+                    from: supportCenter,
+                    to: pelvisProjection
+                )
+                supportRoot.addChildNode(offset)
+            }
         }
 
         private func addSupportBase(
