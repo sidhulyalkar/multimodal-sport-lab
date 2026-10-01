@@ -114,6 +114,86 @@ final class MotionOSAppleCaptureTests: XCTestCase {
     }
 
 
+    func testProductSessionManifestRoundTripsWithSourceHashes() throws {
+        let manifest = ProductSessionManifest(
+            runID: "run-001",
+            captureMode: "Multiview capture",
+            targetDurationSeconds: 120,
+            createdAtUTC: "2026-10-01T17:00:00Z",
+            watchSessionID: "watch-001",
+            cameraSessionID: "camera-001",
+            operatorJournalSHA256: "op-journal",
+            operatorMetadataSHA256: "op-meta",
+            cameraVideoSHA256: "camera-video",
+            cameraJournalSHA256: "camera-journal",
+            cameraMetadataSHA256: "camera-meta",
+            syncReceipts: [
+                .init(
+                    cueID: "sync-start",
+                    label: "start",
+                    acknowledgedAtUTC: "2026-10-01T17:00:12Z",
+                    watchDeviceTimeNS: 12_000_000_000
+                )
+            ],
+            externalCameraExpected: true,
+            externalCameraImported: true,
+            externalCameraSHA256: "action4",
+            operatorEvidenceSealed: true,
+            cameraEvidenceSealed: true
+        )
+
+        let data = try JSONEncoder().encode(manifest)
+        let decoded = try JSONDecoder().decode(
+            ProductSessionManifest.self,
+            from: data
+        )
+
+        XCTAssertEqual(decoded, manifest)
+        XCTAssertEqual(
+            decoded.schemaVersion,
+            ProductSessionManifest.schemaVersion
+        )
+        XCTAssertEqual(decoded.syncReceipts.first?.label, "start")
+        XCTAssertTrue(decoded.claimBoundary.contains("does not itself prove"))
+    }
+
+    func testProductSessionManifestStoreWritesAtomicArtifact() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "motionos-product-manifest-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let manifest = ProductSessionManifest(
+            runID: "run-002",
+            captureMode: "Watch + iPhone",
+            targetDurationSeconds: 120,
+            watchSessionID: nil,
+            cameraSessionID: nil,
+            syncReceipts: [],
+            externalCameraExpected: false,
+            externalCameraImported: false,
+            externalCameraSHA256: nil,
+            operatorEvidenceSealed: true,
+            cameraEvidenceSealed: true
+        )
+
+        let url = try ProductSessionManifestStore.write(
+            manifest,
+            to: directory
+        )
+        XCTAssertTrue(FileManager.default.fileExists(atPath: url.path))
+        XCTAssertEqual(
+            try ProductSessionManifestStore.load(from: url),
+            manifest
+        )
+    }
+
     func testIndoBoardProductProtocolIsContiguousAndBounded() {
         XCTAssertTrue(IndoBoardProductProtocol.isInternallyConsistent)
         XCTAssertEqual(
