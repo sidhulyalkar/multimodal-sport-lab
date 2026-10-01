@@ -338,7 +338,8 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         fieldRun: FieldRunCoordinator
     ) -> String? {
         guard phase == .running,
-              let runID = fieldRun.runID
+              let runID = fieldRun.runID,
+              let watchSessionID = activeWatchSessionID
         else {
             return nil
         }
@@ -362,6 +363,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         let cueID = "sync-\(normalized)-\(UUID().uuidString.prefix(6).lowercased())"
         guard phone.sendSessionSyncCue(
             runID: runID,
+            watchSessionID: watchSessionID,
             cueID: cueID,
             label: normalized
         )
@@ -402,6 +404,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
     ) {
         guard phase == .running,
               acknowledgment.runID == fieldRun.runID,
+              acknowledgment.watchSessionID == activeWatchSessionID,
               acknowledgment.cueID == pendingCueID
         else {
             return
@@ -437,9 +440,11 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         errorMessage = nil
 
         let stopRequested: Bool
-        if let runID = fieldRun.runID {
+        if let runID = fieldRun.runID,
+           let watchSessionID = activeWatchSessionID {
             stopRequested = phone.sendWatchStopRequest(
-                runID: runID
+                runID: runID,
+                watchSessionID: watchSessionID
             )
         } else {
             stopRequested = false
@@ -686,6 +691,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         UIApplication.shared.isIdleTimerDisabled = false
         phase = .idle
         outcome = nil
+        activeWatchSessionID = nil
         startedAt = nil
         cueReceipts = []
         pendingCueID = nil
@@ -778,9 +784,11 @@ final class IndoBoardSessionCoordinator: ObservableObject {
                     when: true
                 ) {
                     fieldRun.startBlock(block.id)
-                    if let runID = fieldRun.runID {
+                    if let runID = fieldRun.runID,
+                       let watchSessionID = activeWatchSessionID {
                         _ = phone.sendSessionProtocolCue(
                             runID: runID,
+                            watchSessionID: watchSessionID,
                             stepID: block.id,
                             title: block.title,
                             instruction: block.instruction
@@ -860,6 +868,55 @@ final class IndoBoardSessionCoordinator: ObservableObject {
             && configuration.stabilizationLockedOff
     }
 
+    private func watchCaptureBusy(
+        _ phone: PhoneSessionCoordinator
+    ) -> Bool {
+        switch phone.state {
+        case .launchingWatch, .waitingForMirror, .running, .paused:
+            return true
+        default:
+            break
+        }
+
+        let watchState = phone.watchPresence?
+            .captureState
+            .lowercased()
+        return [
+            "starting",
+            "running",
+            "paused",
+            "ending",
+        ].contains(watchState ?? "")
+    }
+
+    private func waitForFreshWatchSessionID(
+        phone: PhoneSessionCoordinator,
+        after launchRequestedAt: Date,
+        excluding priorSessionID: String?,
+        timeoutSeconds: TimeInterval = 10
+    ) async -> String? {
+        let deadline = Date().addingTimeInterval(timeoutSeconds)
+
+        while Date() < deadline {
+            if let health = phone.watchCaptureHealth,
+               health.receivedAt >= launchRequestedAt,
+               !health.sessionID.isEmpty,
+               health.sessionID != priorSessionID,
+               phone.state == .running || phone.state == .paused {
+                return health.sessionID
+            }
+
+            if phone.state == .failed
+                || phone.state == .disconnected {
+                return nil
+            }
+
+            try? await Task.sleep(for: .milliseconds(250))
+        }
+
+        return nil
+    }
+
     private func waitForWatchRunning(
         phone: PhoneSessionCoordinator,
         timeoutSeconds: TimeInterval = 20
@@ -908,7 +965,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
             "watch_reachable": String(phone.watchReachable),
             "watch_workout_state": phone.state.rawValue,
             "watch_session_id":
-                phone.watchCaptureHealth?.sessionID ?? "unknown",
+                activeWatchSessionID ?? "unknown",
             "iphone_camera_phase": camera.phase.rawValue,
             "iphone_camera_session_id":
                 camera.sessionID ?? "unknown",
@@ -966,7 +1023,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
             captureMode: captureMode.rawValue,
             targetDurationSeconds: Self.targetDurationSeconds,
             outcome: outcome ?? .completed,
-            watchSessionID: phone.watchCaptureHealth?.sessionID,
+            watchSessionID: activeWatchSessionID,
             cameraSessionID: camera.sessionID,
             operatorJournalSHA256: operatorJournalDigest.sha256,
             operatorMetadataSHA256: operatorMetadataDigest.sha256,
@@ -1008,12 +1065,20 @@ final class IndoBoardSessionCoordinator: ObservableObject {
             || phone.state == .paused
             || phone.state == .waitingForMirror
             || phone.state == .launchingWatch {
-            if fieldRun.runID != nil {
-                _ = phone.sendWatchStopRequest(runID: runID)
+            if fieldRun.runID != nil,
+               let watchSessionID = activeWatchSessionID,
+               phone.sendWatchStopRequest(
+                    runID: runID,
+                    watchSessionID: watchSessionID
+               ) {
+                watchStopped = await waitForWatchToLeaveRunning(
+                    phone: phone
+                )
+            } else {
+                // Without a fresh Watch capture identity, do not send an
+                // ambiguous remote-stop command into a possibly different run.
+                watchStopped = false
             }
-            watchStopped = await waitForWatchToLeaveRunning(
-                phone: phone
-            )
         }
 
         if camera.phase == .recording {
