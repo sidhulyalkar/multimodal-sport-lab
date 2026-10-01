@@ -275,9 +275,7 @@ struct IndoBoardSessionView: View {
 
             readinessRow(
                 title: "Watch capture",
-                detail: session.watchCaptureAvailable(phone)
-                    ? "available for this session"
-                    : "another capture is active",
+                detail: session.watchCaptureAvailabilityDetail(phone),
                 ready: session.watchCaptureAvailable(phone),
                 symbol: "record.circle"
             )
