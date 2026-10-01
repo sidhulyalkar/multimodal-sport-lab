@@ -333,6 +333,13 @@ motionos validate-indo-board-acquisition \
 
 Do not continue to 3D reconstruction if this command exits non-zero.
 
+The frozen first-run calibration windows are 5–15 s stationary and 20–50 s
+dynamic, with at least 60 and 180 paired Watch/vision samples respectively.
+These floors are derived from the ~10 Hz iPhone pose cadence with room for
+non-detections rather than chosen after looking at results. Use a ~60 s
+calibration run with SYNC impulses near ~2 s, ~30 s, and ~58 s so the stationary
+window is not contaminated by the first cue.
+
 The stationary interval should be genuinely quiet. The dynamic interval should
 contain representative wrist acceleration changes without trying to imitate the
 later scored outcome.
@@ -447,6 +454,29 @@ At this point the expected next action is to capture the scored session.
 ### 6. Capture the scored Indo Board trial
 
 Now capture the session whose performance will actually be interpreted.
+
+For the first qualification, use this fixed ~90 s task rather than improvising:
+
+| Approx. time | Task |
+| --- | --- |
+| 0–10 s | settle into neutral stance; quiet balance |
+| ~10 s | SYNC 1, then one sharp but controlled whole-body/board impulse |
+| 12–32 s | natural balance; avoid deliberately chasing the board |
+| 32–52 s | 4–6 controlled perturb-and-recover cycles; only use a tilt you can safely recover from |
+| ~55 s | SYNC 2 + controlled impulse |
+| 58–78 s | natural balance again |
+| ~80 s | SYNC 3 + controlled impulse |
+| 82–90 s | settle near neutral and hold through the end |
+
+The recovery metric currently needs at least one complete episode whose board
+tilt crosses 8° and later remains at or below 3° while modeled horizontal COM is
+within 4 cm of its session center for at least 0.5 s. Do not force a larger
+perturbation merely to satisfy software. If that range is not comfortable and
+controlled, let the metric remain unavailable and revise the detector after
+reviewing evidence.
+
+For the first physical run, keep a stable support/rail within reach, clear the
+fall area, and do not use live technique coaching.
 
 In the iPhone app:
 
