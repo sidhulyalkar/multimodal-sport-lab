@@ -1077,6 +1077,10 @@ final class WatchSessionController: ObservableObject {
             "sent_at_unix_s": Date().timeIntervalSince1970,
         ]
 
+        if let sessionID {
+            presence["session_id"] = sessionID
+        }
+
         let battery = device.batteryLevel
         if battery >= 0 {
             presence["watch_battery_level_fraction"] = Double(battery)
