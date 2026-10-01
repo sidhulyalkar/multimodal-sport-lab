@@ -485,6 +485,10 @@ def process_indo_board_pipeline(
         qualification_path,
     )
 
+    existing_profile = load_longitudinal_profile(profile_path)
+    already_processed = (
+        manifest.session_id in existing_profile.processed_session_ids
+    )
     longitudinal_updated = False
     if qualification_receipt["passed"]:
         profile = update_longitudinal_profile(
@@ -497,9 +501,7 @@ def process_indo_board_pipeline(
                 )
             ),
         )
-        longitudinal_updated = (
-            manifest.session_id in profile.processed_session_ids
-        )
+        longitudinal_updated = not already_processed
         if profile_path.is_file():
             _record_stage(
                 state,
@@ -508,7 +510,7 @@ def process_indo_board_pipeline(
                 profile_path,
             )
     else:
-        profile = load_longitudinal_profile(profile_path)
+        profile = existing_profile
 
     artifacts = [
         external_sync_path,
