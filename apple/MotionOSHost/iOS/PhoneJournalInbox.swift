@@ -106,6 +106,46 @@ final class PhoneJournalInbox: ObservableObject {
         refreshCatalog()
     }
 
+    @discardableResult
+    func deleteSession(
+        _ session: RecoveredWatchSession
+    ) -> Bool {
+        let directory = session.journalURL.deletingLastPathComponent()
+
+        do {
+            if FileManager.default.fileExists(atPath: directory.path) {
+                try FileManager.default.removeItem(at: directory)
+            }
+
+            sessions.removeAll { $0.sessionID == session.sessionID }
+
+            if latestSessionID == session.sessionID {
+                latestSessionID = nil
+                latestJournalURL = nil
+                latestHostMetadataURL = nil
+                latestJournalSHA256 = nil
+                latestJournalByteCount = nil
+                latestDuplicateRetransfer = false
+                latestCaptureOrigin = nil
+                latestProductRunID = nil
+                latestTransferDiagnostics = nil
+                latestSessionSummary = nil
+                latestSessionSummaryURL = nil
+                summaryError = nil
+            }
+
+            lastError = nil
+            refreshCatalog()
+            return true
+        } catch {
+            lastError = (
+                "Could not delete recording: "
+                    + error.localizedDescription
+            )
+            return false
+        }
+    }
+
     func ingest(
         fileURL: URL,
         metadata: [String: Any]?
