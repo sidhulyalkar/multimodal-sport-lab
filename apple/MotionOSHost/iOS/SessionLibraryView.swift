@@ -4,16 +4,20 @@ import SwiftUI
 
 struct SessionLibraryView: View {
     @EnvironmentObject private var inbox: PhoneJournalInbox
+    @EnvironmentObject private var runLibrary: ProductRunLibrary
 
     var body: some View {
         ScrollView {
             LazyVStack(spacing: MotionOSDesign.pageSpacing) {
                 header
 
-                if let latest = inbox.latestSessionSummary {
+                if let latestRun = runLibrary.runs.first {
+                    latestRunSnapshot(latestRun)
+                } else if let latest = inbox.latestSessionSummary {
                     latestSnapshot(latest)
                 }
 
+                productRuns
                 library
             }
             .motionOSPageWidth()
@@ -28,9 +32,11 @@ struct SessionLibraryView: View {
         .navigationBarTitleDisplayMode(.inline)
         .refreshable {
             inbox.refreshCatalog()
+            runLibrary.refresh()
         }
         .task {
             inbox.refreshCatalog()
+            runLibrary.refresh()
         }
     }
 
@@ -62,11 +68,18 @@ struct SessionLibraryView: View {
 
             HStack(spacing: 8) {
                 MotionOSStatusBadge(
-                    title: "\(inbox.sessions.count) recovered",
+                    title: "\(runLibrary.runs.count) complete runs",
                     systemImage: "checkmark.seal",
-                    color: inbox.sessions.isEmpty
+                    color: runLibrary.runs.isEmpty
                         ? .secondary
                         : .green
+                )
+                MotionOSStatusBadge(
+                    title: "\(inbox.sessions.count) Watch",
+                    systemImage: "applewatch",
+                    color: inbox.sessions.isEmpty
+                        ? .secondary
+                        : .indigo
                 )
 
                 if inbox.catalogLoading {
@@ -79,6 +92,102 @@ struct SessionLibraryView: View {
             }
         }
         .padding(.horizontal, 2)
+    }
+
+    private func latestRunSnapshot(
+        _ run: ProductRunRecord
+    ) -> some View {
+        NavigationLink {
+            ProductRunDetailView(run: run)
+        } label: {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    MotionOSSectionHeader(
+                        title: "Latest complete run",
+                        subtitle: run.protocolKind,
+                        systemImage: "figure.surfing",
+                        accent: .indigo
+                    )
+
+                    Spacer(minLength: 0)
+
+                    Image(systemName: "chevron.right")
+                        .foregroundStyle(.tertiary)
+                }
+
+                HStack(spacing: 8) {
+                    snapshotMetric(
+                        "SOURCES",
+                        "\(run.sourceCount)",
+                        "point.3.connected.trianglepath.dotted"
+                    )
+                    snapshotMetric(
+                        "SYNC",
+                        run.syncComplete
+                            ? "3/3"
+                            : "\(run.syncCueLabels.count)/3",
+                        "waveform.path"
+                    )
+                    snapshotMetric(
+                        "WATCH",
+                        run.watchSummary.map {
+                            String(
+                                format: "%.1f Hz",
+                                $0.imu.effectiveHz
+                            )
+                        } ?? "pending",
+                        "applewatch"
+                    )
+                }
+
+                if let summary = run.watchSummary,
+                   !summary.trace.isEmpty {
+                    Chart(
+                        Array(summary.trace.suffix(36)),
+                        id: \.elapsedSeconds
+                    ) { point in
+                        AreaMark(
+                            x: .value(
+                                "Elapsed",
+                                point.elapsedSeconds
+                            ),
+                            y: .value(
+                                "User acceleration",
+                                point.meanUserAccelerationG
+                            )
+                        )
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [
+                                    Color.indigo.opacity(0.22),
+                                    Color.cyan.opacity(0.02),
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+
+                        LineMark(
+                            x: .value(
+                                "Elapsed",
+                                point.elapsedSeconds
+                            ),
+                            y: .value(
+                                "User acceleration",
+                                point.meanUserAccelerationG
+                            )
+                        )
+                        .foregroundStyle(.indigo)
+                    }
+                    .chartXAxis(.hidden)
+                    .chartYAxis(.hidden)
+                    .frame(height: 88)
+                }
+            }
+            .foregroundStyle(.primary)
+            .cardStyle()
+        }
+        .buttonStyle(.plain)
     }
 
     private func latestSnapshot(
@@ -192,12 +301,135 @@ struct SessionLibraryView: View {
     }
 
     @ViewBuilder
+    private var productRuns: some View {
+        if !runLibrary.runs.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                MotionOSSectionHeader(
+                    title: "Complete sessions",
+                    subtitle: "Protocol + linked source evidence",
+                    systemImage: "figure.surfing",
+                    accent: .indigo
+                )
+
+                ForEach(runLibrary.runs) { run in
+                    NavigationLink {
+                        ProductRunDetailView(run: run)
+                    } label: {
+                        productRunRow(run)
+                    }
+                    .buttonStyle(.plain)
+
+                    if run.id != runLibrary.runs.last?.id {
+                        Divider()
+                    }
+                }
+            }
+            .cardStyle()
+        }
+    }
+
+    private func productRunRow(
+        _ run: ProductRunRecord
+    ) -> some View {
+        HStack(spacing: 12) {
+            ZStack {
+                RoundedRectangle(
+                    cornerRadius: 13,
+                    style: .continuous
+                )
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.indigo.opacity(0.15),
+                            Color.cyan.opacity(0.08),
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: 48, height: 48)
+
+                Image(
+                    systemName:
+                        run.protocolKind
+                            == FieldProtocolKind.indoBoard.rawValue
+                            ? "figure.surfing"
+                            : "figure.outdoor.cycle"
+                )
+                .foregroundStyle(.indigo)
+            }
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(run.protocolKind)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+
+                HStack(spacing: 5) {
+                    if let date = run.startedAt ?? run.sealedAt {
+                        Text(date, style: .date)
+                    }
+                    Text("·")
+                    Text("\(run.sourceCount) sources")
+                    Text("·")
+                    Text(
+                        run.syncComplete
+                            ? "3/3 sync"
+                            : "\(run.syncCueLabels.count)/3 sync"
+                    )
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+                HStack(spacing: 7) {
+                    sourceDot(
+                        "Watch",
+                        present: run.watchJournalURL != nil
+                    )
+                    sourceDot(
+                        "Camera",
+                        present: run.cameraVideoURL != nil
+                    )
+                    if run.externalVideoURL != nil {
+                        sourceDot(
+                            "Action 4",
+                            present: true
+                        )
+                    }
+                }
+            }
+
+            Spacer()
+
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.tertiary)
+        }
+        .contentShape(Rectangle())
+    }
+
+    private func sourceDot(
+        _ title: String,
+        present: Bool
+    ) -> some View {
+        HStack(spacing: 3) {
+            Circle()
+                .fill(present ? Color.green : Color.secondary)
+                .frame(width: 5, height: 5)
+            Text(title)
+        }
+        .font(.caption2)
+        .foregroundStyle(
+            present ? .secondary : .tertiary
+        )
+    }
+
+    @ViewBuilder
     private var library: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 MotionOSSectionHeader(
-                    title: "Session library",
-                    subtitle: "Recovered Watch sessions stored on this iPhone",
+                    title: "Watch captures",
+                    subtitle: "Raw recovered wrist sessions, including qualification runs",
                     systemImage: "square.stack.3d.up.fill",
                     accent: .cyan
                 )
