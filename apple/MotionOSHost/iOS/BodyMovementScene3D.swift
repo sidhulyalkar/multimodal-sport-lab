@@ -432,6 +432,8 @@ private struct BodyMovementScene3D: UIViewRepresentable {
         private var lastViewpoint: BodySceneViewpoint?
         private var lastSessionID: String?
         private var lastSequence: UInt64?
+        private var lastShowSupport: Bool?
+        private var lastShowMuscles: Bool?
 
         func configure(
             _ view: SCNView
@@ -479,11 +481,16 @@ private struct BodyMovementScene3D: UIViewRepresentable {
                 boneNodes.removeAll()
                 surfaceNodes.removeAll()
                 lastSequence = nil
+                lastShowSupport = nil
+                lastShowMuscles = nil
                 lastSessionID = frame.sessionID
             }
 
-            if lastSequence != frame.sequence
-                || lastSequence == nil {
+            let frameChanged =
+                lastSequence != frame.sequence
+                    || lastSequence == nil
+
+            if frameChanged {
                 updateBodySurface(
                     frame,
                     isReference: isReference
@@ -492,20 +499,25 @@ private struct BodyMovementScene3D: UIViewRepresentable {
                     frame,
                     isReference: isReference
                 )
+                lastSequence = frame.sequence
+            }
+
+            if frameChanged || lastShowSupport != showSupport {
                 updateMarkers(
                     frame,
                     showSupport: showSupport,
                     isReference: isReference
                 )
+                lastShowSupport = showSupport
+            }
+
+            if frameChanged || lastShowMuscles != showMuscles {
                 updateMuscles(
                     frame,
                     visible: showMuscles,
                     isReference: isReference
                 )
-                lastSequence = frame.sequence
-            } else {
-                supportRoot.isHidden = !showSupport
-                muscleRoot.isHidden = !showMuscles
+                lastShowMuscles = showMuscles
             }
 
             if lastViewpoint != viewpoint {
