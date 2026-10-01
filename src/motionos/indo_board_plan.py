@@ -72,6 +72,14 @@ def build_indo_board_qualification_plan(
         raise ValueError(
             "qualification plan requires a wrist-fusion calibration receipt"
         )
+    if fusion_receipt.get("acquisition_profile_id") != (
+        ACQUISITION_PROFILE_ID
+    ):
+        raise ValueError(
+            "wrist-fusion calibration acquisition profile does not match "
+            "the current M0-Vision profile"
+        )
+
     fusion = fusion_receipt.get("recommended_wrist_fusion")
     if not isinstance(fusion, dict):
         raise TypeError(
