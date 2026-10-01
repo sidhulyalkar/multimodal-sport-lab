@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+from itertools import pairwise
 from pathlib import Path
 
 from .indo_board_reconstruction import load_skeleton_frames
@@ -356,11 +357,7 @@ def _absolute_rates(
     value_key: str,
 ) -> list[float]:
     rates: list[float] = []
-    for first, second in zip(
-        samples,
-        samples[1:],
-        strict=False,
-    ):
+    for first, second in pairwise(samples):
         dt_s = (
             int(second["time_ns"])
             - int(first["time_ns"])
