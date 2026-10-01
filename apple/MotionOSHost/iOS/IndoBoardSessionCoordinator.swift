@@ -541,6 +541,10 @@ final class IndoBoardSessionCoordinator: ObservableObject {
 
                 if watchStopped || watchCaptureStopped(phone) {
                     phase = .sealed
+                    // Sync-window misses are represented structurally by the
+                    // receipt count in the sealed summary, not as a stale
+                    // transient error banner after a successful close.
+                    errorMessage = nil
                 } else {
                     phase = .watchStopRequired
                     errorMessage =
