@@ -198,6 +198,7 @@ struct IndoBoardSessionView: View {
                 session.phase == .starting
                     || session.phase == .running
                     || session.phase == .finishing
+                    || session.phase == .watchStopRequired
             )
 
             Text(session.captureMode.subtitle)
@@ -301,8 +302,8 @@ struct IndoBoardSessionView: View {
                     }
                     Text(
                         session.requiresExternalCamera
-                            ? "Start the fixed Action 4 capture profile before MotionOS. The untouched movie is imported after sealing."
-                            : "Optional enrichment. Enable this if you are also recording the Action 4."
+                            ? "Before MotionOS: 4K 16:9 · 60 fps · EIS off · no digital zoom · Standard/Dewarp FOV · rigid tripod. The untouched movie is imported after sealing."
+                            : "Optional enrichment. Enable this only if you are also recording the Action 4."
                     )
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -427,6 +428,36 @@ struct IndoBoardSessionView: View {
                 progressRow(
                     "Stopping Watch, sealing video, and closing operator evidence"
                 )
+
+            case .watchStopRequired:
+                VStack(alignment: .leading, spacing: 10) {
+                    Label(
+                        "Stop MotionOS on the Watch",
+                        systemImage: "applewatch"
+                    )
+                    .font(.headline)
+                    .foregroundStyle(.yellow)
+
+                    Text(
+                        "The camera and operator evidence are sealed, but "
+                            + "the phone could not confirm Watch shutdown. "
+                            + "Stop the workout on the Watch so its journal "
+                            + "can close and transfer."
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                    Button {
+                        session.recheckWatchStop(phone: phone)
+                    } label: {
+                        Label(
+                            "Recheck Watch",
+                            systemImage: "arrow.clockwise"
+                        )
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
 
             case .sealed:
                 Label(
@@ -563,7 +594,7 @@ struct IndoBoardSessionView: View {
                     .foregroundStyle(.secondary)
                 Spacer()
                 Text(
-                    "(session.cueReceipts.count)/3"
+                    "\(session.cueReceipts.count)/3"
                 )
                 .font(.system(.caption, design: .monospaced))
                 .foregroundStyle(
@@ -1082,6 +1113,8 @@ struct IndoBoardSessionView: View {
             "RECORDING"
         case .finishing:
             "SEALING"
+        case .watchStopRequired:
+            "WATCH STOP"
         case .sealed:
             "SEALED"
         case .failed:
@@ -1097,6 +1130,8 @@ struct IndoBoardSessionView: View {
             "checkmark.seal.fill"
         case .failed:
             "exclamationmark.triangle.fill"
+        case .watchStopRequired:
+            "applewatch"
         case .preparing, .starting, .finishing:
             "clock.fill"
         default:
@@ -1110,7 +1145,7 @@ struct IndoBoardSessionView: View {
             .red
         case .ready, .sealed:
             .green
-        case .preparing, .starting, .finishing:
+        case .preparing, .starting, .finishing, .watchStopRequired:
             .yellow
         case .failed:
             .red
@@ -1133,6 +1168,8 @@ struct IndoBoardSessionView: View {
             "Session live"
         case .finishing:
             "Sealing evidence"
+        case .watchStopRequired:
+            "Finish Watch capture"
         case .sealed:
             "Session complete"
         }
@@ -1152,6 +1189,8 @@ struct IndoBoardSessionView: View {
             "Follow the protocol and collect three journal-backed sync cues"
         case .finishing:
             "Each source closes into its own durable evidence artifact"
+        case .watchStopRequired:
+            "The Watch journal still needs a manual stop before this run is fully closed"
         case .sealed:
             "Review the recovered Watch session in Sessions when transfer completes"
         }
@@ -1165,6 +1204,8 @@ struct IndoBoardSessionView: View {
             "checkmark.seal.fill"
         case .failed:
             "exclamationmark.triangle.fill"
+        case .watchStopRequired:
+            "applewatch"
         default:
             "record.circle"
         }
