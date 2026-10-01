@@ -8,12 +8,14 @@ struct WatchTransferDiagnostics: Equatable, Sendable {
     let sessionMismatch: UInt64
     let noActiveSession: UInt64
     let staleMotionGeneration: UInt64
+    let productControl: UInt64
 
     var total: UInt64 {
         afterShutdown
             &+ sessionMismatch
             &+ noActiveSession
             &+ staleMotionGeneration
+            &+ productControl
     }
 }
 
@@ -294,6 +296,7 @@ final class PhoneJournalInbox: ObservableObject {
             "rejected_session_mismatch_count",
             "rejected_no_session_count",
             "rejected_stale_motion_count",
+            "rejected_product_control_count",
         ]
         let hasDiagnostics = diagnosticKeys.contains {
             metadata?[$0] != nil
@@ -311,6 +314,9 @@ final class PhoneJournalInbox: ObservableObject {
                 ) ?? 0,
                 staleMotionGeneration: Self.uint64(
                     metadata?["rejected_stale_motion_count"]
+                ) ?? 0,
+                productControl: Self.uint64(
+                    metadata?["rejected_product_control_count"]
                 ) ?? 0
             )
             : nil
