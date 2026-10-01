@@ -78,6 +78,7 @@ final class WatchSessionController: ObservableObject {
     private var staleMotionRejectionBaseline: UInt64 = 0
     private var finalized = false
     private var heartRateSequence: UInt64 = 0
+    private var sessionSyncSequence: UInt64 = 0
     private var closedJournalURL: URL?
     private var closedJournalEvidence: FileEvidenceDigest?
     private var imuHealth = SampleTimingHealth()
@@ -263,6 +264,7 @@ final class WatchSessionController: ObservableObject {
         deviceYawRadians = nil
         visualTelemetryHistory = []
         heartRateSequence = 0
+        sessionSyncSequence = 0
         finalized = false
         closedJournalURL = nil
         closedJournalEvidence = nil
@@ -449,11 +451,12 @@ final class WatchSessionController: ObservableObject {
         )
     }
 
-    private func record(_ event: SensorEnvelope) async {
+    @discardableResult
+    private func record(_ event: SensorEnvelope) async -> Bool {
         guard let journal = admittedJournal(sessionID: event.sessionID) else {
-            return
+            return false
         }
-        await append(event, to: journal)
+        return await append(event, to: journal)
     }
 
     /// The shutdown and cross-session boundary. Runs synchronously on the main
@@ -474,10 +477,11 @@ final class WatchSessionController: ObservableObject {
         return journal
     }
 
+    @discardableResult
     private func append(
         _ event: SensorEnvelope,
         to journal: CaptureSessionJournal
-    ) async {
+    ) async -> Bool {
         do {
             let outcome = try await journal.append(event)
             guard case .appended(let count) = outcome else {
@@ -485,7 +489,7 @@ final class WatchSessionController: ObservableObject {
                     admission.recordRejection(rejection)
                     refreshCaptureRejections()
                 }
-                return
+                return false
             }
 
             if event.stream == "/body/watch/imu" {
@@ -509,8 +513,10 @@ final class WatchSessionController: ObservableObject {
             if admission.isCapturing, count.isMultiple(of: 25) {
                 eventCount = count
             }
+            return true
         } catch {
             fail(error)
+            return false
         }
     }
 
@@ -688,15 +694,80 @@ final class WatchSessionController: ObservableObject {
     private func handleMessage(
         _ message: [String: Any]
     ) {
-        guard message["motionos_message"] as? String
-                == "guided_protocol_cue_v1",
-              let title = message["step_title"] as? String
-        else {
+        guard let type = message["motionos_message"] as? String else {
             return
         }
 
-        guidedCueTitle = title
-        WKInterfaceDevice.current().play(.notification)
+        switch type {
+        case "guided_protocol_cue_v1":
+            guard let title = message["step_title"] as? String else {
+                return
+            }
+            guidedCueTitle = title
+            WKInterfaceDevice.current().play(.notification)
+
+        case "session_sync_cue_v1":
+            guard state == .running || state == .paused,
+                  let runID = message["run_id"] as? String,
+                  let cueID = message["cue_id"] as? String,
+                  let label = message["label"] as? String,
+                  let watchSessionID = sessionID
+            else {
+                return
+            }
+
+            let timestamp = MonotonicClock.nowNS()
+            let event = SensorEnvelope(
+                sessionID: watchSessionID,
+                deviceID: "apple-watch",
+                stream: "/sync/session_cue",
+                sequence: sessionSyncSequence,
+                deviceTimeNS: timestamp,
+                payload: [
+                    "run_id": .string(runID),
+                    "cue_id": .string(cueID),
+                    "label": .string(label),
+                    "timing_semantics":
+                        .string("watch_monotonic_receive_time"),
+                ]
+            )
+            sessionSyncSequence &+= 1
+
+            Task { @MainActor [weak self] in
+                guard let self,
+                      await self.record(event)
+                else {
+                    return
+                }
+
+                self.guidedCueTitle = "SYNC · MOVE NOW"
+                WKInterfaceDevice.current().play(.notification)
+
+                let acknowledgment: [String: Any] = [
+                    "motionos_message": "session_sync_cue_ack_v1",
+                    "run_id": runID,
+                    "cue_id": cueID,
+                    "label": label,
+                    "watch_session_id": watchSessionID,
+                    "watch_device_time_ns": timestamp,
+                ]
+                _ = self.transport.sendMessage(acknowledgment)
+                _ = self.transport.queueUserInfo(acknowledgment)
+
+                Task { @MainActor [weak self] in
+                    try? await Task.sleep(for: .milliseconds(1_500))
+                    guard let self,
+                          self.guidedCueTitle == "SYNC · MOVE NOW"
+                    else {
+                        return
+                    }
+                    self.guidedCueTitle = nil
+                }
+            }
+
+        default:
+            return
+        }
     }
 
     private func handleUserInfo(
