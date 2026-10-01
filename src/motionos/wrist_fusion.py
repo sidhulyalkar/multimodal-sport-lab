@@ -37,17 +37,17 @@ def build_wrist_acceleration_fusion(
         skeleton_geometry_path,
         skeleton_correspondences_path,
     )
-    watch_events = _watch_events(watch_journal_path)
-    resolved_side = wrist_side or _wrist_side(watch_events)
+    watch_events = load_watch_events(watch_journal_path)
+    resolved_side = wrist_side or infer_watch_wrist_side(watch_events)
     if resolved_side not in {"left", "right"}:
         raise ValueError("wrist_side must be left or right")
 
-    vision = _vision_acceleration(
+    vision = vision_wrist_acceleration(
         frames,
         side=resolved_side,
     )
-    watch = _watch_acceleration(watch_events)
-    pairs = _nearest_pairs(
+    watch = watch_acceleration_magnitude(watch_events)
+    pairs = pair_wrist_acceleration_samples(
         vision,
         watch,
         maximum_time_delta_ms=maximum_time_delta_ms,
@@ -146,7 +146,7 @@ def build_wrist_acceleration_fusion(
     return result
 
 
-def _vision_acceleration(
+def vision_wrist_acceleration(
     frames: tuple[object, ...],
     *,
     side: str,
@@ -220,7 +220,7 @@ def _vision_acceleration(
     return tuple(values)
 
 
-def _watch_acceleration(
+def watch_acceleration_magnitude(
     events: tuple[SensorEvent, ...],
 ) -> tuple[dict[str, float | int], ...]:
     values: list[dict[str, float | int]] = []
@@ -250,7 +250,7 @@ def _watch_acceleration(
     return tuple(values)
 
 
-def _nearest_pairs(
+def pair_wrist_acceleration_samples(
     vision: tuple[dict[str, float | int], ...],
     watch: tuple[dict[str, float | int], ...],
     *,
@@ -284,7 +284,7 @@ def _nearest_pairs(
     return tuple(pairs)
 
 
-def _watch_events(path: str | Path) -> tuple[SensorEvent, ...]:
+def load_watch_events(path: str | Path) -> tuple[SensorEvent, ...]:
     events: list[SensorEvent] = []
     for line_number, line in enumerate(
         Path(path).read_text(encoding="utf-8").splitlines(),
@@ -301,7 +301,7 @@ def _watch_events(path: str | Path) -> tuple[SensorEvent, ...]:
     return tuple(events)
 
 
-def _wrist_side(events: tuple[SensorEvent, ...]) -> str:
+def infer_watch_wrist_side(events: tuple[SensorEvent, ...]) -> str:
     for event in events:
         if event.stream != "/meta/watch":
             continue
