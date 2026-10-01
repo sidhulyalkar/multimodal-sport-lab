@@ -1,0 +1,18 @@
+{
+  "schema_version": "motionos.wrist-fusion-reconstruction-spec.v1",
+  "vision_session": "REPLACE/calibration/vision_session.json",
+  "watch_journal": "REPLACE/calibration/watch.jsonl",
+  "rig_receipt": "REPLACE/current-session-camera-rig-receipt.json",
+  "iphone": {
+    "journal": "REPLACE/calibration/iphone/camera-frames.jsonl",
+    "metadata": "REPLACE/calibration/iphone/camera-metadata.json"
+  },
+  "action4": {
+    "journal": "REPLACE/calibration/action4/action4-frames.jsonl",
+    "metadata": "REPLACE/calibration/action4/action4-derived-metadata.json"
+  },
+  "thresholds": {
+    "maximum_pose_pair_ms": 10.0,
+    "minimum_joint_confidence": 0.6
+  }
+}
