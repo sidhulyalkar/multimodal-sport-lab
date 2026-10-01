@@ -196,6 +196,14 @@ public struct SystemsLabQualificationTracker: Sendable, Equatable {
             "paused",
             "ending",
         ].contains(normalized)
+        let isTerminal = [
+            "idle",
+            "journalready",
+            "transferqueued",
+            "transportcomplete",
+            "transferred",
+            "failed",
+        ].contains(normalized)
 
         if isActive, let sessionID, !sessionID.isEmpty {
             ensureCurrent(
@@ -211,6 +219,7 @@ public struct SystemsLabQualificationTracker: Sendable, Equatable {
             return
         }
 
+        guard isTerminal else { return }
         guard var report = current else { return }
         guard sessionID == nil || sessionID == report.sessionID else {
             return
