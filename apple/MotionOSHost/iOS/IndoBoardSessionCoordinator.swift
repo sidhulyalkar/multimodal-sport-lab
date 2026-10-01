@@ -67,7 +67,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         var errorDescription: String? {
             switch self {
             case .watchUnavailable:
-                "The paired MotionOS Watch must be installed and reachable."
+                "MotionOS must be installed on the active paired Apple Watch."
             case .cameraUnavailable:
                 "Prepare the iPhone camera before starting the Indo Board session."
             case .cameraProfileInvalid:
