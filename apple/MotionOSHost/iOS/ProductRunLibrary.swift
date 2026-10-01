@@ -15,6 +15,8 @@ struct ProductRunRecord: Identifiable, Equatable, Sendable {
     let directoryURL: URL
     let operatorJournalURL: URL
     let operatorMetadataURL: URL
+    let productManifestURL: URL?
+    let productManifest: ProductSessionManifest?
     let watchSessionID: String?
     let watchJournalURL: URL?
     let watchSummaryURL: URL?
@@ -39,6 +41,31 @@ struct ProductRunRecord: Identifiable, Equatable, Sendable {
         Set(syncCueLabels).isSuperset(
             of: ["start", "middle", "end"]
         )
+    }
+
+    var captureModeLabel: String {
+        productManifest?.captureMode ?? "Legacy / unspecified"
+    }
+
+    var expectedSourceCount: Int {
+        if productManifest?.externalCameraExpected == true {
+            return 4
+        }
+        return 3
+    }
+
+    var evidenceComplete: Bool {
+        guard operatorMetadataURL.isFileURL,
+              watchJournalURL != nil,
+              cameraVideoURL != nil
+        else {
+            return false
+        }
+
+        if productManifest?.externalCameraExpected == true {
+            return externalVideoURL != nil
+        }
+        return true
     }
 }
 
@@ -127,6 +154,25 @@ final class ProductRunLibrary: ObservableObject {
                 return nil
             }
 
+            let productManifestURL = existingURL(
+                directory.appendingPathComponent(
+                    "product-session.json"
+                ),
+                manager: manager
+            )
+            let productManifest: ProductSessionManifest?
+            if let productManifestURL,
+               let manifestData = try? Data(
+                    contentsOf: productManifestURL
+               ) {
+                productManifest = try? decoder.decode(
+                    ProductSessionManifest.self,
+                    from: manifestData
+                )
+            } else {
+                productManifest = nil
+            }
+
             let startReadiness = stringMap(
                 metadata["start_readiness"]
             )
@@ -134,11 +180,13 @@ final class ProductRunLibrary: ObservableObject {
                 metadata["seal_readiness"]
             )
             let watchSessionID = usefulIdentifier(
-                sealReadiness["watch_session_id"]
+                productManifest?.watchSessionID
+                    ?? sealReadiness["watch_session_id"]
                     ?? startReadiness["watch_session_id"]
             )
             let cameraSessionID = usefulIdentifier(
-                sealReadiness["iphone_camera_session_id"]
+                productManifest?.cameraSessionID
+                    ?? sealReadiness["iphone_camera_session_id"]
                     ?? startReadiness["iphone_camera_session_id"]
             )
 
@@ -259,6 +307,8 @@ final class ProductRunLibrary: ObservableObject {
                 directoryURL: directory,
                 operatorJournalURL: journalURL,
                 operatorMetadataURL: metadataURL,
+                productManifestURL: productManifestURL,
+                productManifest: productManifest,
                 watchSessionID: watchSessionID,
                 watchJournalURL: watchJournal,
                 watchSummaryURL: watchSummaryURL,
