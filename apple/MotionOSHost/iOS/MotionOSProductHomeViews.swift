@@ -106,11 +106,13 @@ struct ObserveHomeView: View {
                         systemImage: "applewatch",
                         color: watchColor
                     )
-                    MotionOSStatusBadge(
-                        title: phone.state.rawValue.capitalized,
-                        systemImage: stateSymbol,
-                        color: stateColor
-                    )
+                    if showPhoneStateBadge {
+                        MotionOSStatusBadge(
+                            title: phone.state.rawValue.capitalized,
+                            systemImage: stateSymbol,
+                            color: stateColor
+                        )
+                    }
                     if let latest = inbox.sessions.first {
                         MotionOSStatusBadge(
                             title: latest.summary == nil
@@ -129,11 +131,13 @@ struct ObserveHomeView: View {
                         systemImage: "applewatch",
                         color: watchColor
                     )
-                    MotionOSStatusBadge(
-                        title: phone.state.rawValue.capitalized,
-                        systemImage: stateSymbol,
-                        color: stateColor
-                    )
+                    if showPhoneStateBadge {
+                        MotionOSStatusBadge(
+                            title: phone.state.rawValue.capitalized,
+                            systemImage: stateSymbol,
+                            color: stateColor
+                        )
+                    }
                 }
             }
         }
@@ -243,20 +247,23 @@ struct ObserveHomeView: View {
     }
 
     private var watchLabel: String {
-        if phone.watchReachable {
-            return "Watch live"
-        }
-        if phone.hasRecentWatchPresence() {
-            return "Watch handshake"
-        }
-        if phone.watchAppInstalled {
-            return "Watch installed"
-        }
-        return "Watch offline"
+        phone.watchConnectionLabel
     }
 
     private var watchColor: Color {
-        phone.watchAppInstalled ? .green : .yellow
+        if phone.watchConnectionReady {
+            return .green
+        }
+        return phone.watchPaired ? .yellow : .secondary
+    }
+
+    private var showPhoneStateBadge: Bool {
+        switch phone.state {
+        case .idle, .ended:
+            false
+        default:
+            true
+        }
     }
 
     private var stateSymbol: String {
@@ -529,13 +536,7 @@ struct CaptureHomeView: View {
     }
 
     private var watchSubtitle: String {
-        if phone.watchReachable {
-            return "Live link · capture ready"
-        }
-        if phone.watchAppInstalled {
-            return "Installed · open Watch for live link"
-        }
-        return "Needs companion setup"
+        phone.watchConnectionDetail
     }
 
     private var cameraColor: Color {
