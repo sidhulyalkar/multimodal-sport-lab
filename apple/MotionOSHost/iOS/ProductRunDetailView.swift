@@ -23,6 +23,7 @@ struct ProductRunDetailView: View {
 
                 if let summary = run.watchSummary {
                     watchSummary(summary)
+                    MotionFingerprintCard(summary: summary)
                     PreviousRunComparisonCard(run: run)
                 }
 
