@@ -336,36 +336,38 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
         if state == .running || state == .paused {
             return "Watch recording"
         }
-        if watchReachable {
-            return "Watch connected"
-        }
-        if hasRecentWatchPresence() || watchAppInstalled {
+        if watchConnectionReady {
             return "Watch ready"
         }
         if watchPaired {
-            return "Watch paired"
+            return "Watch app setup"
         }
-        return "Watch setup"
+        return "No Watch"
     }
 
     var watchConnectionDetail: String {
         if watchReachable {
-            return "Live link"
+            return "MotionOS detected now"
         }
         if hasRecentWatchPresence() {
-            return "Background ready"
+            return "MotionOS detected recently"
         }
-        if watchAppInstalled {
-            return "Companion installed"
+        if systemWatchAppInstalled {
+            return "MotionOS installed"
         }
         if watchPaired {
-            return "Waiting for companion"
+            return "Open MotionOS on the Watch once"
         }
-        return "No active paired Watch"
+        return "Pair an Apple Watch with this iPhone"
     }
 
     var watchConnectionReady: Bool {
-        watchPaired && watchAppInstalled
+        watchPaired
+            && (
+                watchReachable
+                    || hasRecentWatchPresence()
+                    || systemWatchAppInstalled
+            )
     }
 
     private func requestWatchPresenceIfNeeded(
@@ -393,6 +395,11 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
         _ message: [String: Any]
     ) {
         let type = message["motionos_message"] as? String
+
+        if type == "phone_presence_request_v1" {
+            publishPhonePresence()
+            return
+        }
 
         if type == "watch_presence_v1" {
             ingestWatchPresence(message)
