@@ -225,7 +225,7 @@ struct DeviceHubView: View {
         VStack(alignment: .leading, spacing: 12) {
             deviceHeader(
                 title: "DJI Osmo Action 4",
-                subtitle: "External recorded multiview source",
+                subtitle: "Optional external calibration camera",
                 symbol: "video.fill",
                 color: indoBoard.externalCameraConfirmed
                     ? .green
@@ -253,7 +253,7 @@ struct DeviceHubView: View {
                 IndoBoardSessionView()
             } label: {
                 Label(
-                    "Open Multiview Capture",
+                    "Open Capture Setup",
                     systemImage: "scope"
                 )
                 .frame(maxWidth: .infinity)
