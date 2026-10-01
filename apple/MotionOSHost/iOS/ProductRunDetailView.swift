@@ -107,9 +107,14 @@ struct ProductRunDetailView: View {
 
             HStack(spacing: 8) {
                 MotionOSStatusBadge(
-                    title: "\(run.sourceCount) sources",
+                    title: run.captureModeLabel,
+                    systemImage: "scope",
+                    color: .purple
+                )
+                MotionOSStatusBadge(
+                    title: "\(run.sourceCount)/\(run.expectedSourceCount) sources",
                     systemImage: "point.3.connected.trianglepath.dotted",
-                    color: .indigo
+                    color: run.evidenceComplete ? .green : .indigo
                 )
                 MotionOSStatusBadge(
                     title: run.syncComplete
@@ -171,7 +176,11 @@ struct ProductRunDetailView: View {
                 ready: run.externalVideoURL != nil,
                 detail: run.externalVideoURL != nil
                     ? "original hash-bound"
-                    : "optional / not imported"
+                    : (
+                        run.productManifest?.externalCameraExpected == true
+                            ? "required · awaiting import"
+                            : "optional / not imported"
+                    )
             )
 
             Text(
