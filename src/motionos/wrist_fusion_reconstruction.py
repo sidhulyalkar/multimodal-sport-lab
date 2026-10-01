@@ -4,7 +4,11 @@ import json
 import math
 from pathlib import Path
 
-from .indo_board_acquisition import require_indo_board_acquisition
+from .indo_board_acquisition import (
+    ACQUISITION_PROFILE_ID,
+    evaluate_indo_board_acquisition,
+    require_indo_board_acquisition,
+)
 from .multiview_pose import write_skeleton_sequence_correspondences
 from .pose2d_io import (
     infer_pose2d_source_id,
@@ -57,6 +61,18 @@ def reconstruct_wrist_fusion_calibration(
 
     output = Path(output_directory).resolve()
     output.mkdir(parents=True, exist_ok=True)
+
+    acquisition_path = output / "indo-board-acquisition-receipt.json"
+    acquisition_receipt = evaluate_indo_board_acquisition(
+        vision_session,
+        _resolve(base, iphone["metadata"]),
+        _resolve(base, action4["metadata"]),
+        output_path=acquisition_path,
+    )
+    if acquisition_receipt["passed"] is not True:
+        raise ValueError(
+            "calibration acquisition profile failed after preflight"
+        )
 
     external_sync_path = output / "action4-clock-sync.json"
     write_external_camera_sync(
@@ -133,6 +149,7 @@ def reconstruct_wrist_fusion_calibration(
         "spec": source,
     }
     artifact_paths = {
+        "acquisition_receipt": acquisition_path,
         "external_sync": external_sync_path,
         "clock_bundle": clock_bundle_path,
         "skeleton_correspondences": correspondences_path,
@@ -146,6 +163,8 @@ def reconstruct_wrist_fusion_calibration(
         "schema_version": RECONSTRUCTION_RECEIPT_SCHEMA_VERSION,
         "session_id": manifest.session_id,
         "rig_id": rig_id,
+        "acquisition_profile_id": ACQUISITION_PROFILE_ID,
+        "acquisition_receipt_sha256": sha256_file(acquisition_path),
         "pose_pair_count": len(pairs),
         "thresholds": dict(thresholds),
         "input_sha256": {
