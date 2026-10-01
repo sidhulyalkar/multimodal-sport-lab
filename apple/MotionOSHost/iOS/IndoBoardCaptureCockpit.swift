@@ -597,8 +597,21 @@ struct IndoBoardProtocolRibbon: View {
                             height: 8
                         )
 
-                    ForEach([0.125, 0.4375, 0.917], id: .self) {
-                        marker in
+                    let markerFractions: [CGFloat] = [
+                        0.125,
+                        0.4375,
+                        0.917,
+                    ]
+
+                    ForEach(markerFractions, id: \.self) { marker in
+                        let offsetX = max(
+                            CGFloat.zero,
+                            min(
+                                width - 9,
+                                width * marker - 4.5
+                            )
+                        )
+
                         Circle()
                             .fill(Color.cyan)
                             .frame(width: 9, height: 9)
@@ -609,15 +622,7 @@ struct IndoBoardProtocolRibbon: View {
                                         lineWidth: 2
                                     )
                             }
-                            .offset(
-                                x: max(
-                                    0,
-                                    min(
-                                        width - 9,
-                                        width * marker - 4.5
-                                    )
-                                )
-                            )
+                            .offset(x: offsetX)
                     }
                 }
             }
