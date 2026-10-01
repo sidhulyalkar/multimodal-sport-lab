@@ -91,6 +91,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         IndoBoardProductProtocol.targetDurationSeconds
 
     @Published private(set) var phase: Phase = .idle
+    @Published private(set) var outcome: ProductSessionOutcome?
     @Published var captureMode: CaptureMode = .watchAndPhone
     @Published private(set) var startedAt: Date?
     @Published private(set) var cueReceipts: [CueReceipt] = []
@@ -205,6 +206,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         pendingCueID = nil
         externalVideoEvidence = nil
         productManifestURL = nil
+        outcome = nil
         startedAt = nil
 
         fieldRun.createRun(kind: .indoBoard)
@@ -221,7 +223,13 @@ final class IndoBoardSessionCoordinator: ObservableObject {
 
         guard await waitForWatchRunning(phone: phone)
         else {
-            fail(SessionError.watchDidNotStart)
+            await abortStart(
+                error: .watchDidNotStart,
+                phone: phone,
+                camera: camera,
+                fieldRun: fieldRun,
+                pod: pod
+            )
             return
         }
 
@@ -230,17 +238,35 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         }
         guard camera.phase == .ready || camera.phase == .evidenceReady
         else {
-            fail(SessionError.cameraUnavailable)
+            await abortStart(
+                error: .cameraUnavailable,
+                phone: phone,
+                camera: camera,
+                fieldRun: fieldRun,
+                pod: pod
+            )
             return
         }
         guard cameraProfileReady(camera) else {
-            fail(SessionError.cameraProfileInvalid)
+            await abortStart(
+                error: .cameraProfileInvalid,
+                phone: phone,
+                camera: camera,
+                fieldRun: fieldRun,
+                pod: pod
+            )
             return
         }
 
         await camera.startRecording()
         guard camera.phase == .recording else {
-            fail(SessionError.cameraUnavailable)
+            await abortStart(
+                error: .cameraUnavailable,
+                phone: phone,
+                camera: camera,
+                fieldRun: fieldRun,
+                pod: pod
+            )
             return
         }
 
@@ -252,10 +278,13 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         )
         fieldRun.startRun(readiness: readiness)
         guard fieldRun.phase == .running else {
-            if camera.phase == .recording {
-                await camera.stopRecording()
-            }
-            fail(SessionError.fieldRunUnavailable)
+            await abortStart(
+                error: .fieldRunUnavailable,
+                phone: phone,
+                camera: camera,
+                fieldRun: fieldRun,
+                pod: pod
+            )
             return
         }
 
@@ -409,6 +438,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
 
         if fieldRun.phase == .sealed {
             do {
+                outcome = .completed
                 productManifestURL = try writeProductManifest(
                     phone: phone,
                     camera: camera,
@@ -539,6 +569,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
                     captureMode: existing.captureMode,
                     targetDurationSeconds: existing.targetDurationSeconds,
                     createdAtUTC: existing.createdAtUTC,
+                    outcome: existing.outcome,
                     watchSessionID: existing.watchSessionID,
                     cameraSessionID: existing.cameraSessionID,
                     operatorJournalSHA256: existing.operatorJournalSHA256,
@@ -578,8 +609,10 @@ final class IndoBoardSessionCoordinator: ObservableObject {
             && phone.state != .paused
             && phone.state != .waitingForMirror
             && phone.state != .launchingWatch {
-            phase = .sealed
-            errorMessage = nil
+            phase = outcome == .aborted ? .failed : .sealed
+            errorMessage = outcome == .aborted
+                ? "The aborted attempt is sealed in Sessions. Prepare a new run when ready."
+                : nil
         } else {
             errorMessage =
                 SessionError.watchDidNotStop.localizedDescription
@@ -602,6 +635,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         lastCueAttemptAt = [:]
         UIApplication.shared.isIdleTimerDisabled = false
         phase = .idle
+        outcome = nil
         startedAt = nil
         cueReceipts = []
         pendingCueID = nil
@@ -857,6 +891,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
             runID: runID,
             captureMode: captureMode.rawValue,
             targetDurationSeconds: Self.targetDurationSeconds,
+            outcome: outcome ?? .completed,
             watchSessionID: phone.watchCaptureHealth?.sessionID,
             cameraSessionID: camera.sessionID,
             operatorJournalSHA256: operatorJournalDigest.sha256,
@@ -876,6 +911,76 @@ final class IndoBoardSessionCoordinator: ObservableObject {
             manifest,
             to: bundle.directory
         )
+    }
+
+    private func abortStart(
+        error: SessionError,
+        phone: PhoneSessionCoordinator,
+        camera: CameraCaptureController,
+        fieldRun: FieldRunCoordinator,
+        pod: EquipmentPodController
+    ) async {
+        outcome = .aborted
+        protocolTask?.cancel()
+        protocolTask = nil
+        syncTimeoutTask?.cancel()
+        syncTimeoutTask = nil
+        UIApplication.shared.isIdleTimerDisabled = false
+
+        let runID = fieldRun.runID ?? "unknown"
+        var watchStopped = true
+
+        if phone.state == .running
+            || phone.state == .paused
+            || phone.state == .waitingForMirror
+            || phone.state == .launchingWatch {
+            if fieldRun.runID != nil {
+                _ = phone.sendWatchStopRequest(runID: runID)
+            }
+            watchStopped = await waitForWatchToLeaveRunning(
+                phone: phone
+            )
+        }
+
+        if camera.phase == .recording {
+            await camera.stopRecording()
+        }
+
+        if fieldRun.phase == .armed
+            || fieldRun.phase == .running {
+            fieldRun.abortRun(
+                reason: error.localizedDescription,
+                readiness: readinessSnapshot(
+                    phone: phone,
+                    camera: camera,
+                    pod: pod,
+                    runID: runID
+                )
+            )
+        }
+
+        if fieldRun.phase == .sealed {
+            productManifestURL = try? writeProductManifest(
+                phone: phone,
+                camera: camera,
+                fieldRun: fieldRun
+            )
+        }
+
+        if watchStopped {
+            phase = .failed
+            errorMessage = (
+                error.localizedDescription
+                    + " The aborted attempt was sealed for inspection."
+            )
+        } else {
+            phase = .watchStopRequired
+            errorMessage = (
+                error.localizedDescription
+                    + " "
+                    + SessionError.watchDidNotStop.localizedDescription
+            )
+        }
     }
 
     private func fail(_ error: Error) {
