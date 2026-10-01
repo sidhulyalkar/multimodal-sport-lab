@@ -5,6 +5,26 @@ import UIKit
 
 @MainActor
 final class IndoBoardSessionCoordinator: ObservableObject {
+    enum CaptureMode: String, CaseIterable, Identifiable, Sendable {
+        case watchAndPhone = "Watch + iPhone"
+        case multiviewCalibration = "Multiview calibration"
+
+        var id: String { rawValue }
+
+        var subtitle: String {
+            switch self {
+            case .watchAndPhone:
+                "Fast product session with Watch + iPhone video."
+            case .multiviewCalibration:
+                "Camera-rich teacher session with Action 4 preserved for offline synchronization."
+            }
+        }
+
+        var requiresExternalCamera: Bool {
+            self == .multiviewCalibration
+        }
+    }
+
     enum Phase: String {
         case idle
         case preparing
@@ -66,12 +86,14 @@ final class IndoBoardSessionCoordinator: ObservableObject {
     static let targetDurationSeconds: TimeInterval = 120
 
     @Published private(set) var phase: Phase = .idle
+    @Published var captureMode: CaptureMode = .watchAndPhone
     @Published private(set) var startedAt: Date?
     @Published private(set) var cueReceipts: [CueReceipt] = []
     @Published private(set) var pendingCueID: String?
     @Published private(set) var errorMessage: String?
     @Published private(set) var externalVideoEvidence:
         ExternalVideoEvidence?
+    @Published private(set) var productManifestURL: URL?
     @Published var externalCameraConfirmed = false
 
     private var protocolTask: Task<Void, Never>?
@@ -94,6 +116,14 @@ final class IndoBoardSessionCoordinator: ObservableObject {
 
     var currentInstruction: String {
         instruction(at: elapsedSeconds)
+    }
+
+    var requiresExternalCamera: Bool {
+        captureMode.requiresExternalCamera
+    }
+
+    var syncProgress: Double {
+        min(1, Double(cueReceipts.count) / 3.0)
     }
 
     func prepare(
@@ -138,6 +168,15 @@ final class IndoBoardSessionCoordinator: ObservableObject {
             return
         }
 
+        if requiresExternalCamera && !externalCameraConfirmed {
+            errorMessage = (
+                "Multiview calibration requires the Action 4 to be started "
+                    + "and its fixed capture profile confirmed before recording."
+            )
+            phase = .idle
+            return
+        }
+
         phase = .ready
     }
 
@@ -157,6 +196,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         cueReceipts = []
         pendingCueID = nil
         externalVideoEvidence = nil
+        productManifestURL = nil
         startedAt = nil
 
         fieldRun.createRun(kind: .indoBoard)
@@ -341,7 +381,16 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         UIApplication.shared.isIdleTimerDisabled = false
 
         if fieldRun.phase == .sealed {
-            phase = .sealed
+            do {
+                productManifestURL = try writeProductManifest(
+                    phone: phone,
+                    camera: camera,
+                    fieldRun: fieldRun
+                )
+                phase = .sealed
+            } catch {
+                fail(error)
+            }
         } else {
             fail(SessionError.fieldRunUnavailable)
         }
@@ -437,6 +486,32 @@ final class IndoBoardSessionCoordinator: ObservableObject {
             .value
 
             externalVideoEvidence = evidence
+
+            let manifestURL = runDirectory.appendingPathComponent(
+                "product-session.json"
+            )
+            if FileManager.default.fileExists(atPath: manifestURL.path),
+               let existing = try? ProductSessionManifestStore.load(
+                    from: manifestURL
+               ) {
+                let updated = ProductSessionManifest(
+                    runID: existing.runID,
+                    captureMode: existing.captureMode,
+                    targetDurationSeconds: existing.targetDurationSeconds,
+                    watchSessionID: existing.watchSessionID,
+                    cameraSessionID: existing.cameraSessionID,
+                    syncReceipts: existing.syncReceipts,
+                    externalCameraExpected: existing.externalCameraExpected,
+                    externalCameraImported: true,
+                    externalCameraSHA256: evidence.sha256,
+                    operatorEvidenceSealed: existing.operatorEvidenceSealed,
+                    cameraEvidenceSealed: existing.cameraEvidenceSealed
+                )
+                productManifestURL = try ProductSessionManifestStore.write(
+                    updated,
+                    to: runDirectory
+                )
+            }
         } catch {
             errorMessage = (
                 "External video import failed: "
@@ -464,6 +539,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         cueReceipts = []
         pendingCueID = nil
         externalVideoEvidence = nil
+        productManifestURL = nil
         errorMessage = nil
     }
 
@@ -730,11 +806,55 @@ final class IndoBoardSessionCoordinator: ObservableObject {
             "iphone_camera_session_id":
                 camera.sessionID ?? "unknown",
             "equipment_pod_phase": pod.phase.rawValue,
+            "capture_mode": captureMode.rawValue,
             "external_camera_confirmed":
                 String(externalCameraConfirmed),
             "sync_acknowledged":
                 cueReceipts.map(\.label).sorted().joined(separator: ","),
         ]
+    }
+
+    private func writeProductManifest(
+        phone: PhoneSessionCoordinator,
+        camera: CameraCaptureController,
+        fieldRun: FieldRunCoordinator
+    ) throws -> URL {
+        guard let runID = fieldRun.runID,
+              let bundle = fieldRun.evidenceBundle
+        else {
+            throw SessionError.fieldRunUnavailable
+        }
+
+        let receipts = cueReceipts.map {
+            ProductSessionManifest.SyncReceipt(
+                cueID: $0.id,
+                label: $0.label,
+                acknowledgedAtUTC:
+                    ISO8601DateFormatter().string(
+                        from: $0.acknowledgedAt
+                    ),
+                watchDeviceTimeNS: $0.watchDeviceTimeNS
+            )
+        }
+
+        let manifest = ProductSessionManifest(
+            runID: runID,
+            captureMode: captureMode.rawValue,
+            targetDurationSeconds: Self.targetDurationSeconds,
+            watchSessionID: phone.watchCaptureHealth?.sessionID,
+            cameraSessionID: camera.sessionID,
+            syncReceipts: receipts,
+            externalCameraExpected: requiresExternalCamera,
+            externalCameraImported: externalVideoEvidence != nil,
+            externalCameraSHA256: externalVideoEvidence?.sha256,
+            operatorEvidenceSealed: fieldRun.phase == .sealed,
+            cameraEvidenceSealed: camera.phase == .evidenceReady
+        )
+
+        return try ProductSessionManifestStore.write(
+            manifest,
+            to: bundle.directory
+        )
     }
 
     private func fail(_ error: Error) {
