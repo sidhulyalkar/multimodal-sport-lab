@@ -30,6 +30,11 @@ struct JournalIngestReceipt: Sendable {
 
 @MainActor
 final class PhoneJournalInbox: ObservableObject {
+    private enum ReviewOutcome: Sendable {
+        case success(WatchSessionSummary)
+        case failure(String)
+    }
+
     @Published private(set) var latestSessionID: String?
     @Published private(set) var latestJournalURL: URL?
     @Published private(set) var latestHostMetadataURL: URL?
@@ -38,7 +43,12 @@ final class PhoneJournalInbox: ObservableObject {
     @Published private(set) var latestDuplicateRetransfer = false
     @Published private(set) var latestCaptureOrigin: String?
     @Published private(set) var latestTransferDiagnostics: WatchTransferDiagnostics?
+    @Published private(set) var latestReview: WatchSessionSummary?
+    @Published private(set) var latestReviewError: String?
+    @Published private(set) var reviewIsLoading = false
     @Published private(set) var lastError: String?
+
+    private var reviewTask: Task<Void, Never>?
 
     func ingest(
         fileURL: URL,
@@ -58,6 +68,7 @@ final class PhoneJournalInbox: ObservableObject {
             latestCaptureOrigin = receipt.captureOrigin
             latestTransferDiagnostics = receipt.transferDiagnostics
             lastError = nil
+            beginReview(for: receipt.journalURL)
             return receipt
         } catch {
             lastError = error.localizedDescription
@@ -212,6 +223,48 @@ final class PhoneJournalInbox: ObservableObject {
             captureOrigin: captureOrigin,
             transferDiagnostics: diagnostics
         )
+    }
+
+    private func beginReview(
+        for journalURL: URL
+    ) {
+        reviewTask?.cancel()
+        latestReview = nil
+        latestReviewError = nil
+        reviewIsLoading = true
+
+        reviewTask = Task { [weak self] in
+            let outcome = await Task.detached(
+                priority: .utility
+            ) { () -> ReviewOutcome in
+                do {
+                    return .success(
+                        try WatchSessionSummaryAnalyzer.summarizeJournal(
+                            at: journalURL
+                        )
+                    )
+                } catch {
+                    return .failure(error.localizedDescription)
+                }
+            }.value
+
+            guard !Task.isCancelled,
+                  let self,
+                  self.latestJournalURL == journalURL
+            else {
+                return
+            }
+
+            self.reviewIsLoading = false
+            switch outcome {
+            case .success(let summary):
+                self.latestReview = summary
+                self.latestReviewError = nil
+            case .failure(let message):
+                self.latestReview = nil
+                self.latestReviewError = message
+            }
+        }
     }
 
     private static func uint64(_ value: Any?) -> UInt64? {

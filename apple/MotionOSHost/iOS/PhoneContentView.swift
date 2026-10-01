@@ -11,6 +11,7 @@ struct PhoneContentView: View {
                     header
                     SensorSourceStrip()
                     LiveTelemetryDeck()
+                    SessionReviewCard()
                     controls
                     readiness
                     GuidedP0Card()
