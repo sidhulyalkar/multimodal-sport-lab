@@ -456,7 +456,7 @@ final class WatchSessionController: ObservableObject {
             }
 
             if let expectedBytes = metadata["journal_byte_count"] as? NSNumber,
-               UInt64(truncating: expectedBytes) != evidence.byteCount {
+               expectedBytes.uint64Value != evidence.byteCount {
                 continue
             }
 
