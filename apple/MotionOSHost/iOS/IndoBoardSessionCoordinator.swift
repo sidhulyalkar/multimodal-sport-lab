@@ -7,7 +7,7 @@ import UIKit
 final class IndoBoardSessionCoordinator: ObservableObject {
     enum CaptureMode: String, CaseIterable, Identifiable, Sendable {
         case watchAndPhone = "Watch + iPhone"
-        case multiviewCalibration = "Multiview calibration"
+        case multiviewCalibration = "Multiview capture"
 
         var id: String { rawValue }
 
@@ -609,13 +609,13 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         case ..<20:
             acknowledgedCueLabels.contains("start")
                 ? "Return to neutral after the start sync gesture."
-                : "Send START sync, then make one sharp arm gesture."
+                : "When the Watch taps for START sync, make one sharp arm gesture."
         case ..<45:
             "Natural free balance. Stay comfortable and visible to camera."
         case ..<55:
             acknowledgedCueLabels.contains("middle")
                 ? "Return to neutral after the middle sync gesture."
-                : "Send MIDDLE sync, then make one sharp arm gesture."
+                : "When the Watch taps for MIDDLE sync, make one sharp arm gesture."
         case ..<90:
             "Five controlled tilt-and-recover cycles. Alternate directions."
         case ..<110:
@@ -623,7 +623,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         case ..<120:
             acknowledgedCueLabels.contains("end")
                 ? "Hold a comfortable neutral finish."
-                : "Send END sync, then make one sharp arm gesture."
+                : "When the Watch taps for END sync, make one sharp arm gesture."
         default:
             "Session target reached. Finish and seal when stable."
         }
