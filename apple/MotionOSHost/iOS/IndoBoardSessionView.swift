@@ -497,27 +497,15 @@ struct IndoBoardSessionView: View {
             }
 
             HStack(spacing: 7) {
-                syncButton(
-                    "start",
-                    title: "Start",
-                    suggestedWindow: 10...20
-                )
-                syncButton(
-                    "middle",
-                    title: "Middle",
-                    suggestedWindow: 45...60
-                )
-                syncButton(
-                    "end",
-                    title: "End",
-                    suggestedWindow: 105...125
-                )
+                syncStatus("start", title: "Start")
+                syncStatus("middle", title: "Middle")
+                syncStatus("end", title: "End")
             }
 
             Text(
                 session.pendingCueID == nil
-                    ? "After each cue, make one quick, unmistakable arm gesture while keeping the board near neutral."
-                    : "Waiting for the Watch to journal and acknowledge the cue…"
+                    ? "Cues are sent automatically near 0:12, 0:50, and 1:50. When the Watch taps you and shows SYNC · MOVE NOW, make one quick arm gesture while keeping the board near neutral."
+                    : "Waiting for the Watch to journal and acknowledge the automatic cue…"
             )
             .font(.caption2)
             .foregroundStyle(
@@ -536,45 +524,47 @@ struct IndoBoardSessionView: View {
         )
     }
 
-    private func syncButton(
+    private func syncStatus(
         _ label: String,
-        title: String,
-        suggestedWindow: ClosedRange<TimeInterval>
+        title: String
     ) -> some View {
         let acknowledged =
             session.acknowledgedCueLabels.contains(label)
-        let elapsed = session.elapsedSeconds
-        let suggested = suggestedWindow.contains(elapsed)
+        let waiting = session.pendingCueID != nil && !acknowledged
 
-        return Button {
-            _ = session.emitSyncCue(
-                label: label,
-                phone: phone,
-                fieldRun: fieldRun
+        return VStack(spacing: 4) {
+            Image(
+                systemName: acknowledged
+                    ? "checkmark.circle.fill"
+                    : waiting
+                        ? "clock.fill"
+                        : "circle"
             )
-        } label: {
-            VStack(spacing: 4) {
-                Image(
-                    systemName: acknowledged
-                        ? "checkmark.circle.fill"
-                        : "waveform.path"
-                )
-                Text(title)
-                    .font(.caption.weight(.semibold))
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 7)
+            Text(title)
+                .font(.caption.weight(.semibold))
         }
-        .buttonStyle(.bordered)
-        .tint(
+        .foregroundStyle(
             acknowledged
                 ? .green
-                : (suggested ? .cyan : .secondary)
+                : waiting
+                    ? .yellow
+                    : .secondary
         )
-        .disabled(
-            acknowledged
-                || session.pendingCueID != nil
-                || !phone.watchReachable
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+        .background(
+            (
+                acknowledged
+                    ? Color.green
+                    : waiting
+                        ? Color.yellow
+                        : Color.secondary
+            )
+            .opacity(0.07),
+            in: RoundedRectangle(
+                cornerRadius: 10,
+                style: .continuous
+            )
         )
     }
 
