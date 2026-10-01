@@ -18,6 +18,9 @@ struct CameraCaptureConfiguration: Sendable {
     let requestedFrameRate: Double
     let configuredFrameRate: Double
     let frameRateLocked: Bool
+    let videoStabilizationSupported: Bool
+    let preferredVideoStabilizationMode: String
+    let stabilizationLockedOff: Bool
     let intrinsicDeliveryEnabled: Bool
 
     func metadataObject() -> [String: Any] {
@@ -33,6 +36,10 @@ struct CameraCaptureConfiguration: Sendable {
             "requested_frame_rate": requestedFrameRate,
             "configured_frame_rate": configuredFrameRate,
             "frame_rate_locked": frameRateLocked,
+            "video_stabilization_supported": videoStabilizationSupported,
+            "preferred_video_stabilization_mode":
+                preferredVideoStabilizationMode,
+            "stabilization_locked_off": stabilizationLockedOff,
             "intrinsic_matrix_delivery_enabled": intrinsicDeliveryEnabled,
         ]
     }
@@ -332,6 +339,15 @@ final class CameraCapturePipeline:
             connection.videoRotationAngle = 0
         }
 
+        let stabilizationSupported =
+            connection.isVideoStabilizationSupported
+        if stabilizationSupported {
+            connection.preferredVideoStabilizationMode = .off
+        }
+        let stabilizationLockedOff =
+            !stabilizationSupported
+                || connection.preferredVideoStabilizationMode == .off
+
         let ranges = device.activeFormat.videoSupportedFrameRateRanges
         let targetFrameRate = Self.targetFrameRate
         guard ranges.contains(where: {
@@ -373,6 +389,9 @@ final class CameraCapturePipeline:
             requestedFrameRate: targetFrameRate,
             configuredFrameRate: configuredFrameRate,
             frameRateLocked: true,
+            videoStabilizationSupported: stabilizationSupported,
+            preferredVideoStabilizationMode: "off",
+            stabilizationLockedOff: stabilizationLockedOff,
             intrinsicDeliveryEnabled: intrinsicsEnabled
         )
         self.configuration = configuration
