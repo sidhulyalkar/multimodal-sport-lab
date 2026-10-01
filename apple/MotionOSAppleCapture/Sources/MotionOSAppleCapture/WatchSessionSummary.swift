@@ -158,7 +158,7 @@ public enum WatchSessionSummaryBuilder {
                 }
 
             case "/body/watch/hr":
-                if let bpm = number(event.payload["bpm"]),
+                if case .number(let bpm) = event.payload["bpm"],
                    bpm.isFinite,
                    bpm > 0 {
                     hrCount &+= 1
