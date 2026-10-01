@@ -466,9 +466,13 @@ final class ProductRunLibrary: ObservableObject {
         else {
             return nil
         }
-        return files.first {
+        let originals = files.filter {
             $0.lastPathComponent.hasPrefix("original-")
         }
+        guard originals.count == 1 else {
+            return nil
+        }
+        return originals[0]
     }
 
     nonisolated private static func date(
