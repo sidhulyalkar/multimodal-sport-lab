@@ -247,20 +247,27 @@ struct LiveTelemetryDeck: View {
             $0.imuHz != nil
         }
 
-        return Chart(points) { point in
-            if let value = point.imuHz {
-                LineMark(
-                    x: .value("Time", point.timestamp),
-                    y: .value("IMU rate", value)
-                )
-                .interpolationMethod(.catmullRom)
-                .lineStyle(.init(lineWidth: 2.3, lineCap: .round))
-                .foregroundStyle(Color.cyan)
+        return Chart {
+            ForEach(points) { point in
+                if let value = point.imuHz {
+                    LineMark(
+                        x: .value("Time", point.timestamp),
+                        y: .value("IMU rate", value)
+                    )
+                    .interpolationMethod(.catmullRom)
+                    .lineStyle(.init(lineWidth: 2.3, lineCap: .round))
+                    .foregroundStyle(Color.cyan)
+                }
             }
 
             RuleMark(y: .value("Requested", 50.0))
                 .lineStyle(.init(lineWidth: 1, dash: [4, 4]))
                 .foregroundStyle(.secondary.opacity(0.45))
+                .annotation(position: .top, alignment: .trailing) {
+                    Text("50 Hz target")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                }
         }
         .chartXAxis(.hidden)
         .chartYAxis {
