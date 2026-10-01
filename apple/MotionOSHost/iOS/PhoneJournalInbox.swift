@@ -17,6 +17,18 @@ struct WatchTransferDiagnostics: Equatable, Sendable {
     }
 }
 
+struct RecoveredWatchSession: Identifiable, Equatable, Sendable {
+    let id: String
+    let sessionID: String
+    let receivedAt: Date?
+    let journalURL: URL
+    let hostMetadataURL: URL?
+    let summaryURL: URL?
+    let journalSHA256: String?
+    let journalByteCount: UInt64?
+    let summary: WatchSessionSummary?
+}
+
 struct JournalIngestReceipt: Sendable {
     let sessionID: String
     let journalURL: URL
@@ -42,6 +54,40 @@ final class PhoneJournalInbox: ObservableObject {
     @Published private(set) var latestSessionSummaryURL: URL?
     @Published private(set) var summaryError: String?
     @Published private(set) var lastError: String?
+    @Published private(set) var sessions: [RecoveredWatchSession] = []
+    @Published private(set) var catalogLoading = false
+
+    init() {
+        refreshCatalog()
+    }
+
+    func refreshCatalog() {
+        guard !catalogLoading else { return }
+        catalogLoading = true
+
+        Task { [weak self] in
+            do {
+                let items = try await Task.detached(
+                    priority: .utility
+                ) {
+                    try Self.loadRecoveredSessions()
+                }
+                .value
+                guard let self else { return }
+                self.sessions = items
+                self.catalogLoading = false
+            } catch {
+                guard let self else { return }
+                self.catalogLoading = false
+                if self.lastError == nil {
+                    self.lastError = (
+                        "Session library refresh failed: "
+                            + error.localizedDescription
+                    )
+                }
+            }
+        }
+    }
 
     func ingest(
         fileURL: URL,
@@ -102,6 +148,7 @@ final class PhoneJournalInbox: ObservableObject {
                 self.latestSessionSummary = summary
                 self.latestSessionSummaryURL = summaryURL
                 self.summaryError = nil
+                self.refreshCatalog()
             } catch {
                 guard let self else { return }
                 self.summaryError = (
@@ -259,6 +306,111 @@ final class PhoneJournalInbox: ObservableObject {
             captureOrigin: captureOrigin,
             transferDiagnostics: diagnostics
         )
+    }
+
+    private static func loadRecoveredSessions()
+        throws -> [RecoveredWatchSession]
+    {
+        let manager = FileManager.default
+        let documents = try manager.url(
+            for: .documentDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        let root = documents.appendingPathComponent(
+            "MotionOSInbox",
+            isDirectory: true
+        )
+        guard manager.fileExists(atPath: root.path) else {
+            return []
+        }
+
+        let directories = try manager.contentsOfDirectory(
+            at: root,
+            includingPropertiesForKeys: [
+                .isDirectoryKey,
+                .contentModificationDateKey,
+            ],
+            options: [.skipsHiddenFiles]
+        )
+
+        let decoder = JSONDecoder()
+        let formatter = ISO8601DateFormatter()
+
+        let sessions = directories.compactMap {
+            directory -> RecoveredWatchSession? in
+            let values = try? directory.resourceValues(
+                forKeys: [.isDirectoryKey, .contentModificationDateKey]
+            )
+            guard values?.isDirectory == true else { return nil }
+
+            let journalURL = directory.appendingPathComponent(
+                "watch.jsonl"
+            )
+            guard manager.fileExists(atPath: journalURL.path) else {
+                return nil
+            }
+
+            let hostURL = directory.appendingPathComponent(
+                "iphone-host.json"
+            )
+            let summaryURL = directory.appendingPathComponent(
+                "watch-summary.json"
+            )
+
+            var receivedAt = values?.contentModificationDate
+            var hash: String?
+            var bytes: UInt64?
+
+            if let data = try? Data(contentsOf: hostURL),
+               let object = try? JSONSerialization.jsonObject(
+                    with: data
+               ) as? [String: Any] {
+                if let value = object["received_at_utc"] as? String {
+                    receivedAt = formatter.date(from: value) ?? receivedAt
+                }
+                hash = object["watch_journal_sha256"] as? String
+                bytes = uint64(object["watch_journal_byte_count"])
+            }
+
+            let summary: WatchSessionSummary?
+            if let data = try? Data(contentsOf: summaryURL) {
+                summary = try? decoder.decode(
+                    WatchSessionSummary.self,
+                    from: data
+                )
+            } else {
+                summary = nil
+            }
+
+            let sessionID = summary?.sessionID
+                ?? directory.lastPathComponent
+
+            return RecoveredWatchSession(
+                id: sessionID,
+                sessionID: sessionID,
+                receivedAt: receivedAt,
+                journalURL: journalURL,
+                hostMetadataURL:
+                    manager.fileExists(atPath: hostURL.path)
+                        ? hostURL
+                        : nil,
+                summaryURL:
+                    manager.fileExists(atPath: summaryURL.path)
+                        ? summaryURL
+                        : nil,
+                journalSHA256:
+                    summary?.sourceJournalSHA256 ?? hash,
+                journalByteCount: bytes,
+                summary: summary
+            )
+        }
+
+        return sessions.sorted {
+            ($0.receivedAt ?? .distantPast)
+                > ($1.receivedAt ?? .distantPast)
+        }
     }
 
     private static func uint64(_ value: Any?) -> UInt64? {
