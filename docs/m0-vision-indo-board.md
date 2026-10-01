@@ -34,15 +34,32 @@ A session-level sidecar uses `motionos.vision-session.v1`.
 
 ## Physical setup
 
+The first physical qualification uses one fixed acquisition profile:
+
+- **iPhone:** rear wide camera, 1920×1080, 30 fps locked, AVFoundation video
+  stabilization explicitly off, Vision 2D/3D pose scheduled every third
+  delivered frame (~10 Hz when capture holds 30 fps).
+- **Action 4:** 3840×2160 (4K 16:9), 60 fps, electronic stabilization off,
+  **Standard (Dewarp)** FOV, rigid tripod, and offline Vision 2D pose extracted
+  from every decoded frame.
+- Do not change FOV, stabilization, resolution, frame rate, orientation, zoom,
+  camera position, or mount geometry between ChArUco calibration, the separate
+  wrist-fusion calibration run, and the scored run.
+
+The Action 4 stabilization/FOV settings are operator-confirmed because MotionOS
+does not pretend those settings are reliably recoverable from the imported MP4.
+Resolution, decoded frame cadence, and offline pose stride are machine-checked.
+
 1. Put the Action 4 on a rigid tripod 30–60 degrees off frontal.
 2. Put the iPhone roughly 70–110 degrees away from it.
 3. Keep the full athlete, board, feet, and calibration target visible.
-4. Use the existing ChArUco world-frame flow to calibrate intrinsics/extrinsics.
-5. Do not move either camera after mount verification.
-6. Start Watch capture, iPhone video, and Action 4 recording.
-7. Near the beginning, middle, and end, emit a MotionOS sync cue and perform one
+4. Confirm the Action 4 profile in the iPhone MotionOS card before capture.
+5. Use the existing ChArUco world-frame flow to calibrate intrinsics/extrinsics.
+6. Do not move either camera after mount verification.
+7. Start Watch capture, iPhone video, and Action 4 recording.
+8. Near the beginning, middle, and end, emit a MotionOS sync cue and perform one
    sharp whole-body/board impulse that is visible in both videos and the Watch IMU.
-8. Preserve original Action 4 media and import it without transcoding before
+9. Preserve original Action 4 media and import it without transcoding before
    deriving frame timing.
 
 ## First five metrics
@@ -174,6 +191,13 @@ A scale mismatch larger than the declared tolerance fails closed.
 
 ## 2D → 3D pose bridge
 
+With the fixed profile, iPhone pose is scheduled every third 30 fps frame,
+while Action 4 offline pose is extracted from every 60 fps frame. This makes
+the external pose grid dense enough that a synchronized iPhone pose has an
+Action 4 frame within roughly half a 60 fps frame interval (~8.3 ms) before
+clock-model uncertainty. The 10 ms pairing gate therefore has a physically
+meaningful cadence basis rather than relying on fortunate phase alignment.
+
 `motionos.multiview_pose.build_skeleton_correspondences` takes one
 quality-gated 2D pose frame per camera, requires explicit session-clock mapping,
 rejects frames outside the timing-span limit, and emits the repository's
@@ -296,7 +320,18 @@ In the iPhone app:
    `examples/wrist-fusion-calibration-spec.example.json`;
 6. stop and seal the iPhone evidence;
 7. import the untouched Action 4 movie;
-8. run **Extract Action 4 2D Pose**.
+8. run **Extract Action 4 2D Pose**;
+9. validate the acquisition profile and archive its receipt:
+
+```bash
+motionos validate-indo-board-acquisition \
+  calibration/vision_session.json \
+  calibration/iphone/camera-metadata.json \
+  calibration/action4/action4-derived-metadata.json \
+  calibration/acquisition-receipt.json
+```
+
+Do not continue to 3D reconstruction if this command exits non-zero.
 
 The stationary interval should be genuinely quiet. The dynamic interval should
 contain representative wrist acceleration changes without trying to imitate the
@@ -424,7 +459,16 @@ In the iPhone app:
 6. perform the frozen Indo Board trial protocol;
 7. stop and seal the iPhone evidence;
 8. import the untouched Action 4 movie;
-9. run **Extract Action 4 2D Pose**.
+9. run **Extract Action 4 2D Pose**;
+10. validate the same fixed acquisition profile:
+
+```bash
+motionos validate-indo-board-acquisition \
+  scored/vision_session.json \
+  scored/iphone/camera-metadata.json \
+  scored/action4/action4-derived-metadata.json \
+  scored/acquisition-receipt.json
+```
 
 The iPhone camera journals 2D/3D Vision observations plus host-monotonic frame
 anchors. The Action 4 processor preserves original container PTS and writes a
