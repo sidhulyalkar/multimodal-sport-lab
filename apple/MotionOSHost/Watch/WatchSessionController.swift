@@ -30,7 +30,7 @@ final class WatchSessionController: ObservableObject {
     struct VisualTelemetryPoint: Identifiable, Equatable, Sendable {
         let id = UUID()
         let timestamp: Date
-        let motionDeltaG: Double
+        let userAccelerationG: Double
         let rotationRateRadS: Double
         let imuHz: Double?
         let heartRateBPM: Double?
@@ -59,7 +59,7 @@ final class WatchSessionController: ObservableObject {
     @Published private(set) var healthAuthorizationStatus: HKAuthorizationStatus = .notDetermined
     @Published private(set) var captureOrigin: CaptureOrigin = .iPhone
     @Published private(set) var lastPresencePublishedAt: Date?
-    @Published private(set) var motionDeltaG: Double?
+    @Published private(set) var userAccelerationG: Double?
     @Published private(set) var rotationRateRadS: Double?
     @Published private(set) var deviceRollRadians: Double?
     @Published private(set) var devicePitchRadians: Double?
@@ -256,7 +256,7 @@ final class WatchSessionController: ObservableObject {
         watchBatteryLevel = nil
         guidedCueTitle = nil
         lastIMUSampleReceivedAt = nil
-        motionDeltaG = nil
+        userAccelerationG = nil
         rotationRateRadS = nil
         deviceRollRadians = nil
         devicePitchRadians = nil
@@ -773,8 +773,8 @@ final class WatchSessionController: ObservableObject {
             message["watch_battery_level_fraction"] =
                 watchBatteryLevel
         }
-        if let motionDeltaG {
-            message["motion_delta_g"] = motionDeltaG
+        if let userAccelerationG {
+            message["user_acceleration_g"] = userAccelerationG
         }
         if let rotationRateRadS {
             message["rotation_rate_rad_s"] = rotationRateRadS
@@ -797,9 +797,9 @@ final class WatchSessionController: ObservableObject {
     private func updateVisualTelemetry(
         from event: SensorEnvelope
     ) {
-        guard let ax = number(event.payload["ax"]),
-              let ay = number(event.payload["ay"]),
-              let az = number(event.payload["az"]),
+        guard let userAX = number(event.payload["user_ax"]),
+              let userAY = number(event.payload["user_ay"]),
+              let userAZ = number(event.payload["user_az"]),
               let gx = number(event.payload["gx"]),
               let gy = number(event.payload["gy"]),
               let gz = number(event.payload["gz"])
@@ -808,8 +808,10 @@ final class WatchSessionController: ObservableObject {
         }
 
         let standardGravity = 9.80665
-        let accelerationMagnitude = sqrt(ax * ax + ay * ay + az * az)
-        motionDeltaG = abs(accelerationMagnitude / standardGravity - 1.0)
+        let accelerationMagnitude = sqrt(
+            userAX * userAX + userAY * userAY + userAZ * userAZ
+        )
+        userAccelerationG = accelerationMagnitude / standardGravity
         rotationRateRadS = sqrt(gx * gx + gy * gy + gz * gz)
         deviceRollRadians = number(event.payload["roll"])
         devicePitchRadians = number(event.payload["pitch"])
@@ -817,7 +819,7 @@ final class WatchSessionController: ObservableObject {
     }
 
     private func appendVisualTelemetryPoint() {
-        guard let motionDeltaG,
+        guard let userAccelerationG,
               let rotationRateRadS
         else {
             return
@@ -826,7 +828,7 @@ final class WatchSessionController: ObservableObject {
         visualTelemetryHistory.append(
             VisualTelemetryPoint(
                 timestamp: Date(),
-                motionDeltaG: motionDeltaG,
+                userAccelerationG: userAccelerationG,
                 rotationRateRadS: rotationRateRadS,
                 imuHz: recentMedianIMUHz,
                 heartRateBPM: heartRateBPM
