@@ -115,7 +115,6 @@ struct IndoBoardSessionView: View {
             liveProtocol
 
         case .watchStopRequired:
-            sessionControl
             recoveryCard
 
         case .sealed:
@@ -168,19 +167,22 @@ struct IndoBoardSessionView: View {
                 )
             }
 
-            Text(
-                "Record Apple Watch motion + physiology, iPhone video, "
-                    + "operator protocol events, and journal-backed sync cues "
-                    + "as one coordinated product session."
-            )
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
+            if session.phase != .running
+                && session.phase != .finishing {
+                Text(
+                    "Record Apple Watch motion + physiology, iPhone video, "
+                        + "operator protocol events, and journal-backed sync cues "
+                        + "as one coordinated product session."
+                )
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
 
-            HStack(spacing: 8) {
-                featurePill("Watch", "applewatch")
-                featurePill("iPhone Vision", "video.fill")
-                featurePill("120 s", "timer")
+                HStack(spacing: 8) {
+                    featurePill("Watch", "applewatch")
+                    featurePill("iPhone Vision", "video.fill")
+                    featurePill("120 s", "timer")
+                }
             }
         }
         .cardStyle()
