@@ -359,9 +359,20 @@ public enum WatchSessionSummaryBuilder {
         }
     }
 
-    public enum SummaryError: Error {
+    public enum SummaryError: LocalizedError, Equatable {
         case invalidBucketDuration
         case emptyJournal
         case mixedSessionIDs
+
+        public var errorDescription: String? {
+            switch self {
+            case .invalidBucketDuration:
+                "Watch summary bucket duration must be positive."
+            case .emptyJournal:
+                "Watch journal contained no decodable MotionOS events."
+            case .mixedSessionIDs:
+                "Watch journal contained events from multiple session IDs."
+            }
+        }
     }
 }
