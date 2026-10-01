@@ -4,6 +4,7 @@ struct DeviceHubView: View {
     @EnvironmentObject private var phone: PhoneSessionCoordinator
     @EnvironmentObject private var pod: EquipmentPodController
     @EnvironmentObject private var camera: CameraCaptureController
+    @EnvironmentObject private var indoBoard: IndoBoardSessionCoordinator
 
     var body: some View {
         ScrollView {
@@ -12,6 +13,7 @@ struct DeviceHubView: View {
                 watchCard
                 phoneCard
                 cameraCard
+                action4Card
                 podCard
                 evidencePrinciple
             }
@@ -185,6 +187,20 @@ struct DeviceHubView: View {
                     "\(config.formatWidth)×\(config.formatHeight)"
                 )
                 deviceRow(
+                    "Frame rate",
+                    String(
+                        format: "%.0f fps %@",
+                        config.configuredFrameRate,
+                        config.frameRateLocked ? "locked" : "unlocked"
+                    )
+                )
+                deviceRow(
+                    "Stabilization",
+                    config.stabilizationLockedOff
+                        ? "off"
+                        : config.preferredVideoStabilizationMode
+                )
+                deviceRow(
                     "Intrinsics",
                     config.intrinsicDeliveryEnabled
                         ? "enabled"
@@ -205,6 +221,48 @@ struct DeviceHubView: View {
                 Label(
                     "Camera Setup & Evidence",
                     systemImage: "slider.horizontal.3"
+                )
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+        }
+        .cardStyle()
+    }
+
+    private var action4Card: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            deviceHeader(
+                title: "DJI Osmo Action 4",
+                subtitle: "External recorded multiview source",
+                symbol: "video.fill",
+                color: indoBoard.externalCameraConfirmed
+                    ? .green
+                    : .secondary,
+                state: indoBoard.externalCameraConfirmed
+                    ? "confirmed"
+                    : "manual"
+            )
+
+            deviceRow("Capture", "4K · 60 fps")
+            deviceRow("Stabilization", "EIS off")
+            deviceRow("FOV", "Standard (Dewarp)")
+            deviceRow("Control", "manual start / import")
+
+            Label(
+                "MotionOS does not pretend this camera has a live control "
+                    + "link. Start it manually, keep the rig fixed, then import "
+                    + "the untouched movie into the sealed product session.",
+                systemImage: "info.circle"
+            )
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+
+            NavigationLink {
+                IndoBoardSessionView()
+            } label: {
+                Label(
+                    "Open Multiview Capture",
+                    systemImage: "scope"
                 )
                 .frame(maxWidth: .infinity)
             }
