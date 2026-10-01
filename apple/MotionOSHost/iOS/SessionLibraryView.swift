@@ -17,6 +17,7 @@ struct SessionLibraryView: View {
                     latestSnapshot(latest)
                 }
 
+                MovementTrendsCard()
                 productRuns
                 library
             }
