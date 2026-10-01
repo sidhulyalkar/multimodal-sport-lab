@@ -38,7 +38,12 @@ final class PhoneJournalInbox: ObservableObject {
     @Published private(set) var latestDuplicateRetransfer = false
     @Published private(set) var latestCaptureOrigin: String?
     @Published private(set) var latestTransferDiagnostics: WatchTransferDiagnostics?
+    @Published private(set) var latestReview: WatchSessionSummary?
+    @Published private(set) var latestReviewError: String?
+    @Published private(set) var reviewIsLoading = false
     @Published private(set) var lastError: String?
+
+    private var reviewTask: Task<Void, Never>?
 
     func ingest(
         fileURL: URL,
@@ -58,6 +63,7 @@ final class PhoneJournalInbox: ObservableObject {
             latestCaptureOrigin = receipt.captureOrigin
             latestTransferDiagnostics = receipt.transferDiagnostics
             lastError = nil
+            beginReview(for: receipt.journalURL)
             return receipt
         } catch {
             lastError = error.localizedDescription
@@ -212,6 +218,44 @@ final class PhoneJournalInbox: ObservableObject {
             captureOrigin: captureOrigin,
             transferDiagnostics: diagnostics
         )
+    }
+
+    private func beginReview(
+        for journalURL: URL
+    ) {
+        reviewTask?.cancel()
+        latestReview = nil
+        latestReviewError = nil
+        reviewIsLoading = true
+
+        reviewTask = Task { [weak self] in
+            let result = await Task.detached(
+                priority: .utility
+            ) {
+                Result {
+                    try WatchSessionSummaryAnalyzer.summarizeJournal(
+                        at: journalURL
+                    )
+                }
+            }.value
+
+            guard !Task.isCancelled,
+                  let self,
+                  self.latestJournalURL == journalURL
+            else {
+                return
+            }
+
+            self.reviewIsLoading = false
+            switch result {
+            case .success(let summary):
+                self.latestReview = summary
+                self.latestReviewError = nil
+            case .failure(let error):
+                self.latestReview = nil
+                self.latestReviewError = error.localizedDescription
+            }
+        }
     }
 
     private static func uint64(_ value: Any?) -> UInt64? {
