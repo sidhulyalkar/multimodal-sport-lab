@@ -143,7 +143,10 @@ final class IndoBoardSessionCoordinator: ObservableObject {
 
         if camera.phase == .idle
             || camera.phase == .failed
-            || camera.phase == .denied {
+            || camera.phase == .denied
+            || camera.phase == .evidenceReady {
+            // A sealed camera run stops AVCaptureSession. Restart preview
+            // before treating the next product session as frame-ready.
             await camera.prepare()
         }
 
