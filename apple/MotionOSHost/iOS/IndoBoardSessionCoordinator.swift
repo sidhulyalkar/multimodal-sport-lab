@@ -254,7 +254,8 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         }
 
         let previousWatchSessionID =
-            phone.watchCaptureHealth?.sessionID
+            phone.watchPresence?.sessionID
+                ?? phone.watchCaptureHealth?.sessionID
         let watchLaunchRequestedAt = Date()
 
         await phone.startP0(locationType: .indoor)
@@ -1040,6 +1041,19 @@ final class IndoBoardSessionCoordinator: ObservableObject {
                health.sessionID != priorSessionID,
                phone.state == .running || phone.state == .paused {
                 return health.sessionID
+            }
+
+            if let presence = phone.watchPresence,
+               let presenceSessionID = presence.sessionID,
+               (presence.sourceSentAt ?? presence.receivedAt)
+                    >= launchRequestedAt,
+               !presenceSessionID.isEmpty,
+               presenceSessionID != priorSessionID,
+               ["running", "paused"].contains(
+                    presence.captureState.lowercased()
+               ),
+               phone.state == .running || phone.state == .paused {
+                return presenceSessionID
             }
 
             if phone.state == .failed
