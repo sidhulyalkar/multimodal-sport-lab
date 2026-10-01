@@ -388,6 +388,9 @@ struct DeviceHubView: View {
     }
 
     private var watchState: String {
+        if phone.watchConnectionChecking {
+            return "checking"
+        }
         if phone.watchConnectionReady {
             return "ready"
         }
@@ -395,6 +398,9 @@ struct DeviceHubView: View {
     }
 
     private var watchSummary: String {
+        if phone.watchConnectionChecking {
+            return "Checking the paired Apple Watch and MotionOS companion."
+        }
         if phone.watchTwoWayLinkVerified {
             return "Apple Watch and iPhone MotionOS apps detected each other."
         }
