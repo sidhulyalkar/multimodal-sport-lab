@@ -422,6 +422,7 @@ final class WatchSessionController: ObservableObject {
 
         if connectivityActivated {
             _ = ingestPhonePresence(session.receivedApplicationContext)
+            recoverOutstandingTransfers()
         }
 
         #if os(watchOS)
@@ -438,6 +439,40 @@ final class WatchSessionController: ObservableObject {
         publishPresence()
         requestPhonePresenceIfNeeded()
         retryPendingTransfersIfNeeded()
+    }
+
+    private func recoverOutstandingTransfers() {
+        for transfer in transport.session.outstandingFileTransfers {
+            guard let metadata = transfer.file.metadata,
+                  let id = metadata["session_id"] as? String,
+                  pendingJournalTransfers[id] == nil,
+                  let expectedHash = metadata["journal_sha256"] as? String,
+                  let evidence = try? FileEvidence.digest(
+                    transfer.file.fileURL
+                  ),
+                  expectedHash.lowercased() == evidence.sha256
+            else {
+                continue
+            }
+
+            if let expectedBytes = metadata["journal_byte_count"] as? NSNumber,
+               UInt64(truncating: expectedBytes) != evidence.byteCount {
+                continue
+            }
+
+            let pending = PendingJournalTransfer(
+                url: transfer.file.fileURL,
+                evidence: evidence,
+                metadata: metadata
+            )
+            pendingJournalTransfers[id] = pending
+            persistPendingJournal(
+                pending,
+                sessionID: id
+            )
+        }
+
+        pendingTransferCount = pendingJournalTransfers.count
     }
 
     private func requestPhonePresenceIfNeeded(
