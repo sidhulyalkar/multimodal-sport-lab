@@ -272,6 +272,30 @@ def _fixture(tmp_path):
             "maximum_acceleration_rate_m_s3": 25.0,
             "maximum_time_delta_ms": 20,
         },
+        "qualification": {
+            "minimum_pose_frame_pairs": 1,
+            "minimum_board_frame_pairs": 1,
+            "minimum_board_pose_count": 1,
+            "minimum_metric_accepted_samples": 1,
+            "minimum_metric_accepted_fraction": 0.5,
+            "maximum_external_clock_residual_ms": 20.0,
+            "maximum_iphone_clock_residual_ms": 20.0,
+            "maximum_action4_clock_residual_ms": 20.0,
+            "maximum_skeleton_reprojection_rms_px": 3.0,
+            "maximum_board_reprojection_rms_px": 3.0,
+            "maximum_board_pose_residual_p95_m": 0.03,
+            "maximum_board_pose_scale_error_p95_fraction": 0.03,
+            "maximum_board_pose_rejected_fraction": 0.5,
+            "maximum_reconstruction_rejected_fraction": 0.5,
+            "maximum_watch_vision_rms_m_s2": 2.0,
+            "required_metric_ids": [
+                "balance_stability_rms_m",
+                "com_excursion_p95_m",
+                "board_control_jerk_rms_deg_s3",
+                "recovery_latency_median_s",
+                "stance_asymmetry_mean_abs_knee_deg"
+            ]
+        },
     }
     spec.write_text(
         json.dumps(document, indent=2),
