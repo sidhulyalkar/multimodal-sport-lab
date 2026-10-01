@@ -26,6 +26,7 @@ struct RecoveredWatchSession: Identifiable, Equatable, Sendable {
     let summaryURL: URL?
     let journalSHA256: String?
     let journalByteCount: UInt64?
+    let productRunID: String?
     let summary: WatchSessionSummary?
 }
 
@@ -37,6 +38,7 @@ struct JournalIngestReceipt: Sendable {
     let byteCount: UInt64
     let duplicateRetransfer: Bool
     let captureOrigin: String?
+    let productRunID: String?
     let transferDiagnostics: WatchTransferDiagnostics?
 }
 
@@ -49,6 +51,7 @@ final class PhoneJournalInbox: ObservableObject {
     @Published private(set) var latestJournalByteCount: UInt64?
     @Published private(set) var latestDuplicateRetransfer = false
     @Published private(set) var latestCaptureOrigin: String?
+    @Published private(set) var latestProductRunID: String?
     @Published private(set) var latestTransferDiagnostics: WatchTransferDiagnostics?
     @Published private(set) var latestSessionSummary: WatchSessionSummary?
     @Published private(set) var latestSessionSummaryURL: URL?
@@ -105,6 +108,7 @@ final class PhoneJournalInbox: ObservableObject {
             latestJournalByteCount = receipt.byteCount
             latestDuplicateRetransfer = receipt.duplicateRetransfer
             latestCaptureOrigin = receipt.captureOrigin
+            latestProductRunID = receipt.productRunID
             latestTransferDiagnostics = receipt.transferDiagnostics
             latestSessionSummary = nil
             latestSessionSummaryURL = nil
@@ -236,6 +240,8 @@ final class PhoneJournalInbox: ObservableObject {
             "journal_sha256",
             "journal_byte_count",
             "capture_origin",
+            "product_run_id",
+            "rejected_product_control_count",
             "rejected_after_shutdown_count",
             "rejected_session_mismatch_count",
             "rejected_no_session_count",
@@ -270,6 +276,7 @@ final class PhoneJournalInbox: ObservableObject {
         )
 
         let captureOrigin = metadata?["capture_origin"] as? String
+        let productRunID = metadata?["product_run_id"] as? String
         let diagnosticKeys = [
             "rejected_after_shutdown_count",
             "rejected_session_mismatch_count",
@@ -304,6 +311,7 @@ final class PhoneJournalInbox: ObservableObject {
             byteCount: incoming.byteCount,
             duplicateRetransfer: duplicateRetransfer,
             captureOrigin: captureOrigin,
+            productRunID: productRunID,
             transferDiagnostics: diagnostics
         )
     }
@@ -362,6 +370,7 @@ final class PhoneJournalInbox: ObservableObject {
             var receivedAt = values?.contentModificationDate
             var hash: String?
             var bytes: UInt64?
+            var productRunID: String?
 
             if let data = try? Data(contentsOf: hostURL),
                let object = try? JSONSerialization.jsonObject(
@@ -372,6 +381,11 @@ final class PhoneJournalInbox: ObservableObject {
                 }
                 hash = object["watch_journal_sha256"] as? String
                 bytes = uint64(object["watch_journal_byte_count"])
+                if let transfer =
+                    object["transfer_metadata"] as? [String: Any] {
+                    productRunID =
+                        transfer["product_run_id"] as? String
+                }
             }
 
             let summary: WatchSessionSummary?
@@ -403,6 +417,7 @@ final class PhoneJournalInbox: ObservableObject {
                 journalSHA256:
                     summary?.sourceJournalSHA256 ?? hash,
                 journalByteCount: bytes,
+                productRunID: productRunID,
                 summary: summary
             )
         }
