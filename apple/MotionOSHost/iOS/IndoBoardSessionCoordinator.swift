@@ -59,6 +59,9 @@ final class IndoBoardSessionCoordinator: ObservableObject {
     @Published private(set) var errorMessage: String?
     @Published var externalCameraConfirmed = false
 
+    private var protocolTask: Task<Void, Never>?
+    private var protocolTransitions: Set<String> = []
+
     var elapsedSeconds: TimeInterval {
         guard let startedAt else { return 0 }
         return max(0, Date().timeIntervalSince(startedAt))
@@ -184,6 +187,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
 
         startedAt = Date()
         phase = .running
+        startProtocolTimeline(fieldRun: fieldRun)
     }
 
     @discardableResult
@@ -282,6 +286,9 @@ final class IndoBoardSessionCoordinator: ObservableObject {
             )
         }
 
+        protocolTask?.cancel()
+        protocolTask = nil
+
         if fieldRun.phase == .sealed {
             phase = .sealed
         } else {
@@ -296,6 +303,9 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         else {
             return
         }
+        protocolTask?.cancel()
+        protocolTask = nil
+        protocolTransitions = []
         phase = .idle
         startedAt = nil
         cueReceipts = []
@@ -330,6 +340,113 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         default:
             "Session target reached. Finish and seal when stable."
         }
+    }
+
+    private func startProtocolTimeline(
+        fieldRun: FieldRunCoordinator
+    ) {
+        protocolTask?.cancel()
+        protocolTransitions = []
+        fieldRun.startBlock("neutral-settle")
+
+        protocolTask = Task { @MainActor [weak self, weak fieldRun] in
+            while !Task.isCancelled {
+                guard let self,
+                      let fieldRun,
+                      self.phase == .running
+                else {
+                    return
+                }
+
+                self.advanceProtocol(
+                    elapsed: self.elapsedSeconds,
+                    fieldRun: fieldRun
+                )
+                try? await Task.sleep(for: .milliseconds(250))
+            }
+        }
+    }
+
+    private func advanceProtocol(
+        elapsed: TimeInterval,
+        fieldRun: FieldRunCoordinator
+    ) {
+        transition(
+            "complete-neutral-settle",
+            when: elapsed >= 10
+        ) {
+            fieldRun.completeBlock("neutral-settle")
+        }
+
+        transition(
+            "start-free-a",
+            when: elapsed >= 20
+        ) {
+            fieldRun.startBlock("free-balance-a")
+        }
+
+        transition(
+            "complete-free-a",
+            when: elapsed >= 45
+        ) {
+            fieldRun.completeBlock("free-balance-a")
+        }
+
+        transition(
+            "start-tilt-recover",
+            when: elapsed >= 55
+        ) {
+            fieldRun.startBlock("tilt-recover")
+        }
+
+        transition(
+            "complete-tilt-recover",
+            when: elapsed >= 90
+        ) {
+            fieldRun.completeBlock("tilt-recover")
+        }
+
+        transition(
+            "start-free-b",
+            when: elapsed >= 95
+        ) {
+            fieldRun.startBlock("free-balance-b")
+        }
+
+        transition(
+            "complete-free-b",
+            when: elapsed >= 110
+        ) {
+            fieldRun.completeBlock("free-balance-b")
+        }
+
+        transition(
+            "start-neutral-finish",
+            when: elapsed >= 110
+        ) {
+            fieldRun.startBlock("neutral-finish")
+        }
+
+        transition(
+            "complete-neutral-finish",
+            when: elapsed >= 120
+        ) {
+            fieldRun.completeBlock("neutral-finish")
+        }
+    }
+
+    private func transition(
+        _ id: String,
+        when condition: Bool,
+        action: () -> Void
+    ) {
+        guard condition,
+              !protocolTransitions.contains(id)
+        else {
+            return
+        }
+        protocolTransitions.insert(id)
+        action()
     }
 
     private func waitForWatchRunning(
@@ -393,6 +510,8 @@ final class IndoBoardSessionCoordinator: ObservableObject {
     }
 
     private func fail(_ error: Error) {
+        protocolTask?.cancel()
+        protocolTask = nil
         phase = .failed
         errorMessage = error.localizedDescription
     }
