@@ -13,8 +13,15 @@ from .board_marker_correspondences import (
 from .board_pose_series import build_board_pose_series
 from .indo_board import analyze_indo_board
 from .indo_board_quality import build_indo_board_quality_report
+from .indo_board_qualification import (
+    build_indo_board_qualification_receipt,
+    validate_qualification_contract,
+)
 from .indo_board_reconstruction import build_indo_board_samples
-from .longitudinal import update_longitudinal_profile
+from .longitudinal import (
+    load_longitudinal_profile,
+    update_longitudinal_profile,
+)
 from .multiview_pose import write_skeleton_sequence_correspondences
 from .pose2d_io import (
     infer_pose2d_source_id,
@@ -70,6 +77,7 @@ def process_indo_board_pipeline(
     profile_path = _resolve(base, spec["longitudinal_profile"])
     thresholds = _mapping(spec, "thresholds")
     fusion = _mapping(spec, "wrist_fusion")
+    qualification = _mapping(spec, "qualification")
 
     maximum_pose_pair_ms = float(
         thresholds.get("maximum_pose_pair_ms", 10.0)
@@ -418,17 +426,6 @@ def process_indo_board_pipeline(
         "indo_board_metrics",
         metrics_path,
     )
-    profile = update_longitudinal_profile(
-        profile_path,
-        metrics,
-        minimum_confidence=float(
-            thresholds.get(
-                "minimum_longitudinal_confidence",
-                0.6,
-            )
-        ),
-    )
-
     wrist_path = output / "wrist-acceleration-fusion.json"
     wrist_report = build_wrist_acceleration_fusion(
         skeleton_geometry,
@@ -454,14 +451,6 @@ def process_indo_board_pipeline(
         "wrist_acceleration_fusion",
         wrist_path,
     )
-    if profile_path.is_file():
-        _record_stage(
-            state,
-            state_path,
-            "longitudinal_profile",
-            profile_path,
-        )
-
     quality_path = output / "indo-board-quality-report.json"
     quality_report = build_indo_board_quality_report(
         external_sync_path=external_sync_path,
@@ -483,6 +472,44 @@ def process_indo_board_pipeline(
         quality_path,
     )
 
+    qualification_path = output / "indo-board-qualification-receipt.json"
+    qualification_receipt = build_indo_board_qualification_receipt(
+        quality_path,
+        qualification,
+        qualification_path,
+    )
+    _record_stage(
+        state,
+        state_path,
+        "indo_board_qualification",
+        qualification_path,
+    )
+
+    longitudinal_updated = False
+    if qualification_receipt["passed"]:
+        profile = update_longitudinal_profile(
+            profile_path,
+            metrics,
+            minimum_confidence=float(
+                thresholds.get(
+                    "minimum_longitudinal_confidence",
+                    0.6,
+                )
+            ),
+        )
+        longitudinal_updated = (
+            manifest.session_id in profile.processed_session_ids
+        )
+        if profile_path.is_file():
+            _record_stage(
+                state,
+                state_path,
+                "longitudinal_profile",
+                profile_path,
+            )
+    else:
+        profile = load_longitudinal_profile(profile_path)
+
     artifacts = [
         external_sync_path,
         clock_bundle_path,
@@ -497,6 +524,7 @@ def process_indo_board_pipeline(
         metrics_path,
         wrist_path,
         quality_path,
+        qualification_path,
         profile_path,
         state_path,
     ]
@@ -509,6 +537,10 @@ def process_indo_board_pipeline(
         "marker_pair_count": marker_pair_count,
         "metric_count": len(metrics.metrics),
         "longitudinal_metric_count": len(profile.metric_baselines),
+        "longitudinal_updated": longitudinal_updated,
+        "qualification_passed": qualification_receipt["passed"],
+        "qualification_failed_gate_ids":
+            qualification_receipt["failed_gate_ids"],
         "wrist_fusion_sample_count": wrist_report["sample_count"],
         "quality_summary": quality_report["summary"],
         "attention_flags": quality_report["attention_flags"],
@@ -758,6 +790,9 @@ def validate_indo_board_pipeline_spec(
         "maximum_time_delta_ms",
         default=20.0,
     )
+
+    qualification = _mapping(spec, "qualification")
+    validate_qualification_contract(qualification)
 
     profile = _resolve(base, spec["longitudinal_profile"])
     if profile.exists() and not profile.is_file():
