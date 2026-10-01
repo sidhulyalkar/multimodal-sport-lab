@@ -112,6 +112,8 @@ final class IndoBoardSessionCoordinator: ObservableObject {
     private var protocolTask: Task<Void, Never>?
     private var syncTimeoutTask: Task<Void, Never>?
     private var protocolTransitions: Set<String> = []
+    private var sentProtocolCueIDs: Set<String> = []
+    private var lastProtocolCueAttemptAt: [String: Date] = [:]
     private var lastCueAttemptAt: [String: Date] = [:]
 
     var elapsedSeconds: TimeInterval {
@@ -215,6 +217,8 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         errorMessage = nil
         cueReceipts = []
         pendingCueID = nil
+        sentProtocolCueIDs = []
+        lastProtocolCueAttemptAt = [:]
         externalVideoEvidence = nil
         productManifestURL = nil
         outcome = nil
@@ -694,6 +698,8 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         syncTimeoutTask?.cancel()
         syncTimeoutTask = nil
         protocolTransitions = []
+        sentProtocolCueIDs = []
+        lastProtocolCueAttemptAt = [:]
         lastCueAttemptAt = [:]
         UIApplication.shared.isIdleTimerDisabled = false
         phase = .idle
@@ -791,17 +797,13 @@ final class IndoBoardSessionCoordinator: ObservableObject {
                     when: true
                 ) {
                     fieldRun.startBlock(block.id)
-                    if let runID = fieldRun.runID,
-                       let watchSessionID = activeWatchSessionID {
-                        _ = phone.sendSessionProtocolCue(
-                            runID: runID,
-                            watchSessionID: watchSessionID,
-                            stepID: block.id,
-                            title: block.title,
-                            instruction: block.instruction
-                        )
-                    }
                 }
+
+                sendProtocolCueIfNeeded(
+                    block,
+                    phone: phone,
+                    fieldRun: fieldRun
+                )
             }
         }
 
@@ -814,6 +816,37 @@ final class IndoBoardSessionCoordinator: ObservableObject {
                 phone: phone,
                 fieldRun: fieldRun
             )
+        }
+    }
+
+    private func sendProtocolCueIfNeeded(
+        _ block: TimedProtocolBlock,
+        phone: PhoneSessionCoordinator,
+        fieldRun: FieldRunCoordinator
+    ) {
+        guard !sentProtocolCueIDs.contains(block.id),
+              let runID = fieldRun.runID,
+              let watchSessionID = activeWatchSessionID,
+              phone.watchReachable
+        else {
+            return
+        }
+
+        let now = Date()
+        if let previous = lastProtocolCueAttemptAt[block.id],
+           now.timeIntervalSince(previous) < 2 {
+            return
+        }
+        lastProtocolCueAttemptAt[block.id] = now
+
+        if phone.sendSessionProtocolCue(
+            runID: runID,
+            watchSessionID: watchSessionID,
+            stepID: block.id,
+            title: block.title,
+            instruction: block.instruction
+        ) {
+            sentProtocolCueIDs.insert(block.id)
         }
     }
 
