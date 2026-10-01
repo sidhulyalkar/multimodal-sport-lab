@@ -21,6 +21,7 @@ final class CameraCaptureController: ObservableObject {
     @Published private(set) var sessionID: String?
     @Published private(set) var evidenceBundle: CameraEvidenceBundle?
     @Published private(set) var liveStats: CameraLiveCaptureStats?
+    @Published private(set) var latestPoseFrame: BodyMovementFrame?
     @Published private(set) var errorMessage: String?
 
     private let pipeline = CameraCapturePipeline()
@@ -43,6 +44,7 @@ final class CameraCaptureController: ObservableObject {
         sessionID = nil
         evidenceBundle = nil
         liveStats = nil
+        latestPoseFrame = nil
 
         do {
             let authorized = try await ensureAuthorization()
@@ -62,6 +64,7 @@ final class CameraCaptureController: ObservableObject {
         errorMessage = nil
         evidenceBundle = nil
         liveStats = nil
+        latestPoseFrame = nil
 
         do {
             let authorized = try await ensureAuthorization()
@@ -106,8 +109,11 @@ final class CameraCaptureController: ObservableObject {
         statsTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 guard let self else { return }
-                self.liveStats = await self.pipeline.liveStats()
-                try? await Task.sleep(for: .milliseconds(500))
+                async let stats = self.pipeline.liveStats()
+                async let pose = self.pipeline.livePoseFrame()
+                self.liveStats = await stats
+                self.latestPoseFrame = await pose
+                try? await Task.sleep(for: .milliseconds(250))
             }
         }
     }
