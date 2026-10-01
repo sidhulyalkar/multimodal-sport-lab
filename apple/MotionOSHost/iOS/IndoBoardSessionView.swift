@@ -805,6 +805,74 @@ struct IndoBoardSessionView: View {
                 accent: .green
             )
 
+            VStack(spacing: 8) {
+                completionRow(
+                    "Operator protocol",
+                    detail: fieldRun.phase == .sealed
+                        ? "sealed"
+                        : fieldRun.phase.rawValue,
+                    complete: fieldRun.phase == .sealed,
+                    symbol: "list.clipboard.fill"
+                )
+                completionRow(
+                    "iPhone camera",
+                    detail: camera.evidenceBundle != nil
+                        ? "video + frame evidence"
+                        : camera.phase.rawValue,
+                    complete: camera.evidenceBundle != nil,
+                    symbol: "camera.fill"
+                )
+                completionRow(
+                    "Apple Watch",
+                    detail: watchEvidenceReady
+                        ? "journal verified on iPhone"
+                        : "waiting for transfer / verification",
+                    complete: watchEvidenceReady,
+                    symbol: "applewatch"
+                )
+
+                if session.requiresExternalCamera
+                    || session.externalCameraConfirmed {
+                    completionRow(
+                        "Action 4",
+                        detail: session.externalVideoEvidence != nil
+                            ? "original movie hash-bound"
+                            : "awaiting original movie import",
+                        complete: session.externalVideoEvidence != nil,
+                        symbol: "video.fill"
+                    )
+                }
+            }
+            .padding(11)
+            .background(
+                Color.primary.opacity(0.035),
+                in: RoundedRectangle(
+                    cornerRadius: 15,
+                    style: .continuous
+                )
+            )
+
+            if let run = currentRunRecord {
+                NavigationLink {
+                    ProductRunDetailView(run: run)
+                } label: {
+                    Label(
+                        "Review Complete Session",
+                        systemImage: "chart.xyaxis.line"
+                    )
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+            } else if !watchEvidenceReady {
+                Label(
+                    "Session review will fill in automatically when the "
+                        + "Watch journal reaches the iPhone.",
+                    systemImage: "arrow.trianglehead.2.clockwise.rotate.90"
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+
             if let bundle = fieldRun.evidenceBundle {
                 Label(
                     bundle.directory.lastPathComponent,
@@ -931,6 +999,59 @@ struct IndoBoardSessionView: View {
             }
         }
         .cardStyle()
+    }
+
+    private var currentRunRecord: ProductRunRecord? {
+        guard let runID = fieldRun.runID else {
+            return nil
+        }
+        return runLibrary.runs.first {
+            $0.runID == runID
+        }
+    }
+
+    private var watchEvidenceReady: Bool {
+        if currentRunRecord?.watchJournalURL != nil {
+            return true
+        }
+        guard let runID = fieldRun.runID else {
+            return false
+        }
+        return phone.inbox.latestProductRunID == runID
+    }
+
+    private func completionRow(
+        _ title: String,
+        detail: String,
+        complete: Bool,
+        symbol: String
+    ) -> some View {
+        HStack(spacing: 9) {
+            Image(systemName: symbol)
+                .foregroundStyle(
+                    complete ? .green : .yellow
+                )
+                .frame(width: 20)
+
+            Text(title)
+                .font(.subheadline.weight(.medium))
+
+            Spacer(minLength: 8)
+
+            Text(detail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.trailing)
+
+            Image(
+                systemName: complete
+                    ? "checkmark.circle.fill"
+                    : "clock"
+            )
+            .foregroundStyle(
+                complete ? .green : .yellow
+            )
+        }
     }
 
     private var recoveryCard: some View {
