@@ -8,7 +8,6 @@ struct ProductRunRecord: Identifiable, Equatable, Sendable {
     let protocolKind: String
     let protocolVersion: String
     let captureMode: String?
-    let productManifestURL: URL?
     let startedAt: Date?
     let sealedAt: Date?
     let completedBlockIDs: [String]
