@@ -293,7 +293,9 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         UIApplication.shared.isIdleTimerDisabled = true
         startProtocolTimeline(
             phone: phone,
-            fieldRun: fieldRun
+            camera: camera,
+            fieldRun: fieldRun,
+            pod: pod
         )
     }
 
@@ -655,7 +657,9 @@ final class IndoBoardSessionCoordinator: ObservableObject {
 
     private func startProtocolTimeline(
         phone: PhoneSessionCoordinator,
-        fieldRun: FieldRunCoordinator
+        camera: CameraCaptureController,
+        fieldRun: FieldRunCoordinator,
+        pod: EquipmentPodController
     ) {
         protocolTask?.cancel()
         protocolTransitions = []
@@ -675,11 +679,33 @@ final class IndoBoardSessionCoordinator: ObservableObject {
                     return
                 }
 
+                let elapsed = self.elapsedSeconds
                 self.advanceProtocol(
-                    elapsed: self.elapsedSeconds,
+                    elapsed: elapsed,
                     phone: phone,
                     fieldRun: fieldRun
                 )
+
+                if elapsed
+                    >= IndoBoardProductProtocol
+                        .targetDurationSeconds {
+                    Task { @MainActor [weak self, weak fieldRun] in
+                        guard let self,
+                              let fieldRun,
+                              self.phase == .running
+                        else {
+                            return
+                        }
+                        await self.finish(
+                            phone: phone,
+                            camera: camera,
+                            fieldRun: fieldRun,
+                            pod: pod
+                        )
+                    }
+                    return
+                }
+
                 try? await Task.sleep(for: .milliseconds(250))
             }
         }
