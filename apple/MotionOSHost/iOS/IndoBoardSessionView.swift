@@ -7,6 +7,7 @@ struct IndoBoardSessionView: View {
     @EnvironmentObject private var pod: EquipmentPodController
     @EnvironmentObject private var fieldRun: FieldRunCoordinator
     @EnvironmentObject private var session: IndoBoardSessionCoordinator
+    @EnvironmentObject private var runLibrary: ProductRunLibrary
     @State private var importingExternalVideo = false
 
     var body: some View {
@@ -52,6 +53,13 @@ struct IndoBoardSessionView: View {
             }
         }
         .onChange(
+            of: fieldRun.phase
+        ) { _, phase in
+            if phase == .sealed {
+                runLibrary.refresh()
+            }
+        }
+        .onChange(
             of: phone.lastSessionSyncAcknowledgment
         ) { _, acknowledgment in
             guard let acknowledgment else { return }
@@ -79,6 +87,7 @@ struct IndoBoardSessionView: View {
                         runDirectory: bundle.directory,
                         runID: runID
                     )
+                    runLibrary.refresh()
                 }
             } catch {
                 // The coordinator owns product-facing import errors. A user
