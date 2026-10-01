@@ -352,7 +352,7 @@ struct IndoBoardSessionView: View {
                     }
                 } label: {
                     Label(
-                        "Run Preflight",
+                        "Refresh Checks",
                         systemImage: "arrow.clockwise"
                     )
                     .frame(maxWidth: .infinity)
