@@ -59,13 +59,17 @@ final class PhoneJournalInbox: ObservableObject {
     @Published private(set) var lastError: String?
     @Published private(set) var sessions: [RecoveredWatchSession] = []
     @Published private(set) var catalogLoading = false
+    private var catalogRefreshPending = false
 
     init() {
         refreshCatalog()
     }
 
     func refreshCatalog() {
-        guard !catalogLoading else { return }
+        if catalogLoading {
+            catalogRefreshPending = true
+            return
+        }
         catalogLoading = true
 
         Task { [weak self] in
@@ -79,6 +83,7 @@ final class PhoneJournalInbox: ObservableObject {
                 guard let self else { return }
                 self.sessions = items
                 self.catalogLoading = false
+                self.runPendingCatalogRefreshIfNeeded()
             } catch {
                 guard let self else { return }
                 self.catalogLoading = false
@@ -88,8 +93,15 @@ final class PhoneJournalInbox: ObservableObject {
                             + error.localizedDescription
                     )
                 }
+                self.runPendingCatalogRefreshIfNeeded()
             }
         }
+    }
+
+    private func runPendingCatalogRefreshIfNeeded() {
+        guard catalogRefreshPending else { return }
+        catalogRefreshPending = false
+        refreshCatalog()
     }
 
     func ingest(
