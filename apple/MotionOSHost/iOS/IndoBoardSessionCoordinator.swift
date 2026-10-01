@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import MotionOSAppleCapture
 
 @MainActor
 final class IndoBoardSessionCoordinator: ObservableObject {
@@ -43,6 +44,14 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         }
     }
 
+    struct ExternalVideoEvidence: Equatable, Sendable {
+        let videoURL: URL
+        let metadataURL: URL
+        let originalFilename: String
+        let sha256: String
+        let byteCount: UInt64
+    }
+
     struct CueReceipt: Identifiable, Equatable, Sendable {
         let id: String
         let label: String
@@ -57,6 +66,8 @@ final class IndoBoardSessionCoordinator: ObservableObject {
     @Published private(set) var cueReceipts: [CueReceipt] = []
     @Published private(set) var pendingCueID: String?
     @Published private(set) var errorMessage: String?
+    @Published private(set) var externalVideoEvidence:
+        ExternalVideoEvidence?
     @Published var externalCameraConfirmed = false
 
     private var protocolTask: Task<Void, Never>?
@@ -135,6 +146,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         errorMessage = nil
         cueReceipts = []
         pendingCueID = nil
+        externalVideoEvidence = nil
         startedAt = nil
 
         fieldRun.createRun(kind: .indoBoard)
@@ -296,6 +308,104 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         }
     }
 
+    func importExternalVideo(
+        from sourceURL: URL,
+        runDirectory: URL,
+        runID: String
+    ) async {
+        errorMessage = nil
+
+        let gainedAccess =
+            sourceURL.startAccessingSecurityScopedResource()
+        defer {
+            if gainedAccess {
+                sourceURL.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        do {
+            let evidence = try await Task.detached(
+                priority: .utility
+            ) {
+                let manager = FileManager.default
+                let directory = runDirectory
+                    .appendingPathComponent(
+                        "external",
+                        isDirectory: true
+                    )
+                    .appendingPathComponent(
+                        "action4",
+                        isDirectory: true
+                    )
+                try manager.createDirectory(
+                    at: directory,
+                    withIntermediateDirectories: true
+                )
+
+                let safeName = sourceURL.lastPathComponent.isEmpty
+                    ? "action4.mov"
+                    : sourceURL.lastPathComponent
+                let destination = directory.appendingPathComponent(
+                    "original-" + safeName
+                )
+
+                if manager.fileExists(atPath: destination.path) {
+                    try manager.removeItem(at: destination)
+                }
+                try manager.copyItem(
+                    at: sourceURL,
+                    to: destination
+                )
+
+                let digest = try FileEvidence.digest(destination)
+                let metadataURL = directory.appendingPathComponent(
+                    "external-camera-metadata.json"
+                )
+                let metadata: [String: Any] = [
+                    "schema_version":
+                        "motionos.external-video-evidence.v1",
+                    "run_id": runID,
+                    "source": "dji_action4",
+                    "original_filename": safeName,
+                    "sha256": digest.sha256,
+                    "byte_count": digest.byteCount,
+                    "imported_at_utc":
+                        ISO8601DateFormatter().string(from: Date()),
+                    "acquisition_profile_confirmation":
+                        "operator_confirmed_when_enabled",
+                    "claim_boundary":
+                        "The imported file is preserved and hash-bound. "
+                            + "Camera settings remain operator-confirmed "
+                            + "unless independently verified downstream.",
+                ]
+                let data = try JSONSerialization.data(
+                    withJSONObject: metadata,
+                    options: [.prettyPrinted, .sortedKeys]
+                )
+                try data.write(
+                    to: metadataURL,
+                    options: .atomic
+                )
+
+                return ExternalVideoEvidence(
+                    videoURL: destination,
+                    metadataURL: metadataURL,
+                    originalFilename: safeName,
+                    sha256: digest.sha256,
+                    byteCount: digest.byteCount
+                )
+            }
+            .value
+
+            externalVideoEvidence = evidence
+        } catch {
+            errorMessage = (
+                "External video import failed: "
+                    + error.localizedDescription
+            )
+        }
+    }
+
     func reset() {
         guard phase != .running
                 && phase != .starting
@@ -310,6 +420,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         startedAt = nil
         cueReceipts = []
         pendingCueID = nil
+        externalVideoEvidence = nil
         errorMessage = nil
     }
 
