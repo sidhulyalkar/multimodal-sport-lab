@@ -38,6 +38,9 @@ final class PhoneJournalInbox: ObservableObject {
     @Published private(set) var latestDuplicateRetransfer = false
     @Published private(set) var latestCaptureOrigin: String?
     @Published private(set) var latestTransferDiagnostics: WatchTransferDiagnostics?
+    @Published private(set) var latestSessionSummary: WatchSessionSummary?
+    @Published private(set) var latestSessionSummaryURL: URL?
+    @Published private(set) var summaryError: String?
     @Published private(set) var lastError: String?
 
     func ingest(
@@ -57,11 +60,55 @@ final class PhoneJournalInbox: ObservableObject {
             latestDuplicateRetransfer = receipt.duplicateRetransfer
             latestCaptureOrigin = receipt.captureOrigin
             latestTransferDiagnostics = receipt.transferDiagnostics
+            latestSessionSummary = nil
+            latestSessionSummaryURL = nil
+            summaryError = nil
             lastError = nil
+            deriveSessionSummary(for: receipt)
             return receipt
         } catch {
             lastError = error.localizedDescription
             return nil
+        }
+    }
+
+    private func deriveSessionSummary(
+        for receipt: JournalIngestReceipt
+    ) {
+        let journalURL = receipt.journalURL
+        let sourceHash = receipt.journalSHA256
+        let summaryURL = journalURL
+            .deletingLastPathComponent()
+            .appendingPathComponent("watch-summary.json")
+
+        Task { [weak self] in
+            do {
+                let summary = try await Task.detached(
+                    priority: .utility
+                ) {
+                    let summary = try WatchSessionSummaryBuilder.build(
+                        journalURL: journalURL,
+                        sourceJournalSHA256: sourceHash
+                    )
+                    try WatchSessionSummaryBuilder.write(
+                        summary,
+                        to: summaryURL
+                    )
+                    return summary
+                }
+                .value
+
+                guard let self else { return }
+                self.latestSessionSummary = summary
+                self.latestSessionSummaryURL = summaryURL
+                self.summaryError = nil
+            } catch {
+                guard let self else { return }
+                self.summaryError = (
+                    "Derived Watch summary unavailable: "
+                        + error.localizedDescription
+                )
+            }
         }
     }
 
