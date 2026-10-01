@@ -328,7 +328,7 @@ final class PhoneJournalInbox: ObservableObject {
         )
     }
 
-    private static func loadRecoveredSessions()
+    nonisolated private static func loadRecoveredSessions()
         throws -> [RecoveredWatchSession]
     {
         let manager = FileManager.default
@@ -440,7 +440,7 @@ final class PhoneJournalInbox: ObservableObject {
         }
     }
 
-    private static func uint64(_ value: Any?) -> UInt64? {
+    nonisolated private static func uint64(_ value: Any?) -> UInt64? {
         if let value = value as? UInt64 {
             return value
         }
