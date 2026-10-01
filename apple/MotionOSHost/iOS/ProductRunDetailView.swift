@@ -23,6 +23,7 @@ struct ProductRunDetailView: View {
 
                 if let summary = run.watchSummary {
                     watchSummary(summary)
+                    PreviousRunComparisonCard(run: run)
                 }
 
                 feedback
