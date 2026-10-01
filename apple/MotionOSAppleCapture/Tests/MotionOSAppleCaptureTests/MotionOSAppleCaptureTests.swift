@@ -157,6 +157,46 @@ final class MotionOSAppleCaptureTests: XCTestCase {
         XCTAssertTrue(decoded.claimBoundary.contains("does not itself prove"))
     }
 
+    func testProductSessionManifestOutcomeRoundTripAndLegacyDefault() throws {
+        let aborted = ProductSessionManifest(
+            runID: "run-aborted",
+            captureMode: "Watch + iPhone",
+            targetDurationSeconds: 120,
+            outcome: .aborted,
+            watchSessionID: "watch-aborted",
+            cameraSessionID: nil,
+            syncReceipts: [],
+            externalCameraExpected: false,
+            externalCameraImported: false,
+            externalCameraSHA256: nil,
+            operatorEvidenceSealed: true,
+            cameraEvidenceSealed: false
+        )
+
+        let encoded = try JSONEncoder().encode(aborted)
+        let decoded = try JSONDecoder().decode(
+            ProductSessionManifest.self,
+            from: encoded
+        )
+        XCTAssertEqual(decoded.resolvedOutcome, .aborted)
+
+        var legacyObject = try XCTUnwrap(
+            try JSONSerialization.jsonObject(
+                with: encoded
+            ) as? [String: Any]
+        )
+        legacyObject.removeValue(forKey: "outcome")
+        let legacyData = try JSONSerialization.data(
+            withJSONObject: legacyObject,
+            options: [.sortedKeys]
+        )
+        let legacy = try JSONDecoder().decode(
+            ProductSessionManifest.self,
+            from: legacyData
+        )
+        XCTAssertEqual(legacy.resolvedOutcome, .completed)
+    }
+
     func testProductSessionManifestStoreWritesAtomicArtifact() throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent(
