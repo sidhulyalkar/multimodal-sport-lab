@@ -253,6 +253,10 @@ struct WatchContentView: View {
                 }
             }
 
+            if let cue = controller.guidedCueTitle {
+                protocolCueCard(cue)
+            }
+
             WatchMotionTrace(
                 points: controller.visualTelemetryHistory,
                 currentUserAccelerationG: controller.userAccelerationG,
@@ -309,10 +313,6 @@ struct WatchContentView: View {
                         color: battery >= 0.20 ? .secondary : .yellow
                     )
                 }
-            }
-
-            if let cue = controller.guidedCueTitle {
-                protocolCueCard(cue)
             }
 
             HStack(spacing: 7) {
