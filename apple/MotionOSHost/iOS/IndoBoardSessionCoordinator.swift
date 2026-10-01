@@ -421,15 +421,33 @@ final class IndoBoardSessionCoordinator: ObservableObject {
             await camera.stopRecording()
         }
 
+        let reachedTarget =
+            elapsedSeconds
+                >= IndoBoardProductProtocol
+                    .targetDurationSeconds
+
         if fieldRun.phase == .running || fieldRun.phase == .armed {
-            fieldRun.seal(
-                readiness: readinessSnapshot(
-                    phone: phone,
-                    camera: camera,
-                    pod: pod,
-                    runID: fieldRun.runID ?? "unknown"
-                )
+            let readiness = readinessSnapshot(
+                phone: phone,
+                camera: camera,
+                pod: pod,
+                runID: fieldRun.runID ?? "unknown"
             )
+
+            if reachedTarget {
+                fieldRun.seal(readiness: readiness)
+            } else {
+                fieldRun.abortRun(
+                    reason: String(
+                        format:
+                            "Operator stopped the product session at %.1f s before the %.0f s target.",
+                        elapsedSeconds,
+                        IndoBoardProductProtocol
+                            .targetDurationSeconds
+                    ),
+                    readiness: readiness
+                )
+            }
         }
 
         protocolTask?.cancel()
@@ -440,7 +458,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
 
         if fieldRun.phase == .sealed {
             do {
-                outcome = .completed
+                outcome = reachedTarget ? .completed : .aborted
                 productManifestURL = try writeProductManifest(
                     phone: phone,
                     camera: camera,
@@ -611,10 +629,8 @@ final class IndoBoardSessionCoordinator: ObservableObject {
             && phone.state != .paused
             && phone.state != .waitingForMirror
             && phone.state != .launchingWatch {
-            phase = outcome == .aborted ? .failed : .sealed
-            errorMessage = outcome == .aborted
-                ? "The aborted attempt is sealed in Sessions. Prepare a new run when ready."
-                : nil
+            phase = .sealed
+            errorMessage = nil
         } else {
             errorMessage =
                 SessionError.watchDidNotStop.localizedDescription
@@ -993,12 +1009,12 @@ final class IndoBoardSessionCoordinator: ObservableObject {
             )
         }
 
-        if watchStopped {
+        if watchStopped && fieldRun.phase == .sealed {
+            phase = .sealed
+            errorMessage = nil
+        } else if watchStopped {
             phase = .failed
-            errorMessage = (
-                error.localizedDescription
-                    + " The aborted attempt was sealed for inspection."
-            )
+            errorMessage = error.localizedDescription
         } else {
             phase = .watchStopRequired
             errorMessage = (
