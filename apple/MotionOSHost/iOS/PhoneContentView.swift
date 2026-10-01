@@ -665,36 +665,3 @@ struct PhoneContentView: View {
         }
     }
 }
-
-private struct MotionOSCardModifier: ViewModifier {
-    func body(content: Content) -> some View {
-        content
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(
-                    cornerRadius: 22,
-                    style: .continuous
-                )
-                .fill(Color(.secondarySystemGroupedBackground).opacity(0.92))
-            )
-            .overlay {
-                RoundedRectangle(
-                    cornerRadius: 22,
-                    style: .continuous
-                )
-                .stroke(Color.primary.opacity(0.055), lineWidth: 1)
-            }
-            .shadow(
-                color: Color.black.opacity(0.035),
-                radius: 14,
-                y: 7
-            )
-    }
-}
-
-extension View {
-    func cardStyle() -> some View {
-        modifier(MotionOSCardModifier())
-    }
-}
