@@ -3,6 +3,7 @@ import SwiftUI
 enum MotionOSTab: Hashable {
     case observe
     case capture
+    case body
     case sessions
     case devices
 }
