@@ -27,6 +27,15 @@ final class WatchSessionController: ObservableObject {
         case localSensorCheck = "Watch test"
     }
 
+    struct VisualTelemetryPoint: Identifiable, Equatable, Sendable {
+        let id = UUID()
+        let timestamp: Date
+        let userAccelerationG: Double
+        let rotationRateRadS: Double
+        let imuHz: Double?
+        let heartRateBPM: Double?
+    }
+
     @Published private(set) var state: CaptureState = .idle
     @Published private(set) var sessionID: String?
     @Published private(set) var heartRateBPM: Double?
@@ -50,6 +59,12 @@ final class WatchSessionController: ObservableObject {
     @Published private(set) var healthAuthorizationStatus: HKAuthorizationStatus = .notDetermined
     @Published private(set) var captureOrigin: CaptureOrigin = .iPhone
     @Published private(set) var lastPresencePublishedAt: Date?
+    @Published private(set) var userAccelerationG: Double?
+    @Published private(set) var rotationRateRadS: Double?
+    @Published private(set) var deviceRollRadians: Double?
+    @Published private(set) var devicePitchRadians: Double?
+    @Published private(set) var deviceYawRadians: Double?
+    @Published private(set) var visualTelemetryHistory: [VisualTelemetryPoint] = []
     /// Operator diagnostics for late, foreign, or stale events that were not
     /// journaled. Not raw evidence.
     @Published private(set) var captureRejections = CaptureRejectionCounts()
@@ -241,6 +256,12 @@ final class WatchSessionController: ObservableObject {
         watchBatteryLevel = nil
         guidedCueTitle = nil
         lastIMUSampleReceivedAt = nil
+        userAccelerationG = nil
+        rotationRateRadS = nil
+        deviceRollRadians = nil
+        devicePitchRadians = nil
+        deviceYawRadians = nil
+        visualTelemetryHistory = []
         heartRateSequence = 0
         finalized = false
         closedJournalURL = nil
@@ -471,6 +492,7 @@ final class WatchSessionController: ObservableObject {
                 imuHealth.observe(timestampNS: event.deviceTimeNS)
                 imuSampleCount = imuHealth.sampleCount
                 lastIMUSampleReceivedAt = Date()
+                updateVisualTelemetry(from: event)
 
                 if imuHealth.sampleCount.isMultiple(of: 25) {
                     observedIMUHz = imuHealth.effectiveHz
@@ -478,6 +500,7 @@ final class WatchSessionController: ObservableObject {
                     maxIMUGapMS = imuHealth.maxGapMS
                     nonMonotonicIMUCount =
                         imuHealth.nonMonotonicCount
+                    appendVisualTelemetryPoint()
                 }
                 publishCaptureHealthIfNeeded()
             }
@@ -750,10 +773,73 @@ final class WatchSessionController: ObservableObject {
             message["watch_battery_level_fraction"] =
                 watchBatteryLevel
         }
+        if let userAccelerationG {
+            message["user_acceleration_g"] = userAccelerationG
+        }
+        if let rotationRateRadS {
+            message["rotation_rate_rad_s"] = rotationRateRadS
+        }
+        if let deviceRollRadians {
+            message["device_roll_rad"] = deviceRollRadians
+        }
+        if let devicePitchRadians {
+            message["device_pitch_rad"] = devicePitchRadians
+        }
+        if let deviceYawRadians {
+            message["device_yaw_rad"] = deviceYawRadians
+        }
 
         if transport.sendMessage(message) {
             lastTelemetrySentAt = now
         }
+    }
+
+    private func updateVisualTelemetry(
+        from event: SensorEnvelope
+    ) {
+        guard let derived = WatchMotionDerivation.derive(
+            payload: event.payload
+        )
+        else {
+            return
+        }
+
+        userAccelerationG = derived.userAccelerationG
+        rotationRateRadS = derived.rotationRateRadS
+        deviceRollRadians = number(event.payload["roll"])
+        devicePitchRadians = number(event.payload["pitch"])
+        deviceYawRadians = number(event.payload["yaw"])
+    }
+
+    private func appendVisualTelemetryPoint() {
+        guard let userAccelerationG,
+              let rotationRateRadS
+        else {
+            return
+        }
+
+        visualTelemetryHistory.append(
+            VisualTelemetryPoint(
+                timestamp: Date(),
+                userAccelerationG: userAccelerationG,
+                rotationRateRadS: rotationRateRadS,
+                imuHz: recentMedianIMUHz,
+                heartRateBPM: heartRateBPM
+            )
+        )
+
+        if visualTelemetryHistory.count > 48 {
+            visualTelemetryHistory.removeFirst(
+                visualTelemetryHistory.count - 48
+            )
+        }
+    }
+
+    private func number(_ value: JSONValue?) -> Double? {
+        guard case .number(let number) = value else {
+            return nil
+        }
+        return number
     }
 
     private func applyWorkoutState(

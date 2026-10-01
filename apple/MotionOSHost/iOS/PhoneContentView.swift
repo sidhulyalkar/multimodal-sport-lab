@@ -7,53 +7,140 @@ struct PhoneContentView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 16) {
+                LazyVStack(spacing: 14) {
                     header
-                    readiness
-                    FieldRunCard()
+                    SensorSourceStrip()
+                    LiveTelemetryDeck()
                     controls
+                    readiness
                     GuidedP0Card()
-                    journalCard
+                    FieldRunCard()
                     EquipmentPodCard()
                     CameraCaptureCard()
+                    journalCard
 
                     if let error = coordinator.errorMessage ?? inbox.lastError {
-                        Text(error)
-                            .font(.footnote)
-                            .foregroundStyle(.red)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding()
-                            .background(.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
+                        errorCard(error)
                     }
                 }
-                .padding()
+                .frame(maxWidth: 760)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                .padding(.bottom, 36)
             }
-            .navigationTitle("MotionOS")
-            .toolbar {
-                Button("Refresh") {
-                    coordinator.refreshWatchState()
+            .scrollIndicators(.hidden)
+            .background {
+                ZStack(alignment: .top) {
+                    Color(.systemGroupedBackground)
+
+                    LinearGradient(
+                        colors: [
+                            Color.indigo.opacity(0.13),
+                            Color.cyan.opacity(0.06),
+                            Color.clear
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .center
+                    )
+                    .frame(height: 420)
                 }
+                .ignoresSafeArea()
             }
+            .toolbar(.hidden, for: .navigationBar)
         }
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("M0-B / Physical Capture")
-                .font(.caption.weight(.semibold))
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 12) {
+                MotionOSMark(size: 52)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("MotionOS")
+                        .font(.title2.weight(.bold))
+                    Text("MOVEMENT OBSERVATORY")
+                        .font(.caption2.weight(.bold))
+                        .tracking(0.8)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer(minLength: 8)
+
+                Button {
+                    coordinator.refreshWatchState()
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.headline.weight(.semibold))
+                        .frame(width: 44, height: 44)
+                        .background(.ultraThinMaterial, in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Refresh device state")
+            }
+
+            VStack(alignment: .leading, spacing: 7) {
+                Text("See the body in motion.")
+                    .font(
+                        .system(
+                            .largeTitle,
+                            design: .rounded,
+                            weight: .bold
+                        )
+                    )
+                    .minimumScaleFactor(0.85)
+
+                Text(
+                    "Capture raw movement, watch signal quality live, "
+                        + "and preserve every source for explicit calibration."
+                )
+                .font(.subheadline)
                 .foregroundStyle(.secondary)
-            Text("MotionOS capture lab")
-                .font(.largeTitle.bold())
-            Text("Capture Watch, equipment, and camera evidence without collapsing their clock domains. Each source stays raw until explicit calibration.")
-                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) {
+                    statusPill(
+                        watchStatusLabel,
+                        systemImage: watchStatusSymbol,
+                        color: watchStatusColor
+                    )
+                    statusPill(
+                        coordinator.state.rawValue.capitalized,
+                        systemImage: stateSymbol,
+                        color: stateColor
+                    )
+                    Spacer(minLength: 0)
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    statusPill(
+                        watchStatusLabel,
+                        systemImage: watchStatusSymbol,
+                        color: watchStatusColor
+                    )
+                    statusPill(
+                        coordinator.state.rawValue.capitalized,
+                        systemImage: stateSymbol,
+                        color: stateColor
+                    )
+                }
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 2)
+        .padding(.bottom, 2)
     }
 
     private var readiness: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("Readiness", systemImage: "checklist")
-                .font(.headline)
+            sectionHeader(
+                "System readiness",
+                subtitle: "Connection, power, and capture preflight",
+                systemImage: "checklist.checked"
+            )
+
+            Divider()
 
             readinessRow(
                 "Watch paired",
@@ -154,32 +241,59 @@ struct PhoneContentView: View {
     }
 
     private var controls: some View {
-        VStack(spacing: 10) {
-            Button {
-                Task { await coordinator.requestAuthorization() }
-            } label: {
-                Label("Authorize HealthKit", systemImage: "heart.text.square")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.bordered)
+        VStack(alignment: .leading, spacing: 12) {
+            sectionHeader(
+                "Capture",
+                subtitle: "Launch the next physical Watch session",
+                systemImage: "record.circle"
+            )
 
             Button {
                 Task { await coordinator.startP0() }
             } label: {
-                Label("Start P0 on Apple Watch", systemImage: "applewatch.radiowaves.left.and.right")
-                    .frame(maxWidth: .infinity)
+                HStack(spacing: 10) {
+                    Image(
+                        systemName:
+                            "applewatch.radiowaves.left.and.right"
+                    )
+                    Text("Start Watch Capture")
+                        .fontWeight(.semibold)
+                    Spacer(minLength: 0)
+                    Image(systemName: "arrow.right")
+                        .font(.caption.weight(.bold))
+                }
+                .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
+            .controlSize(.large)
             .disabled(
-                coordinator.state == .launchingWatch
-                || coordinator.state == .waitingForMirror
-                || coordinator.state == .running
-                || coordinator.state == .paused
+                !coordinator.watchPaired
+                    || !coordinator.watchAppInstalled
+                    || coordinator.state == .launchingWatch
+                    || coordinator.state == .waitingForMirror
+                    || coordinator.state == .running
+                    || coordinator.state == .paused
             )
 
-            Text("End the first qualification session from the Watch. Phone-side stop control comes after P0 proves mirroring and journal recovery.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            Button {
+                Task { await coordinator.requestAuthorization() }
+            } label: {
+                Label(
+                    "Authorize HealthKit",
+                    systemImage: "heart.text.square"
+                )
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.large)
+
+            Text(
+                "For first-light testing, stop from the Watch so journal "
+                    + "sealing and transfer remain part of the exercised path."
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
         }
         .cardStyle()
     }
@@ -430,6 +544,107 @@ struct PhoneContentView: View {
         }
     }
 
+    private func sectionHeader(
+        _ title: String,
+        subtitle: String,
+        systemImage: String
+    ) -> some View {
+        HStack(alignment: .top, spacing: 11) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .fill(Color.accentColor.opacity(0.10))
+                    .frame(width: 34, height: 34)
+
+                Image(systemName: systemImage)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color.accentColor)
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.headline)
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func statusPill(
+        _ text: String,
+        systemImage: String,
+        color: Color
+    ) -> some View {
+        Label(text, systemImage: systemImage)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(color)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(color.opacity(0.10), in: Capsule())
+            .lineLimit(1)
+    }
+
+    private func errorCard(_ message: String) -> some View {
+        Label {
+            Text(message)
+                .font(.footnote)
+                .fixedSize(horizontal: false, vertical: true)
+        } icon: {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.red)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            Color.red.opacity(0.08),
+            in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.red.opacity(0.16), lineWidth: 1)
+        }
+    }
+
+    private var watchStatusLabel: String {
+        if coordinator.watchReachable {
+            return "Watch live"
+        }
+        if coordinator.hasRecentWatchPresence() {
+            return "Watch handshake"
+        }
+        if coordinator.watchAppInstalled {
+            return "Watch installed"
+        }
+        return "Watch offline"
+    }
+
+    private var watchStatusSymbol: String {
+        coordinator.watchAppInstalled
+            ? "applewatch.radiowaves.left.and.right"
+            : "applewatch"
+    }
+
+    private var watchStatusColor: Color {
+        coordinator.watchAppInstalled ? .green : .yellow
+    }
+
+    private var stateSymbol: String {
+        switch coordinator.state {
+        case .running:
+            "record.circle.fill"
+        case .paused:
+            "pause.circle.fill"
+        case .waitingForMirror, .launchingWatch, .authorizing:
+            "clock.fill"
+        case .failed, .disconnected:
+            "exclamationmark.triangle.fill"
+        default:
+            "circle.fill"
+        }
+    }
+
     private var stateColor: Color {
         switch coordinator.state {
         case .running: .green
@@ -440,11 +655,35 @@ struct PhoneContentView: View {
     }
 }
 
+private struct MotionOSCardModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(
+                    cornerRadius: 22,
+                    style: .continuous
+                )
+                .fill(Color(.secondarySystemGroupedBackground).opacity(0.92))
+            )
+            .overlay {
+                RoundedRectangle(
+                    cornerRadius: 22,
+                    style: .continuous
+                )
+                .stroke(Color.primary.opacity(0.055), lineWidth: 1)
+            }
+            .shadow(
+                color: Color.black.opacity(0.035),
+                radius: 14,
+                y: 7
+            )
+    }
+}
+
 extension View {
     func cardStyle() -> some View {
-        self
-            .padding()
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 18))
+        modifier(MotionOSCardModifier())
     }
 }
