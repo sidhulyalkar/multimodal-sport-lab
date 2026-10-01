@@ -28,6 +28,17 @@ public final class WatchConnectivityTransport: NSObject, WCSessionDelegate {
         metadata: [String: Any]? = nil
     ) -> WCSessionFileTransfer? {
         guard session.activationState == .activated else { return nil }
+
+        // WatchConnectivity already owns queued background transfers. Reuse an
+        // existing transfer for the same MotionOS session instead of creating
+        // duplicate payloads when the UI is reopened or a retry is requested.
+        if let sessionID = metadata?["session_id"] as? String,
+           let existing = session.outstandingFileTransfers.first(where: {
+               $0.file.metadata?["session_id"] as? String == sessionID
+           }) {
+            return existing
+        }
+
         return session.transferFile(url, metadata: metadata)
     }
 
