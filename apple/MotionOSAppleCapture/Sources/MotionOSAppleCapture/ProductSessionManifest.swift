@@ -16,6 +16,8 @@ public struct ProductSessionManifest: Codable, Equatable, Sendable {
     public let createdAtUTC: String
     public let outcome: ProductSessionOutcome?
     public let watchSessionID: String?
+    public let watchJournalSHA256: String?
+    public let watchJournalByteCount: UInt64?
     public let cameraSessionID: String?
     public let operatorJournalSHA256: String?
     public let operatorMetadataSHA256: String?
@@ -56,6 +58,8 @@ public struct ProductSessionManifest: Codable, Equatable, Sendable {
         createdAtUTC: String = ISO8601DateFormatter().string(from: Date()),
         outcome: ProductSessionOutcome? = .completed,
         watchSessionID: String?,
+        watchJournalSHA256: String? = nil,
+        watchJournalByteCount: UInt64? = nil,
         cameraSessionID: String?,
         operatorJournalSHA256: String? = nil,
         operatorMetadataSHA256: String? = nil,
@@ -77,6 +81,8 @@ public struct ProductSessionManifest: Codable, Equatable, Sendable {
         self.createdAtUTC = createdAtUTC
         self.outcome = outcome
         self.watchSessionID = watchSessionID
+        self.watchJournalSHA256 = watchJournalSHA256
+        self.watchJournalByteCount = watchJournalByteCount
         self.cameraSessionID = cameraSessionID
         self.operatorJournalSHA256 = operatorJournalSHA256
         self.operatorMetadataSHA256 = operatorMetadataSHA256
