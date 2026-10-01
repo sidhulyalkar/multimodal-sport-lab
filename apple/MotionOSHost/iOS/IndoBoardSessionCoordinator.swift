@@ -436,6 +436,16 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         pod: EquipmentPodController
     ) async {
         guard phase == .running else { return }
+
+        // Freeze the classification boundary before any shutdown await.
+        // Otherwise a slow Watch stop could make an early user stop appear
+        // to have reached the 120 s protocol target.
+        let finishRequestedElapsed = elapsedSeconds
+        let reachedTarget =
+            finishRequestedElapsed
+                >= IndoBoardProductProtocol
+                    .targetDurationSeconds
+
         phase = .finishing
         errorMessage = nil
 
@@ -457,11 +467,6 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         if camera.phase == .recording {
             await camera.stopRecording()
         }
-
-        let reachedTarget =
-            elapsedSeconds
-                >= IndoBoardProductProtocol
-                    .targetDurationSeconds
 
         if fieldRun.phase == .running || fieldRun.phase == .armed {
             let readiness = readinessSnapshot(
