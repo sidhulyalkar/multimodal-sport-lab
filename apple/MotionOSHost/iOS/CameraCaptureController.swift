@@ -1,6 +1,7 @@
 import AVFoundation
 import Combine
 import Foundation
+import MotionOSAppleCapture
 import UIKit
 
 @MainActor
