@@ -1,11 +1,17 @@
 {
   "schema_version": "motionos.wrist-fusion-calibration-spec.v1",
-  "stationary_window_s": [0.0, 10.0],
-  "dynamic_window_s": [15.0, 45.0],
-  "maximum_time_delta_ms": 20.0,
-  "minimum_stationary_pairs": "REPLACE_WITH_PREDECLARED_MINIMUM",
-  "minimum_dynamic_pairs": "REPLACE_WITH_PREDECLARED_MINIMUM",
+  "stationary_window_s": [
+    5,
+    15
+  ],
+  "dynamic_window_s": [
+    20,
+    50
+  ],
+  "maximum_time_delta_ms": 10,
+  "minimum_stationary_pairs": 60,
+  "minimum_dynamic_pairs": 180,
   "jerk_percentile": 0.99,
-  "jerk_margin_factor": "REPLACE_WITH_PREDECLARED_MARGIN_AT_LEAST_1",
+  "jerk_margin_factor": 1.25,
   "wrist_side": null
 }
