@@ -567,6 +567,18 @@ def _parser() -> argparse.ArgumentParser:
     vision_clock.add_argument("external_sync")
     vision_clock.add_argument("output")
 
+    acquisition = sub.add_parser(
+        "validate-indo-board-acquisition",
+        help=(
+            "verify the fixed M0-Vision iPhone + Action 4 acquisition "
+            "profile before reconstruction"
+        ),
+    )
+    acquisition.add_argument("vision_session")
+    acquisition.add_argument("iphone_metadata")
+    acquisition.add_argument("action4_metadata")
+    acquisition.add_argument("output")
+
     indo_status = sub.add_parser(
         "indo-board-status",
         help=(
@@ -1151,6 +1163,16 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0
+
+    if args.command == "validate-indo-board-acquisition":
+        result = evaluate_indo_board_acquisition(
+            args.vision_session,
+            args.iphone_metadata,
+            args.action4_metadata,
+            output_path=args.output,
+        )
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0 if result["passed"] else 1
 
     if args.command == "indo-board-status":
         result = build_indo_board_status(
