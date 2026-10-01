@@ -313,6 +313,7 @@ struct IndoBoardSessionView: View {
                 session.phase == .running
                     || session.phase == .starting
                     || session.phase == .finishing
+                    || session.phase == .watchStopRequired
             )
 
             HStack(spacing: 8) {
