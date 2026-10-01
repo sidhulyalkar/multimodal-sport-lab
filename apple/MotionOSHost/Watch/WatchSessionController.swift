@@ -543,6 +543,7 @@ final class WatchSessionController: ObservableObject {
             return false
         }
 
+        let firstConfirmation = !phonePresenceConfirmed
         phonePresenceConfirmed = true
         if transport.session.activationState == .activated {
             #if os(watchOS)
@@ -550,6 +551,10 @@ final class WatchSessionController: ObservableObject {
                 transport.session.isCompanionAppInstalled
                     || phonePresenceConfirmed
             #endif
+        }
+
+        if firstConfirmation {
+            publishPresence()
         }
         return true
     }
@@ -1243,6 +1248,7 @@ final class WatchSessionController: ObservableObject {
             "capture_state": state.rawValue,
             "capture_origin": captureOrigin.rawValue,
             "health_authorization": healthAuthorizationLabel,
+            "phone_presence_confirmed": phonePresenceConfirmed,
             "sent_at_unix_s": Date().timeIntervalSince1970,
         ]
 
