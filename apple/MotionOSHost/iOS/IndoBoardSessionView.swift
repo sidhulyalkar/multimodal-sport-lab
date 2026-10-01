@@ -44,9 +44,10 @@ struct IndoBoardSessionView: View {
         .task {
             phone.refreshWatchState()
             phone.refreshHostReadiness()
-            fieldRun.protocolKind == .indoBoard
-                ? ()
-                : session.reset()
+            if fieldRun.protocolKind != .indoBoard
+                && session.phase != .running {
+                session.reset()
+            }
         }
         .onChange(
             of: phone.lastSessionSyncAcknowledgment
@@ -561,9 +562,11 @@ struct IndoBoardSessionView: View {
             }
 
             Text(
-                "The operator block timestamps document what you intended "
-                    + "to do. Watch/device clocks remain the measurement "
-                    + "authority."
+                "MotionOS advances these blocks automatically from the "
+                    + "two-minute protocol so you do not need to touch the "
+                    + "phone while balancing. Operator block timestamps "
+                    + "document protocol intent only; Watch/device clocks "
+                    + "remain the measurement authority."
             )
             .font(.caption2)
             .foregroundStyle(.secondary)
@@ -615,24 +618,24 @@ struct IndoBoardSessionView: View {
 
             Spacer(minLength: 6)
 
-            if session.phase == .running {
-                if complete {
-                    Text("DONE")
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(.green)
-                } else if active {
-                    Button("Done") {
-                        fieldRun.completeBlock(block.id)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
-                } else {
-                    Button("Start") {
-                        fieldRun.startBlock(block.id)
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                }
+            if complete {
+                Text("DONE")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.green)
+            } else if active {
+                Text("NOW")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.cyan)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 4)
+                    .background(
+                        Color.cyan.opacity(0.10),
+                        in: Capsule()
+                    )
+            } else if session.phase == .running {
+                Text("UP NEXT")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.secondary)
             }
         }
         .padding(.vertical, 4)
