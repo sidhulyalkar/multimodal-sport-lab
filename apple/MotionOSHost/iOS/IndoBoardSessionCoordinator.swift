@@ -442,9 +442,9 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         // to have reached the 120 s protocol target.
         let finishRequestedElapsed = elapsedSeconds
         let reachedTarget =
-            finishRequestedElapsed
-                >= IndoBoardProductProtocol
-                    .targetDurationSeconds
+            IndoBoardProductProtocol.reachedTarget(
+                at: finishRequestedElapsed
+            )
 
         phase = .finishing
         errorMessage = nil
