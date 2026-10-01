@@ -40,6 +40,7 @@ def _fixture(tmp_path):
     action_metadata = tmp_path / "action-metadata.json"
     profile = tmp_path / "profile.json"
     fusion_receipt = tmp_path / "wrist-fusion-calibration.json"
+    qualification_plan = tmp_path / "qualification-plan.json"
     spec = tmp_path / "pipeline.json"
 
     landmarks = [
@@ -263,6 +264,7 @@ def _fixture(tmp_path):
         "board_marker_asset_receipt": marker_receipt.name,
         "longitudinal_profile": profile.name,
         "wrist_fusion_calibration_receipt": fusion_receipt.name,
+        "qualification_plan": qualification_plan.name,
         "iphone": {
             "video": iphone_video.name,
             "journal": iphone_journal.name,
@@ -318,6 +320,44 @@ def _fixture(tmp_path):
             ]
         },
     }
+    qualification_plan.write_text(
+        json.dumps(
+            {
+                "schema_version":
+                    "motionos.indo-board-qualification-plan.v1",
+                "plan_id": "indo-board-plan-s1",
+                "frozen_before_scored_capture": True,
+                "evidence": {
+                    "rig_receipt": {
+                        "filename": rig.name,
+                        "sha256": sha256_file(rig),
+                    },
+                    "board_marker_layout": {
+                        "filename": layout.name,
+                        "sha256": sha256_file(layout),
+                    },
+                    "board_marker_asset_receipt": {
+                        "filename": marker_receipt.name,
+                        "sha256": sha256_file(marker_receipt),
+                    },
+                    "wrist_fusion_calibration_receipt": {
+                        "filename": fusion_receipt.name,
+                        "sha256": sha256_file(fusion_receipt),
+                    },
+                },
+                "rig_id": "indo-board-two-camera-v1",
+                "thresholds": document["thresholds"],
+                "wrist_fusion": document["wrist_fusion"],
+                "qualification": document["qualification"],
+                "protocol": {
+                    "coaching_condition": "feedback_disabled",
+                    "minimum_sync_landmarks": 3,
+                },
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
     spec.write_text(
         json.dumps(document, indent=2),
         encoding="utf-8",
@@ -427,7 +467,10 @@ def test_pipeline_preflight_requires_three_sync_landmarks(tmp_path):
     raw["sync_landmarks"] = raw["sync_landmarks"][:2]
     vision.write_text(json.dumps(raw), encoding="utf-8")
 
-    with pytest.raises(ValueError, match="at least three"):
+    with pytest.raises(
+        ValueError,
+        match="fewer whole-body sync landmarks",
+    ):
         validate_indo_board_pipeline_spec(spec)
 
 
@@ -530,6 +573,7 @@ def _state_fixture(tmp_path):
         "iphone-metadata.json",
         "action-metadata.json",
         "wrist-fusion-calibration.json",
+        "qualification-plan.json",
     ):
         path = tmp_path / name
         path.write_text(name + "\n", encoding="utf-8")
@@ -550,6 +594,8 @@ def _state_fixture(tmp_path):
         },
         "wrist_fusion_calibration_receipt":
             paths["wrist-fusion-calibration.json"].name,
+        "qualification_plan":
+            paths["qualification-plan.json"].name,
     }
     spec = tmp_path / "state-spec.json"
     spec.write_text(
@@ -942,5 +988,45 @@ def test_pipeline_preflight_rejects_fusion_parameter_drift(tmp_path):
     with pytest.raises(
         ValueError,
         match="do not match the exact calibration receipt",
+    ):
+        validate_indo_board_pipeline_spec(spec)
+
+
+
+def test_pipeline_preflight_rejects_threshold_drift_from_plan(tmp_path):
+    spec, document, _rig = _fixture(tmp_path)
+    document["thresholds"]["maximum_pose_pair_ms"] = 9.0
+    spec.write_text(json.dumps(document), encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match="analysis thresholds do not match",
+    ):
+        validate_indo_board_pipeline_spec(spec)
+
+
+def test_pipeline_preflight_rejects_feedback_condition_drift(tmp_path):
+    spec, document, _rig = _fixture(tmp_path)
+    vision = tmp_path / document["vision_session"]
+    raw = json.loads(vision.read_text(encoding="utf-8"))
+    raw["coaching_condition"] = "feedback_enabled"
+    vision.write_text(json.dumps(raw), encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match="coaching_condition does not match",
+    ):
+        validate_indo_board_pipeline_spec(spec)
+
+
+def test_pipeline_preflight_rejects_modified_frozen_plan_evidence(tmp_path):
+    spec, document, rig = _fixture(tmp_path)
+    raw = json.loads(rig.read_text(encoding="utf-8"))
+    raw["rig_id"] = "modified-after-plan-freeze"
+    rig.write_text(json.dumps(raw), encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match="rig_receipt does not match the frozen qualification plan",
     ):
         validate_indo_board_pipeline_spec(spec)
