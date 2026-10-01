@@ -92,6 +92,9 @@ struct CameraEvidenceBundle: Sendable {
     let videoURL: URL
     let journalURL: URL
     let metadataURL: URL
+    let videoSHA256: String
+    let journalSHA256: String
+    let metadataSHA256: String
 }
 
 enum CameraCaptureError: LocalizedError {
@@ -790,6 +793,9 @@ final class CameraCapturePipeline:
                 )
             }
 
+            let videoSHA256 = try sha256(videoURL)
+            let journalSHA256 = try sha256(journalURL)
+
             let metadata: [String: Any] = [
                 "schema_version": Self.schemaVersion,
                 "session_id": sessionID,
@@ -845,9 +851,8 @@ final class CameraCapturePipeline:
                 "last_intrinsic_matrix":
                     lastIntrinsicMatrix as Any,
                 "provenance": [
-                    "camera_mov_sha256": try sha256(videoURL),
-                    "camera_frames_jsonl_sha256":
-                        try sha256(journalURL),
+                    "camera_mov_sha256": videoSHA256,
+                    "camera_frames_jsonl_sha256": journalSHA256,
                 ],
                 "claim_boundary":
                     "Vision 3D pose is teacher/validation evidence; "
@@ -860,11 +865,15 @@ final class CameraCapturePipeline:
             )
             try data.write(to: metadataURL, options: .atomic)
 
+            let metadataSHA256 = try sha256(metadataURL)
             let bundle = CameraEvidenceBundle(
                 directory: directoryURL,
                 videoURL: videoURL,
                 journalURL: journalURL,
-                metadataURL: metadataURL
+                metadataURL: metadataURL,
+                videoSHA256: videoSHA256,
+                journalSHA256: journalSHA256,
+                metadataSHA256: metadataSHA256
             )
             resetRecordingState()
             return bundle
