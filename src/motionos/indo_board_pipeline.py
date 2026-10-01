@@ -72,6 +72,10 @@ def process_indo_board_pipeline(
     action4_journal = _resolve(base, action4["journal"])
 
     profile_path = _resolve(base, spec["longitudinal_profile"])
+    fusion_calibration_receipt = _resolve(
+        base,
+        spec["wrist_fusion_calibration_receipt"],
+    )
     thresholds = _mapping(spec, "thresholds")
     fusion = _mapping(spec, "wrist_fusion")
     qualification = _mapping(spec, "qualification")
@@ -528,6 +532,8 @@ def process_indo_board_pipeline(
         "session_id": manifest.session_id,
         "spec_sha256": sha256_file(spec_source),
         "rig_receipt_sha256": sha256_file(rig_receipt),
+        "wrist_fusion_calibration_receipt_sha256":
+            sha256_file(fusion_calibration_receipt),
         "pose_pair_count": pose_pair_count,
         "marker_pair_count": marker_pair_count,
         "metric_count": len(metrics.metrics),
@@ -585,6 +591,10 @@ def validate_indo_board_pipeline_spec(
         "board_marker_asset_receipt": _resolve(
             base,
             spec["board_marker_asset_receipt"],
+        ),
+        "wrist_fusion_calibration_receipt": _resolve(
+            base,
+            spec["wrist_fusion_calibration_receipt"],
         ),
     }
     iphone = _mapping(spec, "iphone")
@@ -780,10 +790,15 @@ def validate_indo_board_pipeline_spec(
         fusion,
         "maximum_acceleration_rate_m_s3",
     )
-    _positive(
+    _positive_required(
         fusion,
         "maximum_time_delta_ms",
-        default=20.0,
+    )
+    _validate_wrist_fusion_calibration_chain(
+        receipt_path=required_paths[
+            "wrist_fusion_calibration_receipt"
+        ],
+        fusion=fusion,
     )
 
     qualification = _mapping(spec, "qualification")
@@ -1005,6 +1020,10 @@ def _pipeline_state_input_hashes(
         ),
         "iphone_metadata": _resolve(base, iphone["metadata"]),
         "action4_metadata": _resolve(base, action4["metadata"]),
+        "wrist_fusion_calibration_receipt": _resolve(
+            base,
+            spec["wrist_fusion_calibration_receipt"],
+        ),
     }
     return {
         label: sha256_file(path)
@@ -1189,6 +1208,63 @@ def _validate_action4_evidence_chain(
             "Action4 pose metadata is not bound to the sealed vision session"
         )
     return source_id
+
+
+def _validate_wrist_fusion_calibration_chain(
+    *,
+    receipt_path: Path,
+    fusion: dict[str, object],
+) -> None:
+    receipt = _json_object(receipt_path)
+    if receipt.get("schema_version") != (
+        "motionos.wrist-fusion-calibration.v1"
+    ):
+        raise ValueError(
+            "unsupported wrist-fusion calibration receipt schema"
+        )
+    recommended = receipt.get("recommended_wrist_fusion")
+    if not isinstance(recommended, dict):
+        raise TypeError(
+            "wrist-fusion calibration receipt requires "
+            "recommended_wrist_fusion"
+        )
+
+    keys = (
+        "watch_acceleration_std_m_s2",
+        "vision_acceleration_std_m_s2",
+        "maximum_acceleration_rate_m_s3",
+        "maximum_time_delta_ms",
+    )
+    for key in keys:
+        if key not in fusion:
+            raise ValueError(
+                f"wrist_fusion.{key} is required"
+            )
+        if key not in recommended:
+            raise ValueError(
+                f"calibration receipt is missing {key}"
+            )
+        try:
+            configured = float(fusion[key])
+            calibrated = float(recommended[key])
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"wrist-fusion calibration value {key} must be numeric"
+            ) from exc
+        if (
+            not math.isfinite(configured)
+            or not math.isfinite(calibrated)
+            or not math.isclose(
+                configured,
+                calibrated,
+                rel_tol=1e-12,
+                abs_tol=1e-12,
+            )
+        ):
+            raise ValueError(
+                "wrist_fusion parameters do not match the exact "
+                f"calibration receipt for {key}"
+            )
 
 
 def _positive_required(
