@@ -117,7 +117,7 @@ struct ProductRunDetailView: View {
                 .foregroundStyle(.secondary)
             }
 
-            HStack(spacing: 8) {
+            FlowLayout(spacing: 8) {
                 MotionOSStatusBadge(
                     title: run.outcome == .completed
                         ? "COMPLETE"
