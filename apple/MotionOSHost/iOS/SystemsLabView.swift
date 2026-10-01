@@ -129,7 +129,8 @@ struct SystemsLabView: View {
                             } ?? "waiting"
                         )
 
-                        if let url = phone.systemsLabLatestReportURL,
+                        if let url =
+                            phone.systemsLabReportURLs[report.sessionID],
                            report.endedAt != nil {
                             ShareLink(item: url) {
                                 Label(
