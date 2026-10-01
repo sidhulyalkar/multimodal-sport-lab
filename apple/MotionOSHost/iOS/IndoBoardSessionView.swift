@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct IndoBoardSessionView: View {
     @EnvironmentObject private var phone: PhoneSessionCoordinator
@@ -6,6 +7,7 @@ struct IndoBoardSessionView: View {
     @EnvironmentObject private var pod: EquipmentPodController
     @EnvironmentObject private var fieldRun: FieldRunCoordinator
     @EnvironmentObject private var session: IndoBoardSessionCoordinator
+    @State private var importingExternalVideo = false
 
     var body: some View {
         ScrollView {
@@ -57,6 +59,31 @@ struct IndoBoardSessionView: View {
                 acknowledgment,
                 fieldRun: fieldRun
             )
+        }
+        .fileImporter(
+            isPresented: $importingExternalVideo,
+            allowedContentTypes: [.movie],
+            allowsMultipleSelection: false
+        ) { result in
+            do {
+                guard let sourceURL = try result.get().first,
+                      let bundle = fieldRun.evidenceBundle,
+                      let runID = fieldRun.runID
+                else {
+                    return
+                }
+
+                Task {
+                    await session.importExternalVideo(
+                        from: sourceURL,
+                        runDirectory: bundle.directory,
+                        runID: runID
+                    )
+                }
+            } catch {
+                // The coordinator owns product-facing import errors. A user
+                // cancellation requires no error surface.
+            }
         }
     }
 
@@ -683,6 +710,70 @@ struct IndoBoardSessionView: View {
                         "Share camera evidence",
                         systemImage: "video"
                     )
+                }
+            }
+
+            if session.externalCameraConfirmed {
+                Divider()
+
+                if let external = session.externalVideoEvidence {
+                    Label(
+                        "Action 4 evidence verified",
+                        systemImage: "checkmark.seal.fill"
+                    )
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.green)
+
+                    Text(
+                        external.originalFilename
+                            + " · "
+                            + ByteCountFormatter.string(
+                                fromByteCount: Int64(
+                                    external.byteCount
+                                ),
+                                countStyle: .file
+                            )
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                    Text(
+                        String(external.sha256.prefix(16)) + "…"
+                    )
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+
+                    ShareLink(
+                        items: [
+                            external.videoURL,
+                            external.metadataURL,
+                        ]
+                    ) {
+                        Label(
+                            "Share external camera evidence",
+                            systemImage: "square.and.arrow.up"
+                        )
+                    }
+                } else {
+                    Button {
+                        importingExternalVideo = true
+                    } label: {
+                        Label(
+                            "Import Original Action 4 Movie",
+                            systemImage: "video.badge.plus"
+                        )
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+
+                    Text(
+                        "MotionOS copies the untouched movie into this run "
+                            + "and records its SHA-256 + byte count. "
+                            + "No transcoding occurs during import."
+                    )
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
                 }
             }
 
