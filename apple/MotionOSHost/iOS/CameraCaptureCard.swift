@@ -296,6 +296,21 @@ struct CameraCaptureCard: View {
                 .foregroundStyle(.secondary)
             }
             .font(.caption)
+
+            Label(
+                configuration.stabilizationLockedOff
+                    ? "Video stabilization off · geometry-safe"
+                    : "Video stabilization state requires review",
+                systemImage: configuration.stabilizationLockedOff
+                    ? "viewfinder.circle"
+                    : "exclamationmark.triangle.fill"
+            )
+            .font(.caption)
+            .foregroundStyle(
+                configuration.stabilizationLockedOff
+                    ? .green
+                    : .yellow
+            )
         }
     }
 
