@@ -512,6 +512,7 @@ private struct BodyMovementScene3D: UIViewRepresentable {
                 lastSequence = nil
                 lastShowSupport = nil
                 lastShowMuscles = nil
+                lastViewpoint = nil
                 lastSessionID = frame.sessionID
             }
 
