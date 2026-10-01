@@ -48,7 +48,7 @@ actor ExternalVideoPose2DProcessor {
         sessionID: String,
         outputDirectory: URL,
         sourceID: String = "dji-action4",
-        poseStride: UInt64 = 3
+        poseStride: UInt64 = 1
     ) async throws -> Result {
         precondition(poseStride > 0)
 
@@ -235,6 +235,18 @@ actor ExternalVideoPose2DProcessor {
         }
 
         let sourceDigest = try FileEvidence.digest(videoURL)
+        let effectiveFrameRate: Double? = {
+            guard frameSequence >= 2,
+                  let firstPTSNS,
+                  let lastPTSNS,
+                  lastPTSNS > firstPTSNS
+            else {
+                return nil
+            }
+            let durationSeconds =
+                Double(lastPTSNS - firstPTSNS) / 1_000_000_000.0
+            return Double(frameSequence - 1) / durationSeconds
+        }()
         let metadata: [String: Any] = [
             "schema_version": "motionos.external-video-pose2d.v1",
             "session_id": sessionID,
@@ -254,6 +266,7 @@ actor ExternalVideoPose2DProcessor {
             "image_width_px": displayWidth,
             "image_height_px": displayHeight,
             "pose_stride_frames": poseStride,
+            "effective_frame_rate_fps": effectiveFrameRate as Any,
             "counts": [
                 "frames": frameSequence,
                 "poses": poseSequence,
