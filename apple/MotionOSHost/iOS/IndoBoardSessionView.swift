@@ -98,6 +98,7 @@ struct IndoBoardSessionView: View {
                         runID: runID
                     )
                     runLibrary.refresh()
+                    runLibrary.refresh()
                 }
             } catch {
                 // The coordinator owns product-facing import errors. A user
