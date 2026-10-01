@@ -797,22 +797,15 @@ final class WatchSessionController: ObservableObject {
     private func updateVisualTelemetry(
         from event: SensorEnvelope
     ) {
-        guard let userAX = number(event.payload["user_ax"]),
-              let userAY = number(event.payload["user_ay"]),
-              let userAZ = number(event.payload["user_az"]),
-              let gx = number(event.payload["gx"]),
-              let gy = number(event.payload["gy"]),
-              let gz = number(event.payload["gz"])
+        guard let derived = WatchMotionDerivation.derive(
+            payload: event.payload
+        )
         else {
             return
         }
 
-        let standardGravity = 9.80665
-        let accelerationMagnitude = sqrt(
-            userAX * userAX + userAY * userAY + userAZ * userAZ
-        )
-        userAccelerationG = accelerationMagnitude / standardGravity
-        rotationRateRadS = sqrt(gx * gx + gy * gy + gz * gz)
+        userAccelerationG = derived.userAccelerationG
+        rotationRateRadS = derived.rotationRateRadS
         deviceRollRadians = number(event.payload["roll"])
         devicePitchRadians = number(event.payload["pitch"])
         deviceYawRadians = number(event.payload["yaw"])
