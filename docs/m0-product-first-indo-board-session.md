@@ -32,7 +32,7 @@ Use the release-candidate branch after its CI is green:
 
 ```bash
 cd ~/Documents/Projects/multimodal-sport-lab
-git switch product/motionos-m0-release-candidate-v2
+git switch product/motionos-m0-release-candidate-v3
 git pull --ff-only
 open apple/MotionOSHost/MotionOSHost.xcodeproj
 ```
