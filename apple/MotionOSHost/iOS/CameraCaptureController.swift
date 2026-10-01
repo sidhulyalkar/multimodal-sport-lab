@@ -115,7 +115,9 @@ final class CameraCaptureController: ObservableObject {
         statsTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 guard let self else { return }
-                self.liveStats = await self.pipeline.liveStats()
+                let stats = await self.pipeline.liveStats()
+                guard !Task.isCancelled else { return }
+                self.liveStats = stats
                 try? await Task.sleep(for: .milliseconds(500))
             }
         }
@@ -127,6 +129,7 @@ final class CameraCaptureController: ObservableObject {
             while !Task.isCancelled {
                 guard let self else { return }
                 let nextPose = await self.pipeline.livePoseFrame()
+                guard !Task.isCancelled else { return }
                 if nextPose?.sessionID != self.latestPoseFrame?.sessionID
                     || nextPose?.sequence != self.latestPoseFrame?.sequence {
                     self.latestPoseFrame = nextPose
