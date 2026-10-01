@@ -171,7 +171,9 @@ public struct SystemsLabQualificationReport: Codable, Sendable, Equatable, Ident
 public struct SystemsLabQualificationTracker: Sendable, Equatable {
     public private(set) var current: SystemsLabQualificationReport?
     public private(set) var latestCompleted: SystemsLabQualificationReport?
+    public private(set) var recentCompleted: [SystemsLabQualificationReport] = []
 
+    private let completedCapacity = 12
     private var lastSequence: UInt64?
     private var effectiveRateSum = 0.0
     private var effectiveRateCount: UInt64 = 0
@@ -224,7 +226,7 @@ public struct SystemsLabQualificationTracker: Sendable, Equatable {
                 phoneBatteryFraction ?? report.phoneBatteryEndFraction
         )
         current = report
-        latestCompleted = report
+        storeCompleted(report)
     }
 
     public mutating func ingest(
@@ -327,12 +329,13 @@ public struct SystemsLabQualificationTracker: Sendable, Equatable {
         current = report
     }
 
+    @discardableResult
     public mutating func markJournalReceived(
         sessionID: String,
         receivedAt: Date,
         byteCount: UInt64,
         sha256: String
-    ) {
+    ) -> SystemsLabQualificationReport? {
         if var report = current,
            report.sessionID == sessionID {
             report = copying(
@@ -343,9 +346,25 @@ public struct SystemsLabQualificationTracker: Sendable, Equatable {
             )
             current = report
             if report.endedAt != nil {
+                storeCompleted(report)
+            }
+            return report
+        }
+
+        if let index = recentCompleted.firstIndex(where: {
+            $0.sessionID == sessionID
+        }) {
+            let report = copying(
+                recentCompleted[index],
+                journalReceivedAt: receivedAt,
+                journalByteCount: byteCount,
+                journalSHA256: sha256
+            )
+            recentCompleted[index] = report
+            if latestCompleted?.sessionID == sessionID {
                 latestCompleted = report
             }
-            return
+            return report
         }
 
         if var report = latestCompleted,
@@ -356,12 +375,16 @@ public struct SystemsLabQualificationTracker: Sendable, Equatable {
                 journalByteCount: byteCount,
                 journalSHA256: sha256
             )
-            latestCompleted = report
+            storeCompleted(report)
+            return report
         }
+
+        return nil
     }
 
     public mutating func clearCompleted() {
         latestCompleted = nil
+        recentCompleted.removeAll()
         if current?.endedAt != nil {
             current = nil
         }
@@ -378,7 +401,7 @@ public struct SystemsLabQualificationTracker: Sendable, Equatable {
         }
 
         if let current, current.endedAt != nil {
-            latestCompleted = current
+            storeCompleted(current)
         }
 
         self.current = SystemsLabQualificationReport(
@@ -424,6 +447,23 @@ public struct SystemsLabQualificationTracker: Sendable, Equatable {
             phoneBatteryEndFraction:
                 phoneBatteryFraction ?? report.phoneBatteryEndFraction
         )
+    }
+
+    private mutating func storeCompleted(
+        _ report: SystemsLabQualificationReport
+    ) {
+        guard report.endedAt != nil else { return }
+
+        recentCompleted.removeAll {
+            $0.sessionID == report.sessionID
+        }
+        recentCompleted.insert(report, at: 0)
+        if recentCompleted.count > completedCapacity {
+            recentCompleted.removeLast(
+                recentCompleted.count - completedCapacity
+            )
+        }
+        latestCompleted = recentCompleted.first
     }
 
     private func copying(
