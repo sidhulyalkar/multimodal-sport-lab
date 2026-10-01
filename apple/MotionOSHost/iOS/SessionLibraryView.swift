@@ -9,8 +9,6 @@ struct SessionLibraryView: View {
     var body: some View {
         ScrollView {
             LazyVStack(spacing: MotionOSDesign.pageSpacing) {
-                header
-
                 if let latestRun = runLibrary.runs.first {
                     latestRunSnapshot(latestRun)
                 } else if let latest = inbox.latestSessionSummary {
@@ -23,14 +21,14 @@ struct SessionLibraryView: View {
             }
             .motionOSPageWidth()
             .padding(.horizontal, MotionOSDesign.pageHorizontalPadding)
-            .padding(.top, 10)
+            .padding(.top, 4)
             .padding(.bottom, 36)
         }
         .background {
             MotionOSPageBackground()
         }
         .navigationTitle("Sessions")
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarTitleDisplayMode(.large)
         .refreshable {
             inbox.refreshCatalog()
             runLibrary.refresh()
@@ -39,68 +37,6 @@ struct SessionLibraryView: View {
             inbox.refreshCatalog()
             runLibrary.refresh()
         }
-    }
-
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Sessions")
-                        .font(.largeTitle.weight(.bold))
-                    Text(
-                        "Your sealed movement evidence, summaries, and "
-                            + "progression trail."
-                    )
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                }
-
-                Spacer()
-
-                ZStack {
-                    Circle()
-                        .fill(Color.indigo.opacity(0.10))
-                        .frame(width: 46, height: 46)
-                    Image(systemName: "clock.arrow.circlepath")
-                        .font(.title3)
-                        .foregroundStyle(.indigo)
-                }
-            }
-
-            HStack(spacing: 8) {
-                MotionOSStatusBadge(
-                    title: "\(completedRunCount) complete",
-                    systemImage: "checkmark.seal",
-                    color: completedRunCount == 0
-                        ? .secondary
-                        : .green
-                )
-
-                if abortedRunCount > 0 {
-                    MotionOSStatusBadge(
-                        title: "\(abortedRunCount) aborted",
-                        systemImage: "exclamationmark.triangle",
-                        color: .yellow
-                    )
-                }
-                MotionOSStatusBadge(
-                    title: "\(inbox.sessions.count) Watch",
-                    systemImage: "applewatch",
-                    color: inbox.sessions.isEmpty
-                        ? .secondary
-                        : .indigo
-                )
-
-                if inbox.catalogLoading {
-                    MotionOSStatusBadge(
-                        title: "Refreshing",
-                        systemImage: "arrow.clockwise",
-                        color: .yellow
-                    )
-                }
-            }
-        }
-        .padding(.horizontal, 2)
     }
 
     private func latestRunSnapshot(
@@ -317,16 +253,13 @@ struct SessionLibraryView: View {
 
     @ViewBuilder
     private var productRuns: some View {
-        if !runLibrary.runs.isEmpty {
+        let history = Array(runLibrary.runs.dropFirst())
+        if !history.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                MotionOSSectionHeader(
-                    title: "Product sessions",
-                    subtitle: "Completed runs and inspectable aborted attempts",
-                    systemImage: "figure.surfing",
-                    accent: .indigo
-                )
+                Text("History")
+                    .font(.headline)
 
-                ForEach(runLibrary.runs) { run in
+                ForEach(history) { run in
                     NavigationLink {
                         ProductRunDetailView(run: run)
                     } label: {
@@ -334,7 +267,7 @@ struct SessionLibraryView: View {
                     }
                     .buttonStyle(.plain)
 
-                    if run.id != runLibrary.runs.last?.id {
+                    if run.id != history.last?.id {
                         Divider()
                     }
                 }
@@ -432,18 +365,6 @@ struct SessionLibraryView: View {
         .contentShape(Rectangle())
     }
 
-    private var completedRunCount: Int {
-        runLibrary.runs.filter {
-            $0.outcome == .completed
-        }.count
-    }
-
-    private var abortedRunCount: Int {
-        runLibrary.runs.filter {
-            $0.outcome == .aborted
-        }.count
-    }
-
     private func sourceDot(
         _ title: String,
         present: Bool
@@ -464,12 +385,8 @@ struct SessionLibraryView: View {
     private var library: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                MotionOSSectionHeader(
-                    title: "Watch captures",
-                    subtitle: "Raw recovered wrist sessions, including qualification runs",
-                    systemImage: "square.stack.3d.up.fill",
-                    accent: .cyan
-                )
+                Text("Watch recordings")
+                    .font(.headline)
 
                 Spacer(minLength: 0)
             }

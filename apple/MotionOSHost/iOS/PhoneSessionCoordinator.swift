@@ -14,39 +14,6 @@ struct SessionSyncAcknowledgment: Equatable, Sendable {
     let receivedAt: Date
 }
 
-struct WatchLiveCaptureHealth: Equatable, Sendable {
-    let sessionID: String
-    let receivedAt: Date
-    let sourceSentAt: Date?
-    let imuSampleCount: UInt64
-    let heartRateEventCount: UInt64
-    let observedIMUHz: Double?
-    let recentMedianIMUHz: Double?
-    let maxIMUGapMS: Double
-    let nonMonotonicIMUCount: UInt64
-    let heartRateBPM: Double?
-    let watchBatteryLevel: Double?
-    let userAccelerationG: Double?
-    let rotationRateRadS: Double?
-    let rollRadians: Double?
-    let pitchRadians: Double?
-    let yawRadians: Double?
-}
-
-struct WatchTelemetryPoint: Identifiable, Equatable, Sendable {
-    let id = UUID()
-    let timestamp: Date
-    let sessionID: String
-    let imuHz: Double?
-    let maxGapMS: Double
-    let heartRateBPM: Double?
-    let userAccelerationG: Double?
-    let rotationRateRadS: Double?
-    let rollRadians: Double?
-    let pitchRadians: Double?
-    let yawRadians: Double?
-}
-
 struct WatchPresence: Equatable, Sendable {
     let receivedAt: Date
     let sourceSentAt: Date?
@@ -82,9 +49,10 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
     @Published private(set) var watchAppInstalled = false
     @Published private(set) var systemWatchAppInstalled = false
     @Published private(set) var watchReachable = false
-    @Published private(set) var watchCaptureHealth: WatchLiveCaptureHealth?
     @Published private(set) var watchPresence: WatchPresence?
-    @Published private(set) var watchTelemetryHistory: [WatchTelemetryPoint] = []
+    /// Lossy live preview of the active Watch recording. The sealed Watch
+    /// journal received through `inbox` is the evidence.
+    @Published private(set) var liveTelemetry = LiveTelemetryBuffer()
     @Published private(set) var lastSessionSyncAcknowledgment:
         SessionSyncAcknowledgment?
     @Published private(set) var iPhoneBatteryLevel: Double?
@@ -171,8 +139,7 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
             // A deactivation can mean the user switched active Watches.
             // Never carry a prior Watch's handshake into the new session.
             watchPresence = nil
-            watchCaptureHealth = nil
-            watchTelemetryHistory = []
+            liveTelemetry.clear()
         } else {
             ingestWatchPresence(session.receivedApplicationContext)
             publishPhonePresence()
@@ -307,16 +274,6 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
         )
     }
 
-    func watchCaptureHealthAge(
-        at date: Date = Date()
-    ) -> TimeInterval? {
-        guard let watchCaptureHealth else { return nil }
-        return max(
-            0,
-            date.timeIntervalSince(watchCaptureHealth.receivedAt)
-        )
-    }
-
     func watchPresenceAge(
         at date: Date = Date()
     ) -> TimeInterval? {
@@ -333,56 +290,59 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
         return age <= maxAge
     }
 
-    var watchConnectionChecking: Bool {
-        transport.session.activationState != .activated
+    /// The single source of truth for Apple Watch status and the Live
+    /// Observatory. Views must not infer Watch or live state themselves.
+    func observation(
+        at date: Date = Date()
+    ) -> WatchObservation {
+        WatchObservationResolver.resolve(
+            WatchObservationInput(
+                now: date,
+                connectivityActivated:
+                    transport.session.activationState == .activated,
+                paired: watchPaired,
+                systemAppInstalled: systemWatchAppInstalled,
+                reachable: watchReachable,
+                presenceRecent: hasRecentWatchPresence(at: date),
+                presence: watchPresence.map {
+                    WatchObservationInput.Presence(
+                        capturePhase: WatchCapturePhase(
+                            presenceCaptureState: $0.captureState
+                        ),
+                        sessionID: $0.sessionID,
+                        receivedAt: $0.receivedAt
+                    )
+                },
+                mirroredWorkout: mirroredWorkoutPhase,
+                latestFrame: liveTelemetry.latest
+            )
+        )
     }
 
-    var watchConnectionLabel: String {
-        if watchConnectionChecking {
-            return "Checking Watch"
-        }
-        if state == .running || state == .paused {
-            return "Watch recording"
-        }
-        if watchConnectionReady {
-            return "Watch ready"
-        }
-        if watchPaired {
-            return "Watch app setup"
-        }
-        return "No Watch"
-    }
-
-    var watchConnectionDetail: String {
-        if watchConnectionChecking {
-            return "Checking Apple Watch connection"
-        }
-        if watchReachable {
-            return "MotionOS detected now"
-        }
-        if hasRecentWatchPresence() {
-            return "MotionOS detected recently"
-        }
-        if systemWatchAppInstalled {
-            return "Open MotionOS on the Watch once"
-        }
-        if watchPaired {
-            return "Install or open MotionOS on the Watch"
-        }
-        return "Pair an Apple Watch with this iPhone"
+    var watchStatus: WatchLinkStatus {
+        observation().link
     }
 
     var watchConnectionReady: Bool {
-        watchPaired
-            && (
-                watchReachable
-                    || hasRecentWatchPresence()
-            )
+        watchStatus.isReady
     }
 
     var watchTwoWayLinkVerified: Bool {
         hasRecentWatchPresence()
             && (watchPresence?.phonePresenceConfirmed == true)
+    }
+
+    private var mirroredWorkoutPhase: MirroredWorkoutPhase {
+        switch state {
+        case .launchingWatch, .waitingForMirror:
+            .launching
+        case .running:
+            .recording
+        case .paused:
+            .paused
+        default:
+            .none
+        }
     }
 
     private func requestWatchPresenceIfNeeded(
@@ -446,87 +406,14 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
             return
         }
 
-        guard type == "watch_capture_health_v1",
-              let sessionID = message["session_id"] as? String,
-              let imuSamples = Self.uint64(
-                message["imu_sample_count"]
-              ),
-              let hrEvents = Self.uint64(
-                message["hr_event_count"]
-              ),
-              let maxGap = Self.double(
-                message["max_imu_gap_ms"]
-              ),
-              let nonMonotonic = Self.uint64(
-                message["non_monotonic_imu_count"]
-              )
-        else {
+        guard LiveTelemetrySnapshot.isLiveTelemetry(message) else {
             return
         }
-
-        let sentAt = Self.double(message["sent_at_unix_s"]).map {
-            Date(timeIntervalSince1970: $0)
-        }
-
-        let receivedAt = Date()
-        let previousSessionID = watchCaptureHealth?.sessionID
-        let userAccelerationG = Self.double(message["user_acceleration_g"])
-        let rotationRateRadS = Self.double(
-            message["rotation_rate_rad_s"]
-        )
-        let rollRadians = Self.double(message["device_roll_rad"])
-        let pitchRadians = Self.double(message["device_pitch_rad"])
-        let yawRadians = Self.double(message["device_yaw_rad"])
-        let heartRateBPM = Self.double(message["heart_rate_bpm"])
-        let recentMedianIMUHz = Self.double(
-            message["recent_median_imu_hz"]
-        )
-
-        if previousSessionID != nil && previousSessionID != sessionID {
-            watchTelemetryHistory = []
-        }
-
-        watchCaptureHealth = WatchLiveCaptureHealth(
-            sessionID: sessionID,
-            receivedAt: receivedAt,
-            sourceSentAt: sentAt,
-            imuSampleCount: imuSamples,
-            heartRateEventCount: hrEvents,
-            observedIMUHz: Self.double(
-                message["observed_imu_hz"]
-            ),
-            recentMedianIMUHz: recentMedianIMUHz,
-            maxIMUGapMS: maxGap,
-            nonMonotonicIMUCount: nonMonotonic,
-            heartRateBPM: heartRateBPM,
-            watchBatteryLevel: Self.double(
-                message["watch_battery_level_fraction"]
-            ),
-            userAccelerationG: userAccelerationG,
-            rotationRateRadS: rotationRateRadS,
-            rollRadians: rollRadians,
-            pitchRadians: pitchRadians,
-            yawRadians: yawRadians
-        )
-
-        watchTelemetryHistory.append(
-            WatchTelemetryPoint(
-                timestamp: sentAt ?? receivedAt,
-                sessionID: sessionID,
-                imuHz: recentMedianIMUHz,
-                maxGapMS: maxGap,
-                heartRateBPM: heartRateBPM,
-                userAccelerationG: userAccelerationG,
-                rotationRateRadS: rotationRateRadS,
-                rollRadians: rollRadians,
-                pitchRadians: pitchRadians,
-                yawRadians: yawRadians
-            )
-        )
-        if watchTelemetryHistory.count > 120 {
-            watchTelemetryHistory.removeFirst(
-                watchTelemetryHistory.count - 120
-            )
+        do {
+            let snapshot = try LiveTelemetrySnapshot(message: message)
+            liveTelemetry.ingest(snapshot, receivedAt: Date())
+        } catch {
+            liveTelemetry.recordInvalidPacket()
         }
     }
 
@@ -567,6 +454,16 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
 
         let sentAt = Self.double(message["sent_at_unix_s"]).map {
             Date(timeIntervalSince1970: $0)
+        }
+
+        // refreshWatchState() replays `receivedApplicationContext`. A replay
+        // of the same presence must not look newer than live telemetry.
+        if let existing = watchPresence,
+           sentAt != nil,
+           existing.sourceSentAt == sentAt,
+           existing.captureState == message["capture_state"] as? String,
+           existing.sessionID == message["session_id"] as? String {
+            return
         }
 
         watchPresence = WatchPresence(

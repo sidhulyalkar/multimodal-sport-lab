@@ -46,7 +46,11 @@ struct ProductRunRecord: Identifiable, Equatable, Sendable {
     }
 
     var captureModeLabel: String {
-        productManifest?.captureMode ?? "Legacy / unspecified"
+        guard let raw = productManifest?.captureMode else {
+            return "Legacy / unspecified"
+        }
+        return IndoBoardSessionCoordinator.CaptureMode(rawValue: raw)?
+            .displayName ?? raw
     }
 
     var expectedSourceCount: Int {

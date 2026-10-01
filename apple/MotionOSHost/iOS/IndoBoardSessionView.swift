@@ -106,7 +106,6 @@ struct IndoBoardSessionView: View {
 
         case .starting:
             sessionControl
-            SensorSourceStrip()
 
         case .running, .finishing:
             sessionControl
@@ -152,7 +151,7 @@ struct IndoBoardSessionView: View {
                         .font(.title2.weight(.bold))
                     Text(
                         "M0 · 2 min · "
-                            + session.captureMode.rawValue
+                            + session.captureMode.displayName
                     )
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(.secondary)
@@ -524,23 +523,6 @@ struct IndoBoardSessionView: View {
                         Text(session.instruction(at: elapsed))
                             .font(.headline)
                             .fixedSize(horizontal: false, vertical: true)
-
-                        if let health = phone.watchCaptureHealth {
-                            HStack(spacing: 10) {
-                                liveMetric(
-                                    health.recentMedianIMUHz.map {
-                                        String(format: "%.1f Hz", $0)
-                                    } ?? "warming",
-                                    symbol: "waveform.path"
-                                )
-                                liveMetric(
-                                    health.heartRateBPM.map {
-                                        "\(Int($0.rounded())) bpm"
-                                    } ?? "HR —",
-                                    symbol: "heart.fill"
-                                )
-                            }
-                        }
                     }
                 }
 
@@ -1216,15 +1198,6 @@ struct IndoBoardSessionView: View {
         }
     }
 
-    private func liveMetric(
-        _ value: String,
-        symbol: String
-    ) -> some View {
-        Label(value, systemImage: symbol)
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(.secondary)
-    }
-
     private func errorCard(
         _ message: String
     ) -> some View {
@@ -1264,7 +1237,7 @@ struct IndoBoardSessionView: View {
 
     private var watchPreflightDetail: String {
         if !phone.watchConnectionReady {
-            return phone.watchConnectionDetail
+            return phone.watchStatus.detail
         }
         if !session.watchCaptureAvailable(phone) {
             return session.watchCaptureAvailabilityDetail(phone)

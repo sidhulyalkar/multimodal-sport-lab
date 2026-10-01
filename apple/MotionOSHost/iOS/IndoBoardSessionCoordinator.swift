@@ -24,6 +24,17 @@ final class IndoBoardSessionCoordinator: ObservableObject {
 
         var id: String { rawValue }
 
+        /// User-facing name. `rawValue` is persisted in session evidence and
+        /// must not change.
+        var displayName: String {
+            switch self {
+            case .watchAndPhone:
+                "Watch + iPhone"
+            case .multiviewCalibration:
+                "With external camera"
+            }
+        }
+
         var subtitle: String {
             switch self {
             case .watchAndPhone:
@@ -212,7 +223,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
 
         if requiresExternalCamera && !externalCameraConfirmed {
             errorMessage = (
-                "Multiview calibration requires the Action 4 to be started "
+                "The external camera must be started "
                     + "and its fixed capture profile confirmed before recording."
             )
             phase = .idle
@@ -255,7 +266,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
 
         let previousWatchSessionID =
             phone.watchPresence?.sessionID
-                ?? phone.watchCaptureHealth?.sessionID
+                ?? phone.liveTelemetry.sessionID
         let watchLaunchRequestedAt = Date()
 
         await phone.startP0(locationType: .indoor)
@@ -1041,12 +1052,11 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         let deadline = Date().addingTimeInterval(timeoutSeconds)
 
         while Date() < deadline {
-            if let health = phone.watchCaptureHealth,
-               health.receivedAt >= launchRequestedAt,
-               !health.sessionID.isEmpty,
-               health.sessionID != priorSessionID,
+            if let frame = phone.liveTelemetry.latest,
+               frame.receivedAt >= launchRequestedAt,
+               frame.snapshot.sessionID != priorSessionID,
                phone.state == .running || phone.state == .paused {
-                return health.sessionID
+                return frame.snapshot.sessionID
             }
 
             if let presence = phone.watchPresence,

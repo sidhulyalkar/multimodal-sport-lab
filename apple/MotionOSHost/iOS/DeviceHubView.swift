@@ -1,5 +1,9 @@
+import MotionOSAppleCapture
 import SwiftUI
 
+/// Devices: one row per device, one status, one actionable description.
+/// Pairing, reachability, builds, and transfer counters live in each
+/// device's Advanced details.
 struct DeviceHubView: View {
     @EnvironmentObject private var phone: PhoneSessionCoordinator
     @EnvironmentObject private var pod: EquipmentPodController
@@ -7,26 +11,78 @@ struct DeviceHubView: View {
     @EnvironmentObject private var indoBoard: IndoBoardSessionCoordinator
 
     var body: some View {
-        ScrollView {
-            LazyVStack(spacing: MotionOSDesign.pageSpacing) {
-                header
-                watchCard
-                phoneCard
-                cameraCard
-                action4Card
-                podCard
-                evidencePrinciple
+        List {
+            Section("Core") {
+                NavigationLink {
+                    WatchDeviceDetailView()
+                } label: {
+                    DeviceRow(
+                        title: "Apple Watch",
+                        detail: watchDetail,
+                        symbol: "applewatch",
+                        status: phone.watchStatus.badge,
+                        tint: phone.watchStatus.tint
+                    )
+                }
+
+                NavigationLink {
+                    PhoneDeviceDetailView()
+                } label: {
+                    DeviceRow(
+                        title: "iPhone",
+                        detail: phoneDetail,
+                        symbol: "iphone",
+                        status: phoneReady ? "READY" : "CHECK",
+                        tint: phoneReady ? .green : .orange
+                    )
+                }
             }
-            .motionOSPageWidth()
-            .padding(.horizontal, MotionOSDesign.pageHorizontalPadding)
-            .padding(.top, 10)
-            .padding(.bottom, 36)
+
+            Section("Optional sources") {
+                NavigationLink {
+                    CameraDeviceDetailView()
+                } label: {
+                    DeviceRow(
+                        title: "iPhone Camera",
+                        detail: cameraStatus.detail,
+                        symbol: "camera.fill",
+                        status: cameraStatus.badge,
+                        tint: cameraStatus.tint
+                    )
+                }
+
+                NavigationLink {
+                    ExternalCameraDetailView()
+                } label: {
+                    DeviceRow(
+                        title: "External Camera",
+                        detail: "DJI Osmo Action 4 · start manually, import after",
+                        symbol: "video.fill",
+                        status: indoBoard.externalCameraConfirmed
+                            ? "ENABLED"
+                            : "OPTIONAL",
+                        tint: indoBoard.externalCameraConfirmed
+                            ? .green
+                            : .secondary
+                    )
+                }
+
+                NavigationLink {
+                    PodDeviceDetailView()
+                } label: {
+                    DeviceRow(
+                        title: "Equipment Pod",
+                        detail: podStatus.detail,
+                        symbol: "sensor.tag.radiowaves.forward",
+                        status: podStatus.badge,
+                        tint: podStatus.tint
+                    )
+                }
+            }
         }
-        .background {
-            MotionOSPageBackground()
-        }
+        .listStyle(.insetGrouped)
         .navigationTitle("Devices")
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarTitleDisplayMode(.large)
         .refreshable {
             phone.refreshWatchState()
             phone.refreshHostReadiness()
@@ -37,416 +93,367 @@ struct DeviceHubView: View {
         }
     }
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Devices")
-                .font(.largeTitle.weight(.bold))
-            Text(
-                "The sensor fabric behind MotionOS. Configure hardware here, "
-                    + "then let capture workflows orchestrate it."
-            )
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
-
-            SensorSourceStrip()
+    private var watchDetail: String {
+        if phone.watchStatus == .ready && !phone.watchTwoWayLinkVerified {
+            return "MotionOS detected on Apple Watch"
         }
-        .padding(.horizontal, 2)
+        return phone.watchStatus.detail
     }
 
-    private var watchCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            deviceHeader(
-                title: "Apple Watch",
-                subtitle: "Primary continuous wrist sensor",
-                symbol: "applewatch",
-                color: watchColor,
-                state: watchState
-            )
-
-            Label(
-                watchSummary,
-                systemImage: phone.watchConnectionReady
-                    ? "checkmark.circle.fill"
-                    : "info.circle"
-            )
-            .font(.subheadline)
-            .foregroundStyle(
-                phone.watchConnectionReady
-                    ? Color.green
-                    : Color.secondary
-            )
-
-            if let presence = phone.watchPresence {
-                deviceRow(
-                    "Detected",
-                    presence.receivedAt.formatted(
-                        date: .omitted,
-                        time: .shortened
-                    )
-                )
-                deviceRow(
-                    "App check",
-                    phone.watchTwoWayLinkVerified
-                        ? "two-way verified"
-                        : "checking"
-                )
-                deviceRow(
-                    "WatchOS",
-                    presence.watchSystemVersion
-                )
-                deviceRow(
-                    "MotionOS",
-                    "v\(presence.appVersion) · build \(presence.appBuild)"
-                )
-                deviceRow(
-                    "Workout access",
-                    presence.healthAuthorization
-                )
-                if let battery = presence.watchBatteryLevel {
-                    deviceRow(
-                        "Battery",
-                        String(format: "%.0f%%", battery * 100)
-                    )
-                }
-            }
-
-            Button {
-                phone.refreshWatchState()
-            } label: {
-                Label(
-                    "Check Watch",
-                    systemImage: "arrow.clockwise"
-                )
-                .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.bordered)
-        }
-        .cardStyle()
+    private var phoneReady: Bool {
+        (phone.iPhoneBatteryLevel ?? 1) >= 0.20
+            && (phone.iPhoneAvailableStorageBytes ?? .max) >= 5_000_000_000
     }
 
-    private var phoneCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            deviceHeader(
-                title: "iPhone",
-                subtitle: "Coordinator, camera, inbox, and local evidence store",
-                symbol: "iphone",
-                color: .indigo,
-                state: "ready"
-            )
-
-            deviceRow(
-                "Battery",
-                phone.iPhoneBatteryLevel.map {
-                    String(format: "%.0f%%", $0 * 100)
-                } ?? "unknown"
-            )
-            deviceRow(
-                "Free storage",
-                phone.iPhoneAvailableStorageBytes.map {
-                    ByteCountFormatter.string(
-                        fromByteCount: $0,
-                        countStyle: .file
-                    )
-                } ?? "unknown"
-            )
-            deviceRow(
-                "Workout state",
-                phone.state.rawValue
-            )
-
-            Label(
-                "Development preflight uses 20% battery and 5 GB free as "
-                    + "operator margins, not qualification criteria.",
-                systemImage: "info.circle"
-            )
-            .font(.caption2)
-            .foregroundStyle(.secondary)
+    private var phoneDetail: String {
+        if let battery = phone.iPhoneBatteryLevel, battery < 0.20 {
+            return String(format: "Battery %.0f%% · charge before capture", battery * 100)
         }
-        .cardStyle()
+        if let free = phone.iPhoneAvailableStorageBytes, free < 5_000_000_000 {
+            return "Low storage · free space before capture"
+        }
+        return "Coordinates capture and stores sessions"
     }
 
-    private var cameraCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            deviceHeader(
-                title: "iPhone Camera",
-                subtitle: "Video + frame timing + Vision evidence",
-                symbol: "camera.fill",
-                color: cameraColor,
-                state: camera.phase.rawValue
-            )
-
-            if let config = camera.configuration {
-                deviceRow(
-                    "Camera",
-                    config.localizedName
-                )
-                deviceRow(
-                    "Format",
-                    "\(config.formatWidth)×\(config.formatHeight)"
-                )
-                deviceRow(
-                    "Frame rate",
-                    String(
-                        format: "%.0f fps %@",
-                        config.configuredFrameRate,
-                        config.frameRateLocked ? "locked" : "unlocked"
-                    )
-                )
-                deviceRow(
-                    "Stabilization",
-                    config.stabilizationLockedOff
-                        ? "off"
-                        : config.preferredVideoStabilizationMode
-                )
-                deviceRow(
-                    "Intrinsics",
-                    config.intrinsicDeliveryEnabled
-                        ? "enabled"
-                        : "unavailable"
-                )
-            } else {
-                Text(
-                    "Prepare the camera once to inspect the selected physical "
-                        + "device and capture format."
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
-
-            NavigationLink {
-                CameraCaptureCard()
-            } label: {
-                Label(
-                    "Camera Setup & Evidence",
-                    systemImage: "slider.horizontal.3"
-                )
-                .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.bordered)
-        }
-        .cardStyle()
+    private var cameraStatus: DeviceStatus {
+        DeviceStatus.camera(camera.phase)
     }
 
-    private var action4Card: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            deviceHeader(
-                title: "DJI Osmo Action 4",
-                subtitle: "Optional external calibration camera",
-                symbol: "video.fill",
-                color: indoBoard.externalCameraConfirmed
-                    ? .green
-                    : .secondary,
-                state: indoBoard.externalCameraConfirmed
-                    ? "confirmed"
-                    : "manual"
-            )
+    private var podStatus: DeviceStatus {
+        DeviceStatus.pod(pod.phase)
+    }
+}
 
-            deviceRow("Capture", "4K · 60 fps")
-            deviceRow("Stabilization", "EIS off")
-            deviceRow("FOV", "Standard (Dewarp)")
-            deviceRow("Control", "manual start / import")
+struct DeviceStatus {
+    let badge: String
+    let detail: String
+    let tint: Color
 
-            Label(
-                "MotionOS does not pretend this camera has a live control "
-                    + "link. Start it manually, keep the rig fixed, then import "
-                    + "the untouched movie into the sealed product session.",
-                systemImage: "info.circle"
-            )
-            .font(.caption2)
-            .foregroundStyle(.secondary)
-
-            NavigationLink {
-                IndoBoardSessionView()
-            } label: {
-                Label(
-                    "Open Capture Setup",
-                    systemImage: "scope"
-                )
-                .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.bordered)
+    static func camera(_ phase: CameraCaptureController.Phase) -> DeviceStatus {
+        switch phase {
+        case .idle:
+            DeviceStatus(badge: "OFF", detail: "Prepared automatically for a session", tint: .secondary)
+        case .authorizing:
+            DeviceStatus(badge: "CHECKING", detail: "Requesting camera access", tint: .secondary)
+        case .ready, .evidenceReady:
+            DeviceStatus(badge: "READY", detail: "Video, frame timing, and pose", tint: .green)
+        case .recording:
+            DeviceStatus(badge: "RECORDING", detail: "Recording video evidence", tint: .red)
+        case .finalizing:
+            DeviceStatus(badge: "SAVING", detail: "Sealing the video", tint: .secondary)
+        case .denied:
+            DeviceStatus(badge: "NEEDS PERMISSION", detail: "Allow camera access in Settings", tint: .orange)
+        case .failed:
+            DeviceStatus(badge: "ISSUE", detail: "Open details to retry the camera", tint: .orange)
         }
-        .cardStyle()
     }
 
-    private var podCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            deviceHeader(
-                title: "Equipment Pod",
-                subtitle: "MetaMotionS equipment-frame IMU",
-                symbol: "sensor.tag.radiowaves.forward",
-                color: podColor,
-                state: pod.phase.rawValue
-            )
-
-            if let metadata = pod.deviceMetadata {
-                deviceRow("Model", metadata.model)
-                deviceRow(
-                    "Firmware",
-                    metadata.firmwareRevision
-                )
-                deviceRow(
-                    "Requested accel",
-                    String(format: "%.0f Hz", metadata.requestedAccelHz)
-                )
-                deviceRow(
-                    "Requested gyro",
-                    String(format: "%.0f Hz", metadata.requestedGyroHz)
-                )
-            } else {
-                Text(
-                    "Optional for the first Watch + camera Indo Board product "
-                        + "session. Add it after the core capture is clean."
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
-
-            NavigationLink {
-                EquipmentPodCard()
-            } label: {
-                Label(
-                    "Equipment Pod Setup",
-                    systemImage: "dot.radiowaves.left.and.right"
-                )
-                .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.bordered)
+    static func pod(_ phase: EquipmentPodController.Phase) -> DeviceStatus {
+        switch phase {
+        case .idle:
+            DeviceStatus(badge: "NOT CONNECTED", detail: "MetaMotionS board IMU", tint: .secondary)
+        case .scanning, .connecting:
+            DeviceStatus(badge: "CONNECTING", detail: "Looking for the pod", tint: .secondary)
+        case .recovering, .downloading:
+            DeviceStatus(badge: "SYNCING", detail: "Downloading pod data", tint: .secondary)
+        case .ready, .previewing, .evidenceReady:
+            DeviceStatus(badge: "READY", detail: "MetaMotionS board IMU", tint: .green)
+        case .recording:
+            DeviceStatus(badge: "RECORDING", detail: "Logging on the pod", tint: .red)
+        case .linkLost:
+            DeviceStatus(badge: "LINK LOST", detail: "The pod keeps logging; reconnect to sync", tint: .orange)
+        case .failed:
+            DeviceStatus(badge: "ISSUE", detail: "Open details to reconnect", tint: .orange)
         }
-        .cardStyle()
     }
+}
 
-    private var evidencePrinciple: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label(
-                "One product, independent evidence",
-                systemImage: "point.3.connected.trianglepath.dotted"
-            )
-            .font(.headline)
+private struct DeviceRow: View {
+    let title: String
+    let detail: String
+    let symbol: String
+    let status: String
+    let tint: Color
 
-            Text(
-                "MotionOS coordinates devices without pretending they share "
-                    + "a clock or measurement model. Each sensor preserves its "
-                    + "native evidence first; synchronization and interpretation "
-                    + "remain explicit downstream steps."
-            )
-            .font(.caption)
-            .foregroundStyle(.secondary)
-        }
-        .cardStyle()
-    }
-
-    private func deviceHeader(
-        title: String,
-        subtitle: String,
-        symbol: String,
-        color: Color,
-        state: String
-    ) -> some View {
-        HStack(alignment: .top, spacing: 11) {
-            ZStack {
-                RoundedRectangle(
-                    cornerRadius: 12,
-                    style: .continuous
-                )
-                .fill(color.opacity(0.10))
-                .frame(width: 42, height: 42)
-                Image(systemName: symbol)
-                    .foregroundStyle(color)
-            }
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: symbol)
+                .font(.title3)
+                .foregroundStyle(tint == .secondary ? Color.secondary : tint)
+                .frame(width: 30)
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.headline)
-                Text(subtitle)
+                    .font(.body.weight(.semibold))
+                Text(detail)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             Spacer(minLength: 8)
 
-            Text(state.uppercased())
+            Text(status)
                 .font(.caption2.weight(.bold))
-                .foregroundStyle(color)
-                .lineLimit(1)
-        }
-    }
-
-    private func deviceRow(
-        _ title: String,
-        _ value: String
-    ) -> some View {
-        HStack {
-            Text(title)
-                .font(.subheadline)
-            Spacer(minLength: 8)
-            Text(value)
-                .font(.system(.caption, design: .monospaced))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(tint == .secondary ? Color.secondary : tint)
                 .multilineTextAlignment(.trailing)
+                .lineLimit(2)
         }
+        .padding(.vertical, 6)
+        .frame(minHeight: 44)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// A plain diagnostic key/value row for Advanced details.
+struct DiagnosticRow: View {
+    let title: String
+    let value: String
+
+    init(_ title: String, _ value: String) {
+        self.title = title
+        self.value = value
     }
 
-    private var watchState: String {
-        if phone.watchConnectionChecking {
-            return "checking"
-        }
-        if phone.watchConnectionReady {
-            return "ready"
-        }
-        return phone.watchPaired ? "app setup" : "not paired"
-    }
-
-    private var watchSummary: String {
-        if phone.watchConnectionChecking {
-            return "Checking the paired Apple Watch and MotionOS companion."
-        }
-        if phone.watchTwoWayLinkVerified {
-            return "Apple Watch and iPhone MotionOS apps detected each other."
-        }
-        if phone.watchConnectionReady {
-            return "Apple Watch + MotionOS detected. Open both apps once to verify the two-way link."
-        }
-        if phone.watchPaired {
-            return "Apple Watch is paired. Open MotionOS on the Watch once to finish setup."
-        }
-        return "No Apple Watch is paired with this iPhone."
-    }
-
-    private var watchColor: Color {
-        if phone.watchConnectionReady {
-            return .green
-        }
-        return phone.watchPaired ? .yellow : .secondary
-    }
-
-    private var cameraColor: Color {
-        switch camera.phase {
-        case .ready, .evidenceReady:
-            .green
-        case .recording:
-            .red
-        case .authorizing, .finalizing:
-            .yellow
-        case .failed, .denied:
-            .red
-        case .idle:
-            .secondary
+    var body: some View {
+        LabeledContent(title) {
+            Text(value)
+                .font(.system(.callout, design: .monospaced))
+                .multilineTextAlignment(.trailing)
+                .textSelection(.enabled)
         }
     }
+}
 
-    private var podColor: Color {
-        switch pod.phase {
-        case .ready, .evidenceReady:
-            .green
-        case .previewing, .recording:
-            .cyan
-        case .scanning, .connecting, .recovering, .downloading:
-            .yellow
-        case .linkLost, .failed:
-            .red
-        case .idle:
-            .secondary
+// MARK: - Advanced details
+
+private struct WatchDeviceDetailView: View {
+    @EnvironmentObject private var phone: PhoneSessionCoordinator
+    @EnvironmentObject private var inbox: PhoneJournalInbox
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            let observation = phone.observation(at: context.date)
+            List {
+                Section {
+                    LabeledContent("Status") {
+                        MotionOSStatusPill(
+                            title: observation.link.title,
+                            tint: observation.link.tint
+                        )
+                    }
+                    Text(observation.link.detail)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                Section("Connection") {
+                    DiagnosticRow("System pairing", phone.watchPaired ? "paired" : "not paired")
+                    DiagnosticRow(
+                        "Watch app installed",
+                        phone.systemWatchAppInstalled ? "yes" : "not reported"
+                    )
+                    DiagnosticRow("Live reachability", phone.watchReachable ? "reachable" : "not reachable")
+                    DiagnosticRow("Two-way app check", phone.watchTwoWayLinkVerified ? "verified" : "pending")
+                    DiagnosticRow(
+                        "Last detected",
+                        phone.watchPresence.map {
+                            $0.receivedAt.formatted(date: .omitted, time: .standard)
+                        } ?? "never"
+                    )
+                    DiagnosticRow("Mirrored workout", phone.state.rawValue)
+                }
+
+                if let presence = phone.watchPresence {
+                    Section("Apple Watch") {
+                        DiagnosticRow("watchOS", presence.watchSystemVersion)
+                        DiagnosticRow("MotionOS", "v\(presence.appVersion) · build \(presence.appBuild)")
+                        DiagnosticRow("Health access", presence.healthAuthorization)
+                        DiagnosticRow("Capture state", presence.captureState)
+                        if let battery = presence.watchBatteryLevel {
+                            DiagnosticRow("Battery", String(format: "%.0f%%", battery * 100))
+                        }
+                    }
+                }
+
+                Section("Live preview") {
+                    let diagnostics = phone.liveTelemetry.diagnostics
+                    DiagnosticRow("Observatory", observation.observatory.badge.lowercased())
+                    DiagnosticRow("Packets shown", "\(diagnostics.appended)")
+                    DiagnosticRow("Packets missed", "\(diagnostics.missingSequences)")
+                    DiagnosticRow(
+                        "Ignored",
+                        "\(diagnostics.duplicates) dup · \(diagnostics.outOfOrder) late · "
+                            + "\(diagnostics.retiredSessionPackets) old · \(diagnostics.invalidPackets) invalid"
+                    )
+                    if let frame = phone.liveTelemetry.latest {
+                        DiagnosticRow(
+                            "Last packet",
+                            String(format: "%.1f s ago", max(0, context.date.timeIntervalSince(frame.receivedAt)))
+                        )
+                    }
+                }
+
+                Section("Transfers") {
+                    DiagnosticRow("Watch sessions on iPhone", "\(inbox.sessions.count)")
+                }
+
+                Section {
+                    Button {
+                        phone.refreshWatchState()
+                    } label: {
+                        Label("Check Watch Again", systemImage: "arrow.clockwise")
+                    }
+                } footer: {
+                    Text("Live preview is lossy. Sealed Watch journals are transferred and verified separately.")
+                }
+            }
+            .listStyle(.insetGrouped)
         }
+        .navigationTitle("Apple Watch")
+        .navigationBarTitleDisplayMode(.inline)
+        .task { phone.refreshWatchState() }
+    }
+}
+
+private struct PhoneDeviceDetailView: View {
+    @EnvironmentObject private var phone: PhoneSessionCoordinator
+
+    var body: some View {
+        List {
+            Section {
+                DiagnosticRow(
+                    "Battery",
+                    phone.iPhoneBatteryLevel.map { String(format: "%.0f%%", $0 * 100) } ?? "unknown"
+                )
+                DiagnosticRow(
+                    "Free storage",
+                    phone.iPhoneAvailableStorageBytes.map {
+                        ByteCountFormatter.string(fromByteCount: $0, countStyle: .file)
+                    } ?? "unknown"
+                )
+                DiagnosticRow("Mirrored workout", phone.state.rawValue)
+            } footer: {
+                Text("Capture preflight asks for 20% battery and 5 GB free as operator margins, not qualification criteria.")
+            }
+        }
+        .listStyle(.insetGrouped)
+        .navigationTitle("iPhone")
+        .navigationBarTitleDisplayMode(.inline)
+        .task { phone.refreshHostReadiness() }
+    }
+}
+
+private struct CameraDeviceDetailView: View {
+    @EnvironmentObject private var camera: CameraCaptureController
+
+    var body: some View {
+        List {
+            Section {
+                let status = DeviceStatus.camera(camera.phase)
+                LabeledContent("Status") {
+                    MotionOSStatusPill(title: status.badge.capitalized, tint: status.tint)
+                }
+            }
+
+            if let config = camera.configuration {
+                Section("Capture profile") {
+                    DiagnosticRow("Camera", config.localizedName)
+                    DiagnosticRow("Format", "\(config.formatWidth)×\(config.formatHeight)")
+                    DiagnosticRow(
+                        "Frame rate",
+                        String(
+                            format: "%.0f fps %@",
+                            config.configuredFrameRate,
+                            config.frameRateLocked ? "locked" : "unlocked"
+                        )
+                    )
+                    DiagnosticRow(
+                        "Stabilization",
+                        config.stabilizationLockedOff ? "off" : config.preferredVideoStabilizationMode
+                    )
+                    DiagnosticRow("Intrinsics", config.intrinsicDeliveryEnabled ? "enabled" : "unavailable")
+                }
+            }
+
+            Section {
+                NavigationLink {
+                    CameraCaptureCard()
+                } label: {
+                    Label("Camera Setup & Evidence", systemImage: "slider.horizontal.3")
+                }
+            }
+        }
+        .listStyle(.insetGrouped)
+        .navigationTitle("iPhone Camera")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private struct ExternalCameraDetailView: View {
+    @EnvironmentObject private var indoBoard: IndoBoardSessionCoordinator
+
+    var body: some View {
+        List {
+            Section {
+                DiagnosticRow("Model", "DJI Osmo Action 4")
+                DiagnosticRow("Profile", "4K · 60 fps")
+                DiagnosticRow("Stabilization", "EIS off")
+                DiagnosticRow("Field of view", "Standard (Dewarp)")
+                DiagnosticRow("Control", "manual start · import after")
+                DiagnosticRow("This session", indoBoard.externalCameraConfirmed ? "enabled" : "not used")
+            } footer: {
+                Text("MotionOS has no live control link to this camera. Start it manually, keep the rig fixed, then import the untouched movie into the session.")
+            }
+
+            Section {
+                NavigationLink {
+                    IndoBoardSessionView()
+                } label: {
+                    Label("Open Capture Setup", systemImage: "scope")
+                }
+            }
+        }
+        .listStyle(.insetGrouped)
+        .navigationTitle("External Camera")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private struct PodDeviceDetailView: View {
+    @EnvironmentObject private var pod: EquipmentPodController
+
+    var body: some View {
+        List {
+            Section {
+                let status = DeviceStatus.pod(pod.phase)
+                LabeledContent("Status") {
+                    MotionOSStatusPill(title: status.badge.capitalized, tint: status.tint)
+                }
+            }
+
+            if let metadata = pod.deviceMetadata {
+                Section("Sensor") {
+                    DiagnosticRow("Model", metadata.model)
+                    DiagnosticRow("Firmware", metadata.firmwareRevision)
+                    DiagnosticRow("Requested accel", String(format: "%.0f Hz", metadata.requestedAccelHz))
+                    DiagnosticRow("Requested gyro", String(format: "%.0f Hz", metadata.requestedGyroHz))
+                }
+            }
+
+            Section {
+                NavigationLink {
+                    EquipmentPodCard()
+                } label: {
+                    Label("Equipment Pod Setup", systemImage: "dot.radiowaves.left.and.right")
+                }
+            } footer: {
+                Text("Optional for Watch + iPhone sessions.")
+            }
+        }
+        .listStyle(.insetGrouped)
+        .navigationTitle("Equipment Pod")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }

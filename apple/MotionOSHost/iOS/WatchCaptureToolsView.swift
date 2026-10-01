@@ -51,40 +51,45 @@ struct WatchCaptureToolsView: View {
     }
 
     private var readiness: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            statusRow(
-                "Watch connection",
-                phone.watchConnectionReady,
-                phone.watchConnectionDetail
-            )
-            statusRow(
-                "Workout",
-                phone.state == .running || phone.state == .paused,
-                phone.state == .idle ? "Ready" : phone.state.rawValue.capitalized
-            )
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            let observation = phone.observation(at: context.date)
+            VStack(alignment: .leading, spacing: 10) {
+                statusRow(
+                    "Apple Watch",
+                    observation.link.isReady,
+                    observation.link.title
+                )
+                statusRow(
+                    "Live view",
+                    observation.observatory.isLive,
+                    observation.observatory.badge.capitalized
+                )
 
-            if let health = phone.watchCaptureHealth {
-                HStack(spacing: 8) {
-                    metric(
-                        "IMU",
-                        health.recentMedianIMUHz.map {
-                            String(format: "%.1f Hz", $0)
-                        } ?? "—"
-                    )
-                    metric(
-                        "HR",
-                        health.heartRateBPM.map {
-                            "\(Int($0.rounded()))"
-                        } ?? "—"
-                    )
-                    metric(
-                        "gap",
-                        String(format: "%.0f ms", health.maxIMUGapMS)
-                    )
+                if let snapshot = observation.sessionFrame?.snapshot {
+                    HStack(spacing: 8) {
+                        metric(
+                            "IMU",
+                            snapshot.recentMedianIMUHz.map {
+                                String(format: "%.1f Hz", $0)
+                            } ?? "—"
+                        )
+                        metric(
+                            "HR",
+                            observation.observatory.isLive
+                                ? snapshot.heartRateBPM.map {
+                                    "\(Int($0.rounded()))"
+                                } ?? "—"
+                                : "—"
+                        )
+                        metric(
+                            "gap",
+                            String(format: "%.0f ms", snapshot.maxIMUGapMS)
+                        )
+                    }
                 }
             }
+            .cardStyle()
         }
-        .cardStyle()
     }
 
     private var controls: some View {
