@@ -6,6 +6,8 @@ import MotionOSAppleCapture
 @MainActor
 final class VisionLabController: ObservableObject {
     static let minimumSyncLandmarkCount = 3
+    static let action4AcquisitionProfileID =
+        "m0-action4-4k60-eisoff-standard-dewarp-v1"
     enum Phase: String {
         case idle
         case armed
@@ -69,10 +71,16 @@ final class VisionLabController: ObservableObject {
             capabilities: [
                 "4k",
                 "timecode",
-                "wide_fov",
                 "manual_import",
                 "offline_vision_pose2d",
-            ]
+            ] + (
+                action4RecordingConfirmed
+                    ? [
+                        "operator_confirmed_acquisition_profile:"
+                            + Self.action4AcquisitionProfileID
+                    ]
+                    : []
+            )
         ),
         ]
     }
