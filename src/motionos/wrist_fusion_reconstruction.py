@@ -4,6 +4,7 @@ import json
 import math
 from pathlib import Path
 
+from .indo_board_acquisition import require_indo_board_acquisition
 from .multiview_pose import write_skeleton_sequence_correspondences
 from .pose2d_io import (
     infer_pose2d_source_id,
@@ -205,6 +206,12 @@ def validate_wrist_fusion_reconstruction_spec(
             "calibration reconstruction inputs are missing: "
             + ", ".join(missing)
         )
+
+    require_indo_board_acquisition(
+        required["vision_session"],
+        required["iphone.metadata"],
+        required["action4.metadata"],
+    )
 
     manifest = VisionSessionManifest.from_dict(
         _json_object(required["vision_session"])
