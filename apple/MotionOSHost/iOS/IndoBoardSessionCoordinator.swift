@@ -233,7 +233,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
             phone.watchCaptureHealth?.sessionID
         let watchLaunchRequestedAt = Date()
 
-        await phone.startP0()
+        await phone.startP0(locationType: .indoor)
 
         guard await waitForWatchRunning(phone: phone)
         else {
