@@ -66,8 +66,16 @@ final class SystemsLabQualificationTests: XCTestCase {
         XCTAssertEqual(report.transferLatencySeconds, 2)
         XCTAssertEqual(report.journalByteCount, 42_000)
         XCTAssertEqual(report.journalSHA256, "abc123")
-        XCTAssertEqual(report.watchBatteryDropFraction, 0.01, accuracy: 1e-9)
-        XCTAssertEqual(report.phoneBatteryDropFraction, 0.01, accuracy: 1e-9)
+        XCTAssertEqual(
+            try XCTUnwrap(report.watchBatteryDropFraction),
+            0.01,
+            accuracy: 1e-9
+        )
+        XCTAssertEqual(
+            try XCTUnwrap(report.phoneBatteryDropFraction),
+            0.01,
+            accuracy: 1e-9
+        )
         XCTAssertNil(report.observedWatchBatteryDropPerHour)
     }
 
