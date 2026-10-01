@@ -56,6 +56,7 @@ struct WatchPresence: Equatable, Sendable {
     let watchSystemVersion: String
     let captureState: String
     let captureOrigin: String
+    let sessionID: String?
     let healthAuthorization: String
     let watchBatteryLevel: Double?
 }
@@ -556,6 +557,7 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
                 message["watch_system_version"] as? String ?? "unknown",
             captureState: message["capture_state"] as? String ?? "unknown",
             captureOrigin: message["capture_origin"] as? String ?? "unknown",
+            sessionID: message["session_id"] as? String,
             healthAuthorization:
                 message["health_authorization"] as? String ?? "unknown",
             watchBatteryLevel:
