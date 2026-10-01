@@ -15,6 +15,9 @@ struct CameraCaptureConfiguration: Sendable {
     let formatHeight: Int32
     let minFrameRate: Double
     let maxFrameRate: Double
+    let requestedFrameRate: Double
+    let configuredFrameRate: Double
+    let frameRateLocked: Bool
     let intrinsicDeliveryEnabled: Bool
 
     func metadataObject() -> [String: Any] {
@@ -27,6 +30,9 @@ struct CameraCaptureConfiguration: Sendable {
             "format_height": Int(formatHeight),
             "min_supported_frame_rate": minFrameRate,
             "max_supported_frame_rate": maxFrameRate,
+            "requested_frame_rate": requestedFrameRate,
+            "configured_frame_rate": configuredFrameRate,
+            "frame_rate_locked": frameRateLocked,
             "intrinsic_matrix_delivery_enabled": intrinsicDeliveryEnabled,
         ]
     }
@@ -87,6 +93,7 @@ enum CameraCaptureError: LocalizedError {
     case cannotAddOutput
     case videoConnectionUnavailable
     case writerSettingsUnavailable
+    case targetFrameRateUnavailable(Double)
     case recordingAlreadyActive
     case recordingNotActive
     case invalidPresentationTime
@@ -105,6 +112,9 @@ enum CameraCaptureError: LocalizedError {
             "The capture session has no video connection."
         case .writerSettingsUnavailable:
             "AVFoundation did not provide compatible movie-writer settings."
+        case .targetFrameRateUnavailable(let frameRate):
+            "The active rear-camera format does not support the required " +
+                "\(Int(frameRate)) fps M0-Vision capture rate."
         case .recordingAlreadyActive:
             "A camera evidence recording is already active."
         case .recordingNotActive:
@@ -126,6 +136,7 @@ final class CameraCapturePipeline:
 {
     static let schemaVersion = "motionos.camera.v1"
     static let poseStride: UInt64 = 3
+    static let targetFrameRate: Double = 30.0
 
     private let captureSession = AVCaptureSession()
     private let videoOutput = AVCaptureVideoDataOutput()
@@ -321,10 +332,32 @@ final class CameraCapturePipeline:
             connection.videoRotationAngle = 0
         }
 
+        let ranges = device.activeFormat.videoSupportedFrameRateRanges
+        let targetFrameRate = Self.targetFrameRate
+        guard ranges.contains(where: {
+            $0.minFrameRate <= targetFrameRate
+                && targetFrameRate <= $0.maxFrameRate
+        }) else {
+            throw CameraCaptureError.targetFrameRateUnavailable(
+                targetFrameRate
+            )
+        }
+
+        try device.lockForConfiguration()
+        let frameDuration = CMTime(
+            value: 1,
+            timescale: CMTimeScale(targetFrameRate)
+        )
+        device.activeVideoMinFrameDuration = frameDuration
+        device.activeVideoMaxFrameDuration = frameDuration
+        let configuredFrameRate = 1.0 / CMTimeGetSeconds(
+            device.activeVideoMinFrameDuration
+        )
+        device.unlockForConfiguration()
+
         let dimensions = CMVideoFormatDescriptionGetDimensions(
             device.activeFormat.formatDescription
         )
-        let ranges = device.activeFormat.videoSupportedFrameRateRanges
         let minRate = ranges.map(\.minFrameRate).min() ?? 0
         let maxRate = ranges.map(\.maxFrameRate).max() ?? 0
 
@@ -337,6 +370,9 @@ final class CameraCapturePipeline:
             formatHeight: dimensions.height,
             minFrameRate: minRate,
             maxFrameRate: maxRate,
+            requestedFrameRate: targetFrameRate,
+            configuredFrameRate: configuredFrameRate,
+            frameRateLocked: true,
             intrinsicDeliveryEnabled: intrinsicsEnabled
         )
         self.configuration = configuration
