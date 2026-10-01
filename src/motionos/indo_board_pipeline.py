@@ -12,11 +12,11 @@ from .board_marker_correspondences import (
 )
 from .board_pose_series import build_board_pose_series
 from .indo_board import analyze_indo_board
-from .indo_board_quality import build_indo_board_quality_report
 from .indo_board_qualification import (
     build_indo_board_qualification_receipt,
     validate_qualification_contract,
 )
+from .indo_board_quality import build_indo_board_quality_report
 from .indo_board_reconstruction import build_indo_board_samples
 from .longitudinal import update_longitudinal_profile_if_qualified
 from .multiview_pose import write_skeleton_sequence_correspondences
