@@ -76,6 +76,9 @@ from .simulate import simulate_session
 from .validate import validate_m0_session
 from .vision_clock import build_vision_clock_bundle
 from .wrist_fusion_calibration import calibrate_wrist_fusion
+from .wrist_fusion_reconstruction import (
+    reconstruct_wrist_fusion_calibration,
+)
 from .vision_sync import write_external_camera_sync
 from .world_geometry import (
     build_camera_rig_receipt,
@@ -562,6 +565,17 @@ def _parser() -> argparse.ArgumentParser:
     vision_clock.add_argument("iphone_journal")
     vision_clock.add_argument("external_sync")
     vision_clock.add_argument("output")
+
+    wrist_reconstruction = sub.add_parser(
+        "reconstruct-wrist-fusion-calibration",
+        help=(
+            "synchronize two camera pose journals to Watch time and "
+            "reconstruct 3D skeleton geometry for a separate fusion "
+            "calibration run"
+        ),
+    )
+    wrist_reconstruction.add_argument("spec")
+    wrist_reconstruction.add_argument("output_directory")
 
     qualification_plan = sub.add_parser(
         "build-indo-board-qualification-plan",
@@ -1122,6 +1136,14 @@ def main(argv: list[str] | None = None) -> int:
             args.iphone_journal,
             args.external_sync,
             args.output,
+        )
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+
+    if args.command == "reconstruct-wrist-fusion-calibration":
+        result = reconstruct_wrist_fusion_calibration(
+            args.spec,
+            args.output_directory,
         )
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0
