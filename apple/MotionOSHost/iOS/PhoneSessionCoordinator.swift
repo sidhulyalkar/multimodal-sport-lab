@@ -57,6 +57,11 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
         SessionSyncAcknowledgment?
     @Published private(set) var iPhoneBatteryLevel: Double?
     @Published private(set) var iPhoneAvailableStorageBytes: Int64?
+    @Published private(set) var systemsLabCurrentReport:
+        SystemsLabQualificationReport?
+    @Published private(set) var systemsLabLatestCompletedReport:
+        SystemsLabQualificationReport?
+    @Published private(set) var systemsLabLatestReportURL: URL?
     @Published private(set) var errorMessage: String?
 
     let inbox = PhoneJournalInbox()
@@ -64,6 +69,7 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
     private let healthStore = HKHealthStore()
     private let transport = WatchConnectivityTransport()
     private var mirroredSession: HKWorkoutSession?
+    private var systemsLabTracker = SystemsLabQualificationTracker()
     private var batteryObservers: [NSObjectProtocol] = []
     private var lastWatchPresenceRequestAt = Date.distantPast
     private let watchPresenceRequestMinimumInterval: TimeInterval = 5
@@ -100,6 +106,15 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
                     fileURL: url,
                     metadata: metadata
                 ) {
+                    self.systemsLabTracker.markJournalReceived(
+                        sessionID: receipt.sessionID,
+                        receivedAt: Date(),
+                        byteCount: receipt.byteCount,
+                        sha256: receipt.journalSHA256
+                    )
+                    self.refreshSystemsLabReports(
+                        persistCompleted: true
+                    )
                     self.acknowledgeJournal(receipt)
                 }
             }
@@ -411,7 +426,14 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
         }
         do {
             let snapshot = try LiveTelemetrySnapshot(message: message)
-            liveTelemetry.ingest(snapshot, receivedAt: Date())
+            let receivedAt = Date()
+            liveTelemetry.ingest(snapshot, receivedAt: receivedAt)
+            systemsLabTracker.ingest(
+                snapshot,
+                receivedAt: receivedAt,
+                phoneBatteryFraction: iPhoneBatteryLevel
+            )
+            refreshSystemsLabReports()
         } catch {
             liveTelemetry.recordInvalidPacket()
         }
@@ -466,24 +488,92 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
             return
         }
 
+        let receivedAt = Date()
+        let captureState =
+            message["capture_state"] as? String ?? "unknown"
+        let sessionID = message["session_id"] as? String
+        let watchBattery =
+            Self.double(message["watch_battery_level_fraction"])
+
         watchPresence = WatchPresence(
-            receivedAt: Date(),
+            receivedAt: receivedAt,
             sourceSentAt: sentAt,
             bundleID: bundleID,
             appVersion: message["app_version"] as? String ?? "unknown",
             appBuild: message["app_build"] as? String ?? "unknown",
             watchSystemVersion:
                 message["watch_system_version"] as? String ?? "unknown",
-            captureState: message["capture_state"] as? String ?? "unknown",
+            captureState: captureState,
             captureOrigin: message["capture_origin"] as? String ?? "unknown",
-            sessionID: message["session_id"] as? String,
+            sessionID: sessionID,
             healthAuthorization:
                 message["health_authorization"] as? String ?? "unknown",
             phonePresenceConfirmed:
                 message["phone_presence_confirmed"] as? Bool ?? false,
-            watchBatteryLevel:
-                Self.double(message["watch_battery_level_fraction"])
+            watchBatteryLevel: watchBattery
         )
+
+        systemsLabTracker.observePresence(
+            sessionID: sessionID,
+            captureState: captureState,
+            watchBatteryFraction: watchBattery,
+            phoneBatteryFraction: iPhoneBatteryLevel,
+            receivedAt: receivedAt
+        )
+        refreshSystemsLabReports(
+            persistCompleted:
+                systemsLabTracker.latestCompleted?.journalReceivedAt != nil
+        )
+    }
+
+    private func refreshSystemsLabReports(
+        persistCompleted: Bool = false
+    ) {
+        systemsLabCurrentReport = systemsLabTracker.current
+        systemsLabLatestCompletedReport =
+            systemsLabTracker.latestCompleted
+
+        if persistCompleted,
+           let report = systemsLabTracker.latestCompleted {
+            systemsLabLatestReportURL =
+                persistSystemsLabReport(report)
+        }
+    }
+
+    private func persistSystemsLabReport(
+        _ report: SystemsLabQualificationReport
+    ) -> URL? {
+        do {
+            let manager = FileManager.default
+            let documents = try manager.url(
+                for: .documentDirectory,
+                in: .userDomainMask,
+                appropriateFor: nil,
+                create: true
+            )
+            let directory = documents.appendingPathComponent(
+                "MotionOSSystemsLab",
+                isDirectory: true
+            )
+            try manager.createDirectory(
+                at: directory,
+                withIntermediateDirectories: true
+            )
+
+            let url = directory.appendingPathComponent(
+                "\(report.sessionID)-systems-lab.json"
+            )
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            encoder.dateEncodingStrategy = .iso8601
+            try encoder.encode(report).write(
+                to: url,
+                options: .atomic
+            )
+            return url
+        } catch {
+            return nil
+        }
     }
 
     private func acknowledgeJournal(
