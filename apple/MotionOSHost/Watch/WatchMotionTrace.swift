@@ -2,7 +2,7 @@ import SwiftUI
 
 struct WatchMotionTrace: View {
     let points: [WatchSessionController.VisualTelemetryPoint]
-    let currentDeltaG: Double?
+    let currentUserAccelerationG: Double?
     let currentRotationRate: Double?
 
     var body: some View {
@@ -14,8 +14,8 @@ struct WatchMotionTrace: View {
                         .foregroundStyle(.secondary)
 
                     Text(
-                        currentDeltaG.map {
-                            String(format: "%.2f Δg", $0)
+                        currentUserAccelerationG.map {
+                            String(format: "%.2f g", $0)
                         } ?? "warming up"
                     )
                     .font(
@@ -36,7 +36,7 @@ struct WatchMotionTrace: View {
             }
 
             GeometryReader { proxy in
-                let values = points.map(\.motionDeltaG)
+                let values = points.map(\.userAccelerationG)
                 let maxValue = max(values.max() ?? 0.25, 0.25)
 
                 ZStack {
@@ -94,6 +94,6 @@ struct WatchMotionTrace: View {
             in: RoundedRectangle(cornerRadius: 12, style: .continuous)
         )
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Live dynamic acceleration trace")
+        .accessibilityLabel("Live user acceleration trace")
     }
 }
