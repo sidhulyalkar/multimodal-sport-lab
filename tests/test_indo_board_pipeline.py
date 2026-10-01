@@ -1020,7 +1020,7 @@ def test_pipeline_preflight_rejects_feedback_condition_drift(tmp_path):
 
 
 def test_pipeline_preflight_rejects_modified_frozen_plan_evidence(tmp_path):
-    spec, document, rig = _fixture(tmp_path)
+    spec, _document, rig = _fixture(tmp_path)
     raw = json.loads(rig.read_text(encoding="utf-8"))
     raw["rig_id"] = "modified-after-plan-freeze"
     rig.write_text(json.dumps(raw), encoding="utf-8")
