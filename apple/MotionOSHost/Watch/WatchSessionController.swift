@@ -83,12 +83,23 @@ final class WatchSessionController: ObservableObject {
     private var productCueTitle: String?
     private var linkedProductRunID: String?
     @Published private(set) var rejectedProductControlCount: UInt64 = 0
+    @Published private(set) var pendingTransferCount = 0
+
+    private struct PendingJournalTransfer {
+        let url: URL
+        let evidence: FileEvidenceDigest
+        let metadata: [String: Any]
+    }
+
+    private var pendingJournalTransfers: [String: PendingJournalTransfer] = [:]
     private var closedJournalURL: URL?
     private var closedJournalEvidence: FileEvidenceDigest?
     private var imuHealth = SampleTimingHealth()
     private var lastTelemetrySentAt = Date.distantPast
     private var lastTransferQueueAttemptAt = Date.distantPast
+    private var lastPhonePresenceRequestAt = Date.distantPast
     private let automaticTransferRetryInterval: TimeInterval = 15
+    private let phonePresenceRequestMinimumInterval: TimeInterval = 5
 
     private init() {
         workout.onHeartRateBPM = { [weak self] bpm, timestamp in
@@ -165,17 +176,23 @@ final class WatchSessionController: ObservableObject {
     }
 
     var hasRecoverableJournal: Bool {
-        closedJournalURL != nil && closedJournalEvidence != nil
+        guard let id = sessionID else {
+            return closedJournalURL != nil && closedJournalEvidence != nil
+        }
+        return pendingJournalTransfers[id] != nil
+            || (closedJournalURL != nil && closedJournalEvidence != nil)
     }
 
     var canStartCapture: Bool {
-        if state == .idle || state == .transferred {
+        switch state {
+        case .idle, .journalReady, .transferQueued,
+                .transportComplete, .transferred:
             return true
+        case .failed:
+            return journal == nil
+        default:
+            return false
         }
-        if state == .failed {
-            return journal == nil && !hasRecoverableJournal
-        }
-        return false
     }
 
     var healthAuthorizationLabel: String {
@@ -192,19 +209,16 @@ final class WatchSessionController: ObservableObject {
     }
 
     var phoneLinkLabel: String {
-        if phoneReachable {
-            return "Connected"
-        }
-        if phonePresenceConfirmed {
-            return "Background ready"
+        if phoneReachable || phonePresenceConfirmed {
+            return "Ready"
         }
         if companionAppInstalled {
-            return "Companion ready"
+            return "Installed"
         }
         if connectivityActivated {
-            return "Waiting for iPhone"
+            return "Open iPhone app"
         }
-        return "Starting link"
+        return "Starting"
     }
 
     func applicationDidBecomeActive() {
@@ -421,14 +435,102 @@ final class WatchSessionController: ObservableObject {
 
         healthAuthorizationStatus = workout.workoutAuthorizationStatus
         publishPresence()
+        requestPhonePresenceIfNeeded()
+        retryPendingTransfersIfNeeded()
+    }
 
-        if connectivityActivated,
-           state == .journalReady,
-           hasRecoverableJournal,
-           Date().timeIntervalSince(lastTransferQueueAttemptAt)
-                >= automaticTransferRetryInterval {
-            retryTransfer()
+    private func requestPhonePresenceIfNeeded(
+        at date: Date = Date()
+    ) {
+        guard phoneReachable,
+              date.timeIntervalSince(lastPhonePresenceRequestAt)
+                >= phonePresenceRequestMinimumInterval
+        else {
+            return
         }
+
+        if transport.sendMessage(
+            [
+                "motionos_message": "phone_presence_request_v1",
+                "sent_at_unix_s": date.timeIntervalSince1970,
+            ]
+        ) {
+            lastPhonePresenceRequestAt = date
+        }
+    }
+
+    private func retryPendingTransfersIfNeeded(
+        at date: Date = Date()
+    ) {
+        guard connectivityActivated,
+              !pendingJournalTransfers.isEmpty,
+              date.timeIntervalSince(lastTransferQueueAttemptAt)
+                >= automaticTransferRetryInterval
+        else {
+            return
+        }
+
+        lastTransferQueueAttemptAt = date
+        for (id, pending) in pendingJournalTransfers {
+            queueTransfer(
+                journalURL: pending.url,
+                sessionID: id
+            )
+        }
+    }
+
+    func dismissCompletedCapture() {
+        guard state == .journalReady
+                || state == .transferQueued
+                || state == .transportComplete
+                || state == .transferred
+        else {
+            return
+        }
+
+        closedJournalURL = nil
+        closedJournalEvidence = nil
+        lastTransferredURL = nil
+        sessionID = nil
+        startedAt = nil
+        errorMessage = nil
+        state = .idle
+        publishPresence()
+    }
+
+    @discardableResult
+    func deleteCurrentRecording() -> Bool {
+        guard state != .running,
+              state != .paused,
+              state != .starting,
+              state != .ending,
+              let id = sessionID
+        else {
+            return false
+        }
+
+        _ = transport.cancelJournalTransfers(sessionID: id)
+
+        let journalURL =
+            pendingJournalTransfers[id]?.url
+                ?? closedJournalURL
+        if let journalURL {
+            let directory = journalURL.deletingLastPathComponent()
+            try? FileManager.default.removeItem(at: directory)
+        }
+
+        pendingJournalTransfers.removeValue(forKey: id)
+        pendingTransferCount = pendingJournalTransfers.count
+
+        closedJournalURL = nil
+        closedJournalEvidence = nil
+        lastTransferredURL = nil
+        sessionID = nil
+        startedAt = nil
+        errorMessage = nil
+        state = .idle
+        publishPresence()
+        return true
     }
 
     @discardableResult
@@ -453,13 +555,14 @@ final class WatchSessionController: ObservableObject {
     }
 
     func retryTransfer() {
-        guard (
-            state == .journalReady
+        guard state == .journalReady
+                || state == .transferQueued
                 || state == .transportComplete
-                || (state == .failed && hasRecoverableJournal)
-        ),
-        let journalURL = closedJournalURL,
-        let id = sessionID
+                || (state == .failed && hasRecoverableJournal),
+              let id = sessionID,
+              let journalURL =
+                pendingJournalTransfers[id]?.url
+                    ?? closedJournalURL
         else {
             return
         }
@@ -604,6 +707,10 @@ final class WatchSessionController: ObservableObject {
 
             closedJournalURL = journalURL
             closedJournalEvidence = try FileEvidence.digest(journalURL)
+            registerPendingJournal(
+                journalURL: journalURL,
+                sessionID: id
+            )
 
             if shouldPreserveFailure {
                 return
@@ -629,20 +736,16 @@ final class WatchSessionController: ObservableObject {
         captureRejections = admission.rejections
     }
 
-    private func queueTransfer(
+    private func registerPendingJournal(
         journalURL: URL,
         sessionID: String
     ) {
-        lastTransferQueueAttemptAt = Date()
-
         guard let evidence = closedJournalEvidence else {
-            errorMessage = "Closed Watch journal has no verified digest."
-            state = .journalReady
             return
         }
-
-        let preservingCaptureFailure = state == .failed
-        let priorError = errorMessage
+        guard pendingJournalTransfers[sessionID] == nil else {
+            return
+        }
 
         var transferMetadata: [String: Any] = [
             "session_id": sessionID,
@@ -666,21 +769,59 @@ final class WatchSessionController: ObservableObject {
             transferMetadata["product_run_id"] = linkedProductRunID
         }
 
-        let transfer = transport.transferJournal(
-            journalURL,
+        pendingJournalTransfers[sessionID] = PendingJournalTransfer(
+            url: journalURL,
+            evidence: evidence,
             metadata: transferMetadata
+        )
+        pendingTransferCount = pendingJournalTransfers.count
+    }
+
+    private func queueTransfer(
+        journalURL: URL,
+        sessionID: String
+    ) {
+        if pendingJournalTransfers[sessionID] == nil {
+            registerPendingJournal(
+                journalURL: journalURL,
+                sessionID: sessionID
+            )
+        }
+
+        guard let pending = pendingJournalTransfers[sessionID] else {
+            if self.sessionID == sessionID {
+                errorMessage = "Closed Watch journal has no verified digest."
+                state = .journalReady
+            }
+            return
+        }
+
+        lastTransferQueueAttemptAt = Date()
+        let visibleSession = self.sessionID == sessionID
+            && state != .running
+            && state != .paused
+            && state != .starting
+            && state != .ending
+        let preservingCaptureFailure = visibleSession && state == .failed
+        let priorError = errorMessage
+
+        let transfer = transport.transferJournal(
+            pending.url,
+            metadata: pending.metadata
         )
 
         if transfer != nil {
-            lastTransferredURL = journalURL
-            if !preservingCaptureFailure {
-                errorMessage = nil
+            if visibleSession {
+                lastTransferredURL = pending.url
+                if !preservingCaptureFailure {
+                    errorMessage = nil
+                    state = .transferQueued
+                }
             }
-            state = .transferQueued
-        } else {
+        } else if visibleSession {
             let transferMessage = (
-                "WatchConnectivity is not active yet. "
-                + "The journal remains safe on Watch."
+                "The recording is safe on this Watch and will retry "
+                + "when the iPhone link is available."
             )
             errorMessage = preservingCaptureFailure
                 ? [priorError, transferMessage]
@@ -697,26 +838,36 @@ final class WatchSessionController: ObservableObject {
         metadata: [String: Any]?,
         error: Error?
     ) {
-        guard let id = sessionID,
-              metadata?["session_id"] as? String == id
+        guard let id = metadata?["session_id"] as? String,
+              pendingJournalTransfers[id] != nil
         else {
             return
         }
 
+        let visibleSession = sessionID == id
+            && state != .running
+            && state != .paused
+            && state != .starting
+            && state != .ending
+
         if let error {
-            errorMessage = (
-                "Journal transfer failed: "
-                + error.localizedDescription
-                + ". Source remains safe on Watch."
-            )
-            state = .journalReady
+            if visibleSession {
+                errorMessage = (
+                    "The iPhone transfer paused: "
+                    + error.localizedDescription
+                    + ". The recording is still safe on Watch."
+                )
+                state = .journalReady
+                publishPresence()
+            }
             return
         }
 
-        if state != .transferred {
+        if visibleSession && state != .transferred {
             state = .transportComplete
+            errorMessage = nil
+            publishPresence()
         }
-        publishPresence()
     }
 
     private func handleMessage(
@@ -729,6 +880,10 @@ final class WatchSessionController: ObservableObject {
         switch type {
         case "watch_presence_request_v1":
             publishPresence()
+
+        case "phone_presence_request_v1":
+            // This request is intended for iPhone and is harmless if echoed.
+            return
 
         case "guided_protocol_cue_v1":
             guard let title = message["step_title"] as? String else {
@@ -876,45 +1031,59 @@ final class WatchSessionController: ObservableObject {
     ) {
         guard userInfo["motionos_message"] as? String
                 == "journal_received_ack",
-              let id = sessionID,
-              userInfo["session_id"] as? String == id,
-              let evidence = closedJournalEvidence,
+              let id = userInfo["session_id"] as? String,
+              let pending = pendingJournalTransfers[id],
               let receivedHash = userInfo["journal_sha256"] as? String
         else {
             return
         }
 
-        guard receivedHash.lowercased() == evidence.sha256 else {
-            errorMessage = (
-                "iPhone receipt hash did not match the Watch journal. "
-                + "Source remains safe on Watch."
-            )
-            state = .journalReady
+        let visibleSession = sessionID == id
+            && state != .running
+            && state != .paused
+            && state != .starting
+            && state != .ending
+
+        guard receivedHash.lowercased() == pending.evidence.sha256 else {
+            if visibleSession {
+                errorMessage = (
+                    "The iPhone receipt did not match this recording. "
+                    + "The Watch copy has been kept."
+                )
+                state = .journalReady
+                publishPresence()
+            }
             return
         }
 
-        errorMessage = nil
-        state = .transferred
-        releaseVerifiedLocalJournal()
-        WKInterfaceDevice.current().play(.success)
-        publishPresence()
+        releaseVerifiedLocalJournal(
+            sessionID: id,
+            journalURL: pending.url
+        )
+        pendingJournalTransfers.removeValue(forKey: id)
+        pendingTransferCount = pendingJournalTransfers.count
+
+        if visibleSession {
+            errorMessage = nil
+            state = .transferred
+            closedJournalURL = nil
+            closedJournalEvidence = nil
+            WKInterfaceDevice.current().play(.success)
+            publishPresence()
+        }
     }
 
-    private func releaseVerifiedLocalJournal() {
-        guard let journalURL = closedJournalURL else { return }
-
-        // The iPhone has already re-hashed this exact journal and returned the
-        // matching digest. At that point the Watch copy is no longer the only
-        // durable evidence, so release it instead of accumulating sessions
-        // forever on a small wearable filesystem.
+    private func releaseVerifiedLocalJournal(
+        sessionID: String,
+        journalURL: URL
+    ) {
+        // The iPhone has re-hashed this exact journal and returned the
+        // matching digest. Only now is the Watch copy eligible for deletion.
         let sessionDirectory = journalURL.deletingLastPathComponent()
         do {
             try FileManager.default.removeItem(at: sessionDirectory)
-            closedJournalURL = nil
-            closedJournalEvidence = nil
         } catch {
-            // Storage cleanup must never downgrade a successfully verified
-            // transfer. A later app version can reclaim orphaned directories.
+            // Cleanup failure must not invalidate an already verified receipt.
         }
     }
 
