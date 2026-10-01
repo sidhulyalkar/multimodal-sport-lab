@@ -17,7 +17,7 @@ struct WatchLiveCaptureHealth: Equatable, Sendable {
     let nonMonotonicIMUCount: UInt64
     let heartRateBPM: Double?
     let watchBatteryLevel: Double?
-    let motionDeltaG: Double?
+    let userAccelerationG: Double?
     let rotationRateRadS: Double?
     let rollRadians: Double?
     let pitchRadians: Double?
@@ -31,7 +31,7 @@ struct WatchTelemetryPoint: Identifiable, Equatable, Sendable {
     let imuHz: Double?
     let maxGapMS: Double
     let heartRateBPM: Double?
-    let motionDeltaG: Double?
+    let userAccelerationG: Double?
     let rotationRateRadS: Double?
     let rollRadians: Double?
     let pitchRadians: Double?
@@ -268,7 +268,7 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
 
         let receivedAt = Date()
         let previousSessionID = watchCaptureHealth?.sessionID
-        let motionDeltaG = Self.double(message["motion_delta_g"])
+        let userAccelerationG = Self.double(message["user_acceleration_g"])
         let rotationRateRadS = Self.double(
             message["rotation_rate_rad_s"]
         )
@@ -300,7 +300,7 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
             watchBatteryLevel: Self.double(
                 message["watch_battery_level_fraction"]
             ),
-            motionDeltaG: motionDeltaG,
+            userAccelerationG: userAccelerationG,
             rotationRateRadS: rotationRateRadS,
             rollRadians: rollRadians,
             pitchRadians: pitchRadians,
@@ -314,7 +314,7 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
                 imuHz: recentMedianIMUHz,
                 maxGapMS: maxGap,
                 heartRateBPM: heartRateBPM,
-                motionDeltaG: motionDeltaG,
+                userAccelerationG: userAccelerationG,
                 rotationRateRadS: rotationRateRadS,
                 rollRadians: rollRadians,
                 pitchRadians: pitchRadians,
