@@ -47,10 +47,18 @@ struct VisionLabCard: View {
             .disabled(vision.phase == .capturing)
 
             Toggle(
-                "Action 4 is mounted and recording",
+                "Action 4 · 4K/60 · EIS off · Standard (Dewarp) · recording",
                 isOn: $vision.action4RecordingConfirmed
             )
             .disabled(vision.phase == .capturing)
+
+            Text(
+                "This confirmation is sealed into the vision session. "
+                    + "Do not change Action 4 FOV, stabilization, resolution, "
+                    + "or frame rate after camera calibration."
+            )
+            .font(.caption2)
+            .foregroundStyle(.secondary)
 
             if vision.phase == .idle
                 || vision.phase == .sealed
@@ -417,10 +425,10 @@ struct VisionLabCard: View {
                 } ?? "unknown"
             )
             readinessRow(
-                "Action 4 recording",
+                "Action 4 profile",
                 ready: vision.action4RecordingConfirmed,
                 value: vision.action4RecordingConfirmed
-                    ? "confirmed"
+                    ? "4K60 · EIS off · Dewarp"
                     : "not confirmed"
             )
         }
