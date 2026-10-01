@@ -29,6 +29,18 @@ public struct ProductSessionManifest: Codable, Equatable, Sendable {
         public let label: String
         public let acknowledgedAtUTC: String
         public let watchDeviceTimeNS: UInt64
+
+        public init(
+            cueID: String,
+            label: String,
+            acknowledgedAtUTC: String,
+            watchDeviceTimeNS: UInt64
+        ) {
+            self.cueID = cueID
+            self.label = label
+            self.acknowledgedAtUTC = acknowledgedAtUTC
+            self.watchDeviceTimeNS = watchDeviceTimeNS
+        }
     }
 
     public init(
