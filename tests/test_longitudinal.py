@@ -4,6 +4,7 @@ from motionos.indo_board import IndoBoardSample, analyze_indo_board
 from motionos.longitudinal import (
     load_longitudinal_profile,
     update_longitudinal_profile,
+    update_longitudinal_profile_if_qualified,
 )
 
 
@@ -63,3 +64,42 @@ def test_low_confidence_metric_does_not_update_baseline(tmp_path):
 
     assert profile.processed_session_ids == ["s-low"]
     assert profile.metric_baselines == {}
+
+
+
+def test_unqualified_session_cannot_mutate_longitudinal_profile(tmp_path):
+    path = tmp_path / "indo-board-profile.json"
+
+    profile, changed = update_longitudinal_profile_if_qualified(
+        path,
+        _report("rejected-session"),
+        qualification_passed=False,
+    )
+
+    assert changed is False
+    assert profile.processed_session_ids == []
+    assert profile.metric_baselines == {}
+    assert not path.exists()
+
+
+def test_qualified_session_updates_once_and_duplicate_is_idempotent(tmp_path):
+    path = tmp_path / "indo-board-profile.json"
+    report = _report("qualified-session")
+
+    first, first_changed = update_longitudinal_profile_if_qualified(
+        path,
+        report,
+        qualification_passed=True,
+    )
+    second, second_changed = update_longitudinal_profile_if_qualified(
+        path,
+        report,
+        qualification_passed=True,
+    )
+
+    assert first_changed is True
+    assert second_changed is False
+    assert first.processed_session_ids == ["qualified-session"]
+    assert second.metric_baselines[
+        "balance_stability_rms_m"
+    ].sample_count == 1
