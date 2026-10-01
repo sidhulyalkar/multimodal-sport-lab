@@ -644,14 +644,10 @@ struct WatchContentView: View {
             "PAUSED"
         case .ending:
             "FINISHING"
-        case .journalReady:
-            "SAFE"
-        case .transferQueued:
-            "QUEUED"
-        case .transportComplete:
-            "VERIFYING"
+        case .journalReady, .transferQueued, .transportComplete:
+            "SAVED"
         case .transferred:
-            "VERIFIED"
+            "SAVED"
         case .failed:
             "CHECK"
         }
@@ -668,7 +664,7 @@ struct WatchContentView: View {
         case .failed:
             "exclamationmark.triangle.fill"
         case .journalReady, .transferQueued, .transportComplete:
-            "arrow.up.doc.fill"
+            "checkmark.doc.fill"
         default:
             "figure.run"
         }
