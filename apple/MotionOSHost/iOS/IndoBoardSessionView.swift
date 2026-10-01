@@ -593,9 +593,11 @@ struct IndoBoardSessionView: View {
                     }
                 } label: {
                     Label(
-                        elapsed >= 110
+                        elapsed
+                            >= IndoBoardProductProtocol
+                                .targetDurationSeconds
                             ? "Finish & Seal Session"
-                            : "Finish Early & Seal",
+                            : "Stop Early & Preserve Attempt",
                         systemImage: "stop.circle.fill"
                     )
                     .frame(maxWidth: .infinity)
@@ -799,11 +801,28 @@ struct IndoBoardSessionView: View {
     private var sealedSummary: some View {
         VStack(alignment: .leading, spacing: 12) {
             MotionOSSectionHeader(
-                title: "Capture sealed",
-                subtitle: "Raw sources remain independent and hashable",
-                systemImage: "checkmark.seal.fill",
-                accent: .green
+                title: session.outcome == .aborted
+                    ? "Attempt preserved"
+                    : "Capture sealed",
+                subtitle: session.outcome == .aborted
+                    ? "Stopped early or failed to start; available evidence remains inspectable"
+                    : "Raw sources remain independent and hashable",
+                systemImage: session.outcome == .aborted
+                    ? "exclamationmark.triangle.fill"
+                    : "checkmark.seal.fill",
+                accent: session.outcome == .aborted
+                    ? .yellow
+                    : .green
             )
+
+            if session.outcome == .aborted {
+                Label(
+                    "This attempt is excluded from longitudinal comparisons.",
+                    systemImage: "chart.line.downtrend.xyaxis"
+                )
+                .font(.caption)
+                .foregroundStyle(.yellow)
+            }
 
             VStack(spacing: 8) {
                 completionRow(
