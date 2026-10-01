@@ -30,6 +30,11 @@ struct JournalIngestReceipt: Sendable {
 
 @MainActor
 final class PhoneJournalInbox: ObservableObject {
+    private enum ReviewOutcome: Sendable {
+        case success(WatchSessionSummary)
+        case failure(String)
+    }
+
     @Published private(set) var latestSessionID: String?
     @Published private(set) var latestJournalURL: URL?
     @Published private(set) var latestHostMetadataURL: URL?
@@ -229,13 +234,17 @@ final class PhoneJournalInbox: ObservableObject {
         reviewIsLoading = true
 
         reviewTask = Task { [weak self] in
-            let result = await Task.detached(
+            let outcome = await Task.detached(
                 priority: .utility
-            ) {
-                Result {
-                    try WatchSessionSummaryAnalyzer.summarizeJournal(
-                        at: journalURL
+            ) { () -> ReviewOutcome in
+                do {
+                    return .success(
+                        try WatchSessionSummaryAnalyzer.summarizeJournal(
+                            at: journalURL
+                        )
                     )
+                } catch {
+                    return .failure(error.localizedDescription)
                 }
             }.value
 
@@ -247,13 +256,13 @@ final class PhoneJournalInbox: ObservableObject {
             }
 
             self.reviewIsLoading = false
-            switch result {
+            switch outcome {
             case .success(let summary):
                 self.latestReview = summary
                 self.latestReviewError = nil
-            case .failure(let error):
+            case .failure(let message):
                 self.latestReview = nil
-                self.latestReviewError = error.localizedDescription
+                self.latestReviewError = message
             }
         }
     }
