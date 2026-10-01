@@ -853,30 +853,24 @@ final class WatchSessionController: ObservableObject {
                 "watch-transfer.json"
             )
 
-            var metadata: [String: Any] = [
-                "session_id": sessionID,
-                "schema_version": "motionos.m0.v1",
-                "stream": "/body/watch",
-                "journal_sha256": evidence.sha256,
-                "journal_byte_count": evidence.byteCount,
-                "capture_origin": "Recovered Watch journal",
-            ]
-
-            if let data = try? Data(contentsOf: sidecarURL),
-               let object = try? JSONSerialization.jsonObject(
+            // Only a sidecar written after journal.close() proves this file was
+            // sealed. Never auto-transfer an orphaned in-progress journal.
+            guard let data = try? Data(contentsOf: sidecarURL),
+                  let object = try? JSONSerialization.jsonObject(
                     with: data
-               ) as? [String: Any],
-               let storedHash = object["journal_sha256"] as? String,
-               storedHash.lowercased() == evidence.sha256,
-               let storedMetadata =
-                    object["transfer_metadata"] as? [String: Any] {
-                metadata = storedMetadata
+                  ) as? [String: Any],
+                  let storedHash = object["journal_sha256"] as? String,
+                  storedHash.lowercased() == evidence.sha256,
+                  let storedMetadata =
+                    object["transfer_metadata"] as? [String: Any]
+            else {
+                continue
             }
 
             pendingJournalTransfers[sessionID] = PendingJournalTransfer(
                 url: journalURL,
                 evidence: evidence,
-                metadata: metadata
+                metadata: storedMetadata
             )
         }
 
