@@ -85,6 +85,12 @@ struct DeviceHubView: View {
                     )
                 )
                 deviceRow(
+                    "App check",
+                    phone.watchTwoWayLinkVerified
+                        ? "two-way verified"
+                        : "checking"
+                )
+                deviceRow(
                     "WatchOS",
                     presence.watchSystemVersion
                 )
@@ -389,10 +395,11 @@ struct DeviceHubView: View {
     }
 
     private var watchSummary: String {
+        if phone.watchTwoWayLinkVerified {
+            return "Apple Watch and iPhone MotionOS apps detected each other."
+        }
         if phone.watchConnectionReady {
-            return phone.watchReachable
-                ? "Apple Watch + MotionOS detected now"
-                : "Apple Watch + MotionOS are ready"
+            return "Apple Watch + MotionOS detected. Open both apps once to verify the two-way link."
         }
         if phone.watchPaired {
             return "Apple Watch is paired. Open MotionOS on the Watch once to finish setup."
