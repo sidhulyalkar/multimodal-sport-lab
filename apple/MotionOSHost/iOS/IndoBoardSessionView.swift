@@ -260,30 +260,9 @@ struct IndoBoardSessionView: View {
 
             readinessRow(
                 title: "Apple Watch",
-                detail: watchDetail,
-                ready: phone.watchPaired && phone.watchAppInstalled,
+                detail: watchPreflightDetail,
+                ready: watchPreflightReady,
                 symbol: "applewatch"
-            )
-
-            readinessRow(
-                title: "Watch link",
-                detail: phone.watchConnectionDetail,
-                ready: phone.watchConnectionReady,
-                symbol: "dot.radiowaves.left.and.right"
-            )
-
-            readinessRow(
-                title: "Watch capture",
-                detail: session.watchCaptureAvailabilityDetail(phone),
-                ready: session.watchCaptureAvailable(phone),
-                symbol: "record.circle"
-            )
-
-            readinessRow(
-                title: "Workout access",
-                detail: session.watchWorkoutAccessDetail(phone),
-                ready: session.watchWorkoutAccessReady(phone),
-                symbol: "heart.circle"
             )
 
             readinessRow(
@@ -1277,8 +1256,23 @@ struct IndoBoardSessionView: View {
         return "profile needs review"
     }
 
-    private var watchDetail: String {
-        phone.watchConnectionDetail
+    private var watchPreflightReady: Bool {
+        phone.watchConnectionReady
+            && session.watchCaptureAvailable(phone)
+            && session.watchWorkoutAccessReady(phone)
+    }
+
+    private var watchPreflightDetail: String {
+        if !phone.watchConnectionReady {
+            return phone.watchConnectionDetail
+        }
+        if !session.watchCaptureAvailable(phone) {
+            return session.watchCaptureAvailabilityDetail(phone)
+        }
+        if !session.watchWorkoutAccessReady(phone) {
+            return "Open MotionOS on Watch and enable Health"
+        }
+        return "Ready"
     }
 
     private var externalCameraEnabled: Binding<Bool> {
@@ -1297,10 +1291,7 @@ struct IndoBoardSessionView: View {
     }
 
     private var preflightReady: Bool {
-        phone.watchPaired
-            && phone.watchAppInstalled
-            && session.watchCaptureAvailable(phone)
-            && session.watchWorkoutAccessReady(phone)
+        watchPreflightReady
             && (
                 camera.phase == .ready
                     || camera.phase == .evidenceReady
