@@ -30,6 +30,7 @@ struct ProductSessionManifest: Codable, Equatable, Sendable {
         runID: String,
         captureMode: String,
         targetDurationSeconds: Double,
+        createdAtUTC: String = ISO8601DateFormatter().string(from: Date()),
         watchSessionID: String?,
         cameraSessionID: String?,
         syncReceipts: [SyncReceipt],
@@ -44,7 +45,7 @@ struct ProductSessionManifest: Codable, Equatable, Sendable {
         self.sport = "indo_board"
         self.captureMode = captureMode
         self.targetDurationSeconds = targetDurationSeconds
-        self.createdAtUTC = ISO8601DateFormatter().string(from: Date())
+        self.createdAtUTC = createdAtUTC
         self.watchSessionID = watchSessionID
         self.cameraSessionID = cameraSessionID
         self.syncReceipts = syncReceipts
