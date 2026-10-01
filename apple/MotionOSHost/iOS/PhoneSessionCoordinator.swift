@@ -333,7 +333,14 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
         return age <= maxAge
     }
 
+    var watchConnectionChecking: Bool {
+        transport.session.activationState != .activated
+    }
+
     var watchConnectionLabel: String {
+        if watchConnectionChecking {
+            return "Checking Watch"
+        }
         if state == .running || state == .paused {
             return "Watch recording"
         }
@@ -347,6 +354,9 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
     }
 
     var watchConnectionDetail: String {
+        if watchConnectionChecking {
+            return "Checking Apple Watch connection"
+        }
         if watchReachable {
             return "MotionOS detected now"
         }
