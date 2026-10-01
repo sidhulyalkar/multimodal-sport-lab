@@ -538,6 +538,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
                     runID: existing.runID,
                     captureMode: existing.captureMode,
                     targetDurationSeconds: existing.targetDurationSeconds,
+                    createdAtUTC: existing.createdAtUTC,
                     watchSessionID: existing.watchSessionID,
                     cameraSessionID: existing.cameraSessionID,
                     syncReceipts: existing.syncReceipts,
