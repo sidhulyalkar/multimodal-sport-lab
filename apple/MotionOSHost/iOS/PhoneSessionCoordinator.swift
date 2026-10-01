@@ -58,6 +58,7 @@ struct WatchPresence: Equatable, Sendable {
     let captureOrigin: String
     let sessionID: String?
     let healthAuthorization: String
+    let phonePresenceConfirmed: Bool
     let watchBatteryLevel: Double?
 }
 
@@ -370,6 +371,11 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
             )
     }
 
+    var watchTwoWayLinkVerified: Bool {
+        hasRecentWatchPresence()
+            && (watchPresence?.phonePresenceConfirmed == true)
+    }
+
     private func requestWatchPresenceIfNeeded(
         at date: Date = Date()
     ) {
@@ -567,6 +573,8 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
             sessionID: message["session_id"] as? String,
             healthAuthorization:
                 message["health_authorization"] as? String ?? "unknown",
+            phonePresenceConfirmed:
+                message["phone_presence_confirmed"] as? Bool ?? false,
             watchBatteryLevel:
                 Self.double(message["watch_battery_level_fraction"])
         )
