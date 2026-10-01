@@ -142,6 +142,7 @@ struct MovementTrendsCard: View {
             .compactMap { run -> Point? in
                 guard run.protocolKind
                         == FieldProtocolKind.indoBoard.rawValue,
+                      run.outcome == .completed,
                       let date = run.startedAt ?? run.sealedAt,
                       let summary = run.watchSummary,
                       let value = metricValue(summary)
@@ -364,6 +365,7 @@ struct PreviousRunComparisonCard: View {
         let ordered = library.runs
             .filter {
                 $0.protocolKind == run.protocolKind
+                    && $0.outcome == .completed
                     && $0.id != run.id
                     && $0.watchSummary != nil
                     && comparableMode($0)
