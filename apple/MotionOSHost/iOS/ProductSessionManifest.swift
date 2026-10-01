@@ -11,6 +11,11 @@ struct ProductSessionManifest: Codable, Equatable, Sendable {
     let createdAtUTC: String
     let watchSessionID: String?
     let cameraSessionID: String?
+    let operatorJournalSHA256: String?
+    let operatorMetadataSHA256: String?
+    let cameraVideoSHA256: String?
+    let cameraJournalSHA256: String?
+    let cameraMetadataSHA256: String?
     let syncReceipts: [SyncReceipt]
     let externalCameraExpected: Bool
     let externalCameraImported: Bool
@@ -33,6 +38,11 @@ struct ProductSessionManifest: Codable, Equatable, Sendable {
         createdAtUTC: String = ISO8601DateFormatter().string(from: Date()),
         watchSessionID: String?,
         cameraSessionID: String?,
+        operatorJournalSHA256: String? = nil,
+        operatorMetadataSHA256: String? = nil,
+        cameraVideoSHA256: String? = nil,
+        cameraJournalSHA256: String? = nil,
+        cameraMetadataSHA256: String? = nil,
         syncReceipts: [SyncReceipt],
         externalCameraExpected: Bool,
         externalCameraImported: Bool,
@@ -48,6 +58,11 @@ struct ProductSessionManifest: Codable, Equatable, Sendable {
         self.createdAtUTC = createdAtUTC
         self.watchSessionID = watchSessionID
         self.cameraSessionID = cameraSessionID
+        self.operatorJournalSHA256 = operatorJournalSHA256
+        self.operatorMetadataSHA256 = operatorMetadataSHA256
+        self.cameraVideoSHA256 = cameraVideoSHA256
+        self.cameraJournalSHA256 = cameraJournalSHA256
+        self.cameraMetadataSHA256 = cameraMetadataSHA256
         self.syncReceipts = syncReceipts
         self.externalCameraExpected = externalCameraExpected
         self.externalCameraImported = externalCameraImported
