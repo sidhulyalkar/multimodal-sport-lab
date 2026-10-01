@@ -14,11 +14,21 @@ struct IndoBoardSessionView: View {
         ScrollView {
             LazyVStack(spacing: MotionOSDesign.pageSpacing) {
                 hero
+                captureModeCard
                 sourcePreflight
+
+                if camera.phase == .ready
+                    || camera.phase == .recording
+                    || camera.phase == .evidenceReady {
+                    IndoBoardFramingCard()
+                }
+
                 sessionControl
 
                 if session.phase == .running
                     || session.phase == .finishing {
+                    IndoBoardProtocolRibbon()
+                    IndoBoardLiveSignalCard()
                     liveProtocol
                 }
 
@@ -124,9 +134,12 @@ struct IndoBoardSessionView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Indo Board Session")
                         .font(.title2.weight(.bold))
-                    Text("M0 · 2 minute movement capture")
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.secondary)
+                    Text(
+                        "M0 · 2 min · "
+                            + session.captureMode.rawValue
+                    )
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.secondary)
                 }
 
                 Spacer(minLength: 8)
@@ -151,6 +164,63 @@ struct IndoBoardSessionView: View {
                 featurePill("Watch", "applewatch")
                 featurePill("iPhone Vision", "video.fill")
                 featurePill("120 s", "timer")
+            }
+        }
+        .cardStyle()
+    }
+
+    private var captureModeCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            MotionOSSectionHeader(
+                title: "Capture mode",
+                subtitle: "Choose how rich this session should be before preflight",
+                systemImage: "slider.horizontal.3",
+                accent: .purple
+            )
+
+            Picker(
+                "Capture mode",
+                selection: $session.captureMode
+            ) {
+                ForEach(
+                    IndoBoardSessionCoordinator.CaptureMode.allCases
+                ) { mode in
+                    Text(
+                        mode == .watchAndPhone
+                            ? "Standard"
+                            : "Multiview"
+                    )
+                    .tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+            .disabled(
+                session.phase == .starting
+                    || session.phase == .running
+                    || session.phase == .finishing
+            )
+
+            Text(session.captureMode.subtitle)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 7) {
+                requirementPill(
+                    "Watch",
+                    symbol: "applewatch",
+                    required: true
+                )
+                requirementPill(
+                    "iPhone",
+                    symbol: "camera.fill",
+                    required: true
+                )
+                requirementPill(
+                    "Action 4",
+                    symbol: "video.fill",
+                    required: session.requiresExternalCamera
+                )
             }
         }
         .cardStyle()
@@ -220,12 +290,19 @@ struct IndoBoardSessionView: View {
                 isOn: $session.externalCameraConfirmed
             ) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("External camera recording")
-                        .font(.subheadline.weight(.medium))
+                    HStack(spacing: 6) {
+                        Text("Action 4 recording")
+                            .font(.subheadline.weight(.medium))
+                        if session.requiresExternalCamera {
+                            Text("REQUIRED")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(.purple)
+                        }
+                    }
                     Text(
-                        "Optional enrichment. Start the Action 4 manually "
-                            + "before capture if you want the richer "
-                            + "multiview dataset."
+                        session.requiresExternalCamera
+                            ? "Start the fixed Action 4 capture profile before MotionOS. The untouched movie is imported after sealing."
+                            : "Optional enrichment. Enable this if you are also recording the Action 4."
                     )
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -444,7 +521,7 @@ struct IndoBoardSessionView: View {
                                 )
                                 liveMetric(
                                     health.heartRateBPM.map {
-                                        "(Int($0.rounded())) bpm"
+                                        "\(Int($0.rounded())) bpm"
                                     } ?? "HR —",
                                     symbol: "heart.fill"
                                 )
@@ -714,6 +791,15 @@ struct IndoBoardSessionView: View {
                 }
             }
 
+            if let manifestURL = session.productManifestURL {
+                ShareLink(item: manifestURL) {
+                    Label(
+                        "Share product session manifest",
+                        systemImage: "point.3.connected.trianglepath.dotted"
+                    )
+                }
+            }
+
             if session.externalCameraConfirmed {
                 Divider()
 
@@ -841,6 +927,26 @@ struct IndoBoardSessionView: View {
             )
     }
 
+    private func requirementPill(
+        _ title: String,
+        symbol: String,
+        required: Bool
+    ) -> some View {
+        Label(
+            required ? title : "\(title) optional",
+            systemImage: symbol
+        )
+        .font(.caption2.weight(.semibold))
+        .foregroundStyle(required ? .primary : .secondary)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(
+            (required ? Color.purple : Color.secondary)
+                .opacity(0.08),
+            in: Capsule()
+        )
+    }
+
     private func readinessRow(
         title: String,
         detail: String,
@@ -950,6 +1056,10 @@ struct IndoBoardSessionView: View {
             && (phone.iPhoneBatteryLevel ?? 0) >= 0.20
             && (phone.iPhoneAvailableStorageBytes ?? 0)
                 >= 5_000_000_000
+            && (
+                !session.requiresExternalCamera
+                    || session.externalCameraConfirmed
+            )
     }
 
     private var preflightSubtitle: String {
