@@ -42,6 +42,12 @@ struct WatchContentView: View {
         } message: {
             Text("MotionOS will seal the Watch journal before transfer.")
         }
+        .task {
+            while !Task.isCancelled {
+                controller.refreshReadinessAndPresence()
+                try? await Task.sleep(for: .seconds(30))
+            }
+        }
     }
 
     private var brandHeader: some View {
@@ -113,7 +119,7 @@ struct WatchContentView: View {
 
             if let battery = controller.watchBatteryLevel {
                 readinessRow(
-                    title: "Battery",
+                    title: "Watch battery",
                     value: String(format: "%.0f%%", battery * 100),
                     symbol: battery >= 0.20
                         ? "battery.100percent"
