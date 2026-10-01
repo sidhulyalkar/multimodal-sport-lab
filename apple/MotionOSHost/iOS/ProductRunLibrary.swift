@@ -299,10 +299,6 @@ final class ProductRunLibrary: ObservableObject {
                     metadata["protocol_version"] as? String
                         ?? "unknown",
                 captureMode: productManifest?.captureMode,
-                productManifestURL:
-                    manager.fileExists(atPath: manifestURL.path)
-                        ? manifestURL
-                        : nil,
                 startedAt: date(
                     metadata["started_at_utc"],
                     formatter: formatter
