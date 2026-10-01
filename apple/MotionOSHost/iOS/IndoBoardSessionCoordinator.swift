@@ -163,7 +163,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
             fail(SessionError.watchUnavailable)
             return
         }
-        guard !watchCaptureBusy(phone) else {
+        guard watchCaptureAvailable(phone) else {
             fail(SessionError.watchCaptureAlreadyActive)
             return
         }
@@ -866,6 +866,12 @@ final class IndoBoardSessionCoordinator: ObservableObject {
             && configuration.frameRateLocked
             && abs(configuration.configuredFrameRate - 30.0) < 0.01
             && configuration.stabilizationLockedOff
+    }
+
+    func watchCaptureAvailable(
+        _ phone: PhoneSessionCoordinator
+    ) -> Bool {
+        !watchCaptureBusy(phone)
     }
 
     private func watchCaptureBusy(
