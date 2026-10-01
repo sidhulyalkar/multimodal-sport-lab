@@ -121,6 +121,8 @@ final class MotionOSAppleCaptureTests: XCTestCase {
             targetDurationSeconds: 120,
             createdAtUTC: "2026-10-01T17:00:00Z",
             watchSessionID: "watch-001",
+            watchJournalSHA256: "watch-journal",
+            watchJournalByteCount: 4_096,
             cameraSessionID: "camera-001",
             operatorJournalSHA256: "op-journal",
             operatorMetadataSHA256: "op-meta",
@@ -154,6 +156,8 @@ final class MotionOSAppleCaptureTests: XCTestCase {
             ProductSessionManifest.schemaVersion
         )
         XCTAssertEqual(decoded.syncReceipts.first?.label, "start")
+        XCTAssertEqual(decoded.watchJournalSHA256, "watch-journal")
+        XCTAssertEqual(decoded.watchJournalByteCount, 4_096)
         XCTAssertTrue(decoded.claimBoundary.contains("does not itself prove"))
     }
 
