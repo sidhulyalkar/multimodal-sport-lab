@@ -2,6 +2,7 @@ import json
 
 import pytest
 
+from motionos.indo_board_acquisition import ACQUISITION_PROFILE_ID
 from motionos.indo_board_plan import (
     build_indo_board_qualification_plan,
     validate_indo_board_qualification_plan,
@@ -134,6 +135,7 @@ def test_build_plan_freezes_hashes_and_fusion_parameters(tmp_path):
 
     assert plan["plan_id"] == "plan-s1"
     assert plan["frozen_before_scored_capture"] is True
+    assert plan["acquisition_profile_id"] == ACQUISITION_PROFILE_ID
     assert plan["rig_id"] == "rig-v1"
     assert plan["thresholds"] == document["thresholds"]
     assert plan["qualification"] == document["qualification"]
