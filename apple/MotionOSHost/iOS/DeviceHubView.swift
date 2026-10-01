@@ -75,9 +75,7 @@ struct DeviceHubView: View {
             )
             deviceRow(
                 "Link",
-                phone.watchReachable
-                    ? "live"
-                    : "background / unavailable"
+                phone.watchConnectionDetail
             )
 
             if let presence = phone.watchPresence {
@@ -390,20 +388,15 @@ struct DeviceHubView: View {
     }
 
     private var watchState: String {
-        if phone.watchReachable {
-            return "live"
-        }
-        if phone.hasRecentWatchPresence() {
-            return "handshake"
-        }
-        if phone.watchAppInstalled {
-            return "installed"
-        }
-        return "offline"
+        phone.watchConnectionLabel
+            .replacingOccurrences(of: "Watch ", with: "")
     }
 
     private var watchColor: Color {
-        phone.watchAppInstalled ? .green : .yellow
+        if phone.watchConnectionReady {
+            return .green
+        }
+        return phone.watchPaired ? .yellow : .secondary
     }
 
     private var cameraColor: Color {
