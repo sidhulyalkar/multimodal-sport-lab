@@ -1,6 +1,7 @@
-import SceneKit
+import RealityKit
 import SwiftUI
 import UIKit
+import simd
 
 enum BodyInsightMode: String, CaseIterable, Identifiable {
     case movement = "Movement"
@@ -722,78 +723,183 @@ private struct BodySceneView: UIViewRepresentable {
     let mode: BodyInsightMode
     let snapshot: BodyInsightSnapshot
 
-    func makeUIView(context: Context) -> SCNView {
-        let view = SCNView()
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    func makeUIView(context: Context) -> ARView {
+        let view = ARView(
+            frame: .zero,
+            cameraMode: .nonAR,
+            automaticallyConfigureSession: false
+        )
         view.backgroundColor = .clear
-        view.autoenablesDefaultLighting = false
-        view.allowsCameraControl = true
-        view.defaultCameraController.interactionMode = .orbitTurntable
-        view.defaultCameraController.inertiaEnabled = true
-        view.antialiasingMode = .multisampling4X
-        view.preferredFramesPerSecond = 60
-        configure(view)
-        return view
-    }
+        view.isOpaque = false
 
-    func updateUIView(_ uiView: SCNView, context: Context) {
-        configure(uiView)
-    }
-
-    private func configure(_ view: SCNView) {
-        let scene = SCNScene()
-        scene.background.contents = UIColor.clear
-
-        let rig = BodySceneFactory.build(
+        context.coordinator.installGestures(on: view)
+        context.coordinator.rebuild(
+            in: view,
             mode: mode,
             snapshot: snapshot
         )
-        scene.rootNode.addChildNode(rig)
+        return view
+    }
 
-        let cameraNode = SCNNode()
-        cameraNode.camera = SCNCamera()
-        cameraNode.camera?.fieldOfView = 38
-        cameraNode.camera?.zNear = 0.01
-        cameraNode.camera?.zFar = 100
-        cameraNode.position = SCNVector3(0, 0.1, 7.7)
-        cameraNode.look(at: SCNVector3(0, 0.1, 0))
-        scene.rootNode.addChildNode(cameraNode)
+    func updateUIView(
+        _ uiView: ARView,
+        context: Context
+    ) {
+        context.coordinator.rebuild(
+            in: uiView,
+            mode: mode,
+            snapshot: snapshot
+        )
+    }
 
-        let key = SCNNode()
-        key.light = SCNLight()
-        key.light?.type = .omni
-        key.light?.intensity = 980
-        key.light?.temperature = 5_400
-        key.position = SCNVector3(-3.2, 4.2, 4.4)
-        scene.rootNode.addChildNode(key)
+    @MainActor
+    final class Coordinator: NSObject {
+        private weak var view: ARView?
+        private var root: Entity?
+        private var lastMode: BodyInsightMode?
+        private var lastRunID: String?
+        private var yaw: Float = 0
+        private var pitch: Float = 0
+        private var scale: Float = 1
 
-        let fill = SCNNode()
-        fill.light = SCNLight()
-        fill.light?.type = .omni
-        fill.light?.intensity = 620
-        fill.light?.temperature = 7_200
-        fill.position = SCNVector3(3.4, 1.8, 2.4)
-        scene.rootNode.addChildNode(fill)
+        func installGestures(on view: ARView) {
+            guard self.view == nil else { return }
+            self.view = view
 
-        let rim = SCNNode()
-        rim.light = SCNLight()
-        rim.light?.type = .omni
-        rim.light?.intensity = 520
-        rim.position = SCNVector3(0, 2.4, -3.2)
-        scene.rootNode.addChildNode(rim)
+            let pan = UIPanGestureRecognizer(
+                target: self,
+                action: #selector(handlePan(_:))
+            )
+            pan.maximumNumberOfTouches = 1
+            view.addGestureRecognizer(pan)
 
-        scene.rootNode.addChildNode(BodySceneFactory.floorNode())
-        view.scene = scene
-        view.pointOfView = cameraNode
+            let pinch = UIPinchGestureRecognizer(
+                target: self,
+                action: #selector(handlePinch(_:))
+            )
+            view.addGestureRecognizer(pinch)
+        }
+
+        func rebuild(
+            in view: ARView,
+            mode: BodyInsightMode,
+            snapshot: BodyInsightSnapshot
+        ) {
+            let runID = snapshot.run?.id
+            guard lastMode != mode || lastRunID != runID || root == nil else {
+                return
+            }
+
+            lastMode = mode
+            lastRunID = runID
+
+            view.scene.anchors.removeAll()
+
+            let anchor = AnchorEntity(world: .zero)
+            let body = BodyRealityFactory.build(
+                mode: mode,
+                snapshot: snapshot
+            )
+            root = body
+            applyTransform()
+            anchor.addChild(body)
+
+            let camera = PerspectiveCamera()
+            camera.look(
+                at: SIMD3<Float>(0, 0.05, 0),
+                from: SIMD3<Float>(0, 0.10, 7.7),
+                relativeTo: nil
+            )
+            anchor.addChild(camera)
+
+            let key = DirectionalLight()
+            key.light = DirectionalLightComponent(
+                color: .white,
+                intensity: 2_200
+            )
+            key.look(
+                at: SIMD3<Float>(0, 0.4, 0),
+                from: SIMD3<Float>(-3.4, 4.6, 4.2),
+                relativeTo: nil
+            )
+            anchor.addChild(key)
+
+            let fill = DirectionalLight()
+            fill.light = DirectionalLightComponent(
+                color: UIColor(
+                    red: 0.72,
+                    green: 0.84,
+                    blue: 1.0,
+                    alpha: 1
+                ),
+                intensity: 950
+            )
+            fill.look(
+                at: SIMD3<Float>(0, 0.2, 0),
+                from: SIMD3<Float>(3.2, 2.0, 2.6),
+                relativeTo: nil
+            )
+            anchor.addChild(fill)
+
+            anchor.addChild(BodyRealityFactory.floorEntity())
+            view.scene.addAnchor(anchor)
+        }
+
+        @objc private func handlePan(
+            _ gesture: UIPanGestureRecognizer
+        ) {
+            guard let view else { return }
+            let translation = gesture.translation(in: view)
+
+            yaw += Float(translation.x) * 0.008
+            pitch += Float(translation.y) * 0.004
+            pitch = min(0.55, max(-0.55, pitch))
+
+            gesture.setTranslation(.zero, in: view)
+            applyTransform()
+        }
+
+        @objc private func handlePinch(
+            _ gesture: UIPinchGestureRecognizer
+        ) {
+            scale *= Float(gesture.scale)
+            scale = min(1.35, max(0.78, scale))
+            gesture.scale = 1
+            applyTransform()
+        }
+
+        private func applyTransform() {
+            guard let root else { return }
+            let yawRotation = simd_quatf(
+                angle: yaw,
+                axis: SIMD3<Float>(0, 1, 0)
+            )
+            let pitchRotation = simd_quatf(
+                angle: pitch,
+                axis: SIMD3<Float>(1, 0, 0)
+            )
+
+            root.transform.rotation = yawRotation * pitchRotation
+            root.transform.scale = SIMD3<Float>(
+                repeating: scale
+            )
+        }
     }
 }
 
-private enum BodySceneFactory {
+@MainActor
+private enum BodyRealityFactory {
     static func build(
         mode: BodyInsightMode,
         snapshot: BodyInsightSnapshot
-    ) -> SCNNode {
-        let root = SCNNode()
-        root.position = SCNVector3(0, -0.25, 0)
+    ) -> Entity {
+        let root = Entity()
+        root.name = "motionos-body-root"
+        root.position = SIMD3<Float>(0, -0.25, 0)
 
         let neutral = UIColor(
             red: 0.72,
@@ -811,50 +917,52 @@ private enum BodySceneFactory {
         let model = UIColor.systemOrange
         let pending = UIColor.systemYellow
 
-        root.addChildNode(
-            capsule(
+        root.addChild(
+            roundedBox(
                 name: "torso",
-                radius: 0.56,
-                height: 1.65,
-                position: SCNVector3(0, 1.25, 0),
+                size: SIMD3<Float>(1.06, 1.62, 0.62),
+                radius: 0.28,
+                position: SIMD3<Float>(0, 1.25, 0),
                 color: mode == .muscles
                     ? mix(neutral, model, 0.20)
                     : neutral
             )
         )
-        root.addChildNode(
+
+        root.addChild(
             sphere(
                 name: "head",
                 radius: 0.37,
-                position: SCNVector3(0, 2.62, 0),
+                position: SIMD3<Float>(0, 2.62, 0),
                 color: neutral
             )
         )
-        root.addChildNode(
-            capsule(
+
+        root.addChild(
+            roundedBox(
                 name: "pelvis",
-                radius: 0.46,
-                height: 0.66,
-                position: SCNVector3(0, 0.32, 0),
+                size: SIMD3<Float>(0.90, 0.58, 0.58),
+                radius: 0.22,
+                position: SIMD3<Float>(0, 0.32, 0),
                 color: mode == .muscles
                     ? mix(neutral, model, 0.42)
                     : neutral
             )
         )
 
-        let leftShoulder = SCNVector3(-0.56, 1.88, 0)
-        let rightShoulder = SCNVector3(0.56, 1.88, 0)
-        let leftElbow = SCNVector3(-0.88, 1.12, 0.05)
-        let rightElbow = SCNVector3(0.88, 1.12, 0.05)
-        let leftWrist = SCNVector3(-0.92, 0.38, 0.10)
-        let rightWrist = SCNVector3(0.92, 0.38, 0.10)
+        let leftShoulder = SIMD3<Float>(-0.56, 1.88, 0)
+        let rightShoulder = SIMD3<Float>(0.56, 1.88, 0)
+        let leftElbow = SIMD3<Float>(-0.88, 1.12, 0.05)
+        let rightElbow = SIMD3<Float>(0.88, 1.12, 0.05)
+        let leftWrist = SIMD3<Float>(-0.92, 0.38, 0.10)
+        let rightWrist = SIMD3<Float>(0.92, 0.38, 0.10)
 
-        let leftHip = SCNVector3(-0.28, 0.18, 0)
-        let rightHip = SCNVector3(0.28, 0.18, 0)
-        let leftKnee = SCNVector3(-0.34, -1.00, 0.05)
-        let rightKnee = SCNVector3(0.34, -1.00, 0.05)
-        let leftAnkle = SCNVector3(-0.38, -2.08, 0.08)
-        let rightAnkle = SCNVector3(0.38, -2.08, 0.08)
+        let leftHip = SIMD3<Float>(-0.28, 0.18, 0)
+        let rightHip = SIMD3<Float>(0.28, 0.18, 0)
+        let leftKnee = SIMD3<Float>(-0.34, -1.00, 0.05)
+        let rightKnee = SIMD3<Float>(0.34, -1.00, 0.05)
+        let leftAnkle = SIMD3<Float>(-0.38, -2.08, 0.08)
+        let rightAnkle = SIMD3<Float>(0.38, -2.08, 0.08)
 
         addLimb(
             root,
@@ -894,7 +1002,11 @@ private enum BodySceneFactory {
             radius: 0.13,
             color: mode == .movement
                 ? snapshot.watchEvidencePresent
-                    ? mix(neutral, observed, 0.45 + 0.45 * snapshot.motionIntensity)
+                    ? mix(
+                        neutral,
+                        observed,
+                        0.45 + 0.45 * snapshot.motionIntensity
+                    )
                     : mix(neutral, pending, 0.18)
                 : mode == .muscles
                     ? mix(neutral, model, 0.34)
@@ -942,7 +1054,7 @@ private enum BodySceneFactory {
                 : neutral
         )
 
-        for (index, point) in [
+        let joints = [
             leftShoulder,
             rightShoulder,
             leftElbow,
@@ -951,8 +1063,10 @@ private enum BodySceneFactory {
             rightHip,
             leftKnee,
             rightKnee,
-        ].enumerated() {
-            root.addChildNode(
+        ]
+
+        for (index, point) in joints.enumerated() {
+            root.addChild(
                 sphere(
                     name: "joint-\(index)",
                     radius: 0.12,
@@ -962,13 +1076,15 @@ private enum BodySceneFactory {
             )
         }
 
-        root.addChildNode(
+        root.addChild(
             sphere(
                 name: "watch",
                 radius: 0.15,
                 position: rightWrist,
                 color: mode == .movement
-                    ? snapshot.watchEvidencePresent ? observed : pending
+                    ? snapshot.watchEvidencePresent
+                        ? observed
+                        : pending
                     : joint
             )
         )
@@ -987,42 +1103,49 @@ private enum BodySceneFactory {
         )
 
         if mode == .balance {
-            root.addChildNode(balanceReticle())
+            root.addChild(balanceReticle())
         }
 
         if mode == .sources {
-            addSourceRings(root, snapshot: snapshot)
+            addSourceDiscs(
+                root,
+                snapshot: snapshot
+            )
         }
 
         return root
     }
 
-    static func floorNode() -> SCNNode {
-        let plane = SCNPlane(width: 5.5, height: 5.5)
-        plane.cornerRadius = 0.22
-        let material = SCNMaterial()
-        material.diffuse.contents = UIColor(
-            white: 0.50,
-            alpha: 0.055
+    static func floorEntity() -> Entity {
+        let mesh = MeshResource.generatePlane(
+            width: 5.5,
+            depth: 5.5,
+            cornerRadius: 0.22
         )
-        material.isDoubleSided = true
-        plane.materials = [material]
-
-        let node = SCNNode(geometry: plane)
-        node.eulerAngles.x = -.pi / 2
-        node.position = SCNVector3(0, -2.47, 0)
-        return node
+        let entity = ModelEntity(
+            mesh: mesh,
+            materials: [
+                material(
+                    UIColor(
+                        white: 0.55,
+                        alpha: 0.07
+                    )
+                )
+            ]
+        )
+        entity.position = SIMD3<Float>(0, -2.47, 0)
+        return entity
     }
 
     private static func addLimb(
-        _ root: SCNNode,
+        _ root: Entity,
         name: String,
-        from: SCNVector3,
-        to: SCNVector3,
-        radius: CGFloat,
+        from: SIMD3<Float>,
+        to: SIMD3<Float>,
+        radius: Float,
         color: UIColor
     ) {
-        root.addChildNode(
+        root.addChild(
             cylinderBetween(
                 name: name,
                 from: from,
@@ -1034,64 +1157,77 @@ private enum BodySceneFactory {
     }
 
     private static func addFoot(
-        _ root: SCNNode,
+        _ root: Entity,
         name: String,
-        at ankle: SCNVector3,
+        at ankle: SIMD3<Float>,
         color: UIColor
     ) {
-        let box = SCNBox(
-            width: 0.34,
-            height: 0.18,
-            length: 0.70,
-            chamferRadius: 0.11
+        root.addChild(
+            roundedBox(
+                name: name,
+                size: SIMD3<Float>(0.34, 0.18, 0.70),
+                radius: 0.09,
+                position: SIMD3<Float>(
+                    ankle.x,
+                    ankle.y - 0.17,
+                    ankle.z + 0.19
+                ),
+                color: color
+            )
         )
-        box.materials = [material(color)]
-        let node = SCNNode(geometry: box)
-        node.name = name
-        node.position = SCNVector3(
-            ankle.x,
-            ankle.y - 0.17,
-            ankle.z + 0.19
-        )
-        root.addChildNode(node)
     }
 
-    private static func balanceReticle() -> SCNNode {
-        let root = SCNNode()
-        root.name = "balance-reticle"
-        root.position = SCNVector3(0, -2.35, 0.08)
+    private static func balanceReticle() -> Entity {
+        let root = Entity()
+        root.name = "balance-reference"
 
-        let rings: [(CGFloat, UIColor)] = [
-            (0.44, UIColor.systemYellow.withAlphaComponent(0.28)),
-            (0.78, UIColor.systemYellow.withAlphaComponent(0.15)),
-            (1.18, UIColor.systemYellow.withAlphaComponent(0.08)),
+        let discs: [(Float, Float)] = [
+            (1.18, 0.055),
+            (0.78, 0.095),
+            (0.44, 0.16),
         ]
 
-        for (radius, color) in rings {
-            let torus = SCNTorus(
-                ringRadius: radius,
-                pipeRadius: 0.012
+        for (index, item) in discs.enumerated() {
+            let mesh = MeshResource.generateCylinder(
+                height: 0.007,
+                radius: item.0
             )
-            torus.materials = [material(color)]
-            let node = SCNNode(geometry: torus)
-            node.eulerAngles.x = .pi / 2
-            root.addChildNode(node)
+            let entity = ModelEntity(
+                mesh: mesh,
+                materials: [
+                    material(
+                        UIColor.systemYellow.withAlphaComponent(
+                            CGFloat(item.1)
+                        )
+                    )
+                ]
+            )
+            entity.position = SIMD3<Float>(
+                0,
+                -2.34 + Float(index) * 0.009,
+                0.08
+            )
+            root.addChild(entity)
         }
 
-        let center = SCNSphere(radius: 0.07)
-        center.materials = [
-            material(
-                UIColor.systemYellow.withAlphaComponent(0.80)
-            )
-        ]
-        let centerNode = SCNNode(geometry: center)
-        root.addChildNode(centerNode)
+        let center = ModelEntity(
+            mesh: .generateSphere(radius: 0.07),
+            materials: [
+                material(
+                    UIColor.systemYellow.withAlphaComponent(
+                        0.82
+                    )
+                )
+            ]
+        )
+        center.position = SIMD3<Float>(0, -2.29, 0.08)
+        root.addChild(center)
 
         return root
     }
 
-    private static func addSourceRings(
-        _ root: SCNNode,
+    private static func addSourceDiscs(
+        _ root: Entity,
         snapshot: BodyInsightSnapshot
     ) {
         let values: [(Float, Bool, UIColor)] = [
@@ -1101,99 +1237,99 @@ private enum BodySceneFactory {
         ]
 
         for (y, present, color) in values {
-            let torus = SCNTorus(
-                ringRadius: 0.78,
-                pipeRadius: 0.018
+            let mesh = MeshResource.generateCylinder(
+                height: 0.016,
+                radius: 0.80
             )
-            torus.materials = [
-                material(
-                    color.withAlphaComponent(present ? 0.72 : 0.12)
-                )
-            ]
-            let node = SCNNode(geometry: torus)
-            node.position = SCNVector3(0, y, 0)
-            node.eulerAngles.x = .pi / 2
-            root.addChildNode(node)
+            let entity = ModelEntity(
+                mesh: mesh,
+                materials: [
+                    material(
+                        color.withAlphaComponent(
+                            present ? 0.28 : 0.055
+                        )
+                    )
+                ]
+            )
+            entity.position = SIMD3<Float>(0, y, 0)
+            root.addChild(entity)
         }
     }
 
-    private static func capsule(
+    private static func roundedBox(
         name: String,
-        radius: CGFloat,
-        height: CGFloat,
-        position: SCNVector3,
+        size: SIMD3<Float>,
+        radius: Float,
+        position: SIMD3<Float>,
         color: UIColor
-    ) -> SCNNode {
-        let geometry = SCNCapsule(
-            capRadius: radius,
-            height: height
+    ) -> ModelEntity {
+        let mesh = MeshResource.generateBox(
+            width: size.x,
+            height: size.y,
+            depth: size.z,
+            cornerRadius: radius
         )
-        geometry.materials = [material(color)]
-        let node = SCNNode(geometry: geometry)
-        node.name = name
-        node.position = position
-        return node
+        let entity = ModelEntity(
+            mesh: mesh,
+            materials: [material(color)]
+        )
+        entity.name = name
+        entity.position = position
+        return entity
     }
 
     private static func sphere(
         name: String,
-        radius: CGFloat,
-        position: SCNVector3,
+        radius: Float,
+        position: SIMD3<Float>,
         color: UIColor
-    ) -> SCNNode {
-        let geometry = SCNSphere(radius: radius)
-        geometry.segmentCount = 40
-        geometry.materials = [material(color)]
-        let node = SCNNode(geometry: geometry)
-        node.name = name
-        node.position = position
-        return node
+    ) -> ModelEntity {
+        let entity = ModelEntity(
+            mesh: .generateSphere(radius: radius),
+            materials: [material(color)]
+        )
+        entity.name = name
+        entity.position = position
+        return entity
     }
 
     private static func cylinderBetween(
         name: String,
-        from: SCNVector3,
-        to: SCNVector3,
-        radius: CGFloat,
+        from: SIMD3<Float>,
+        to: SIMD3<Float>,
+        radius: Float,
         color: UIColor
-    ) -> SCNNode {
-        let dx = to.x - from.x
-        let dy = to.y - from.y
-        let dz = to.z - from.z
-        let length = sqrt(dx * dx + dy * dy + dz * dz)
-
-        let cylinder = SCNCylinder(
-            radius: radius,
-            height: CGFloat(length)
+    ) -> ModelEntity {
+        let direction = to - from
+        let length = simd_length(direction)
+        let entity = ModelEntity(
+            mesh: .generateCylinder(
+                height: length,
+                radius: radius
+            ),
+            materials: [material(color)]
         )
-        cylinder.radialSegmentCount = 28
-        cylinder.materials = [material(color)]
+        entity.name = name
+        entity.position = (from + to) / 2
 
-        let node = SCNNode(geometry: cylinder)
-        node.name = name
-        node.position = SCNVector3(
-            (from.x + to.x) / 2,
-            (from.y + to.y) / 2,
-            (from.z + to.z) / 2
-        )
+        if length > 0.0001 {
+            entity.transform.rotation = simd_quatf(
+                from: SIMD3<Float>(0, 1, 0),
+                to: simd_normalize(direction)
+            )
+        }
 
-        node.look(
-            at: to,
-            up: SCNVector3(0, 1, 0),
-            localFront: SCNVector3(0, 1, 0)
-        )
-
-        return node
+        return entity
     }
 
     private static func material(
         _ color: UIColor
-    ) -> SCNMaterial {
-        let material = SCNMaterial()
-        material.diffuse.contents = color
-        material.metalness.contents = 0.18
-        material.roughness.contents = 0.47
-        return material
+    ) -> SimpleMaterial {
+        SimpleMaterial(
+            color: color,
+            roughness: 0.48,
+            isMetallic: false
+        )
     }
 
     private static func mix(
@@ -1211,8 +1347,18 @@ private enum BodySceneFactory {
         var bb: CGFloat = 0
         var ba: CGFloat = 0
 
-        a.getRed(&ar, green: &ag, blue: &ab, alpha: &aa)
-        b.getRed(&br, green: &bg, blue: &bb, alpha: &ba)
+        a.getRed(
+            &ar,
+            green: &ag,
+            blue: &ab,
+            alpha: &aa
+        )
+        b.getRed(
+            &br,
+            green: &bg,
+            blue: &bb,
+            alpha: &ba
+        )
 
         return UIColor(
             red: ar + (br - ar) * t,
