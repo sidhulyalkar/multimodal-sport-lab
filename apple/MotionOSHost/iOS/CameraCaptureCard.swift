@@ -173,18 +173,18 @@ struct CameraCaptureCard: View {
                 )
                 healthMetric(
                     "written",
-                    "(stats.writtenFrames)/(stats.deliveredFrames)"
+                    "\(stats.writtenFrames)/\(stats.deliveredFrames)"
                 )
                 healthMetric(
                     "drops",
-                    "(stats.droppedFrames)"
+                    "\(stats.droppedFrames)"
                 )
             }
 
             HStack {
                 healthMetric(
                     "backpressure",
-                    "(stats.writerBackpressureFrames)"
+                    "\(stats.writerBackpressureFrames)"
                 )
                 healthMetric(
                     "pose",
@@ -194,7 +194,7 @@ struct CameraCaptureCard: View {
                 )
                 healthMetric(
                     "pose errs",
-                    "(stats.poseErrorFrames)"
+                    "\(stats.poseErrorFrames)"
                 )
             }
 
