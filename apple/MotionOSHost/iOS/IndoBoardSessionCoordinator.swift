@@ -628,6 +628,8 @@ final class IndoBoardSessionCoordinator: ObservableObject {
                     createdAtUTC: existing.createdAtUTC,
                     outcome: existing.outcome,
                     watchSessionID: existing.watchSessionID,
+                    watchJournalSHA256: existing.watchJournalSHA256,
+                    watchJournalByteCount: existing.watchJournalByteCount,
                     cameraSessionID: existing.cameraSessionID,
                     operatorJournalSHA256: existing.operatorJournalSHA256,
                     operatorMetadataSHA256: existing.operatorMetadataSHA256,
