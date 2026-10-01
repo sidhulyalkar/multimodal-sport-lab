@@ -247,6 +247,7 @@ final class FieldRunCoordinator: ObservableObject {
     private var sealedAtUTC: String?
     private var startReadiness: [String: String] = [:]
     private var sealReadiness: [String: String] = [:]
+    private var runOutcome = ProductSessionOutcome.completed
     private let encoder: JSONEncoder = {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
@@ -461,6 +462,46 @@ final class FieldRunCoordinator: ObservableObject {
         }
     }
 
+    func abortRun(
+        reason: String,
+        readiness: [String: String]
+    ) {
+        guard phase == .armed || phase == .running else {
+            return
+        }
+
+        let cleaned = reason.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )
+        guard !cleaned.isEmpty else {
+            return
+        }
+
+        do {
+            runOutcome = .aborted
+            if let activeBlockID {
+                try append(
+                    kind: "protocol_block_interrupted",
+                    blockID: activeBlockID,
+                    label: protocolBlocks.first {
+                        $0.id == activeBlockID
+                    }?.label
+                )
+                self.activeBlockID = nil
+            }
+
+            try append(
+                kind: "run_aborted",
+                label: "capture attempt aborted",
+                payload: ["message": cleaned]
+            )
+            failureNoteCount += 1
+            seal(readiness: readiness)
+        } catch {
+            fail(error)
+        }
+    }
+
     func seal(readiness: [String: String]) {
         guard phase == .running || phase == .armed else {
             fail(CoordinatorError.invalidState(
@@ -506,6 +547,7 @@ final class FieldRunCoordinator: ObservableObject {
                 "run_id": runID,
                 "protocol_version": protocolDefinition.protocolVersion,
                 "protocol_kind": protocolKind.rawValue,
+                "run_outcome": runOutcome.rawValue,
                 "armed_at_utc": armedAtValue,
                 "started_at_utc": startedAtValue,
                 "sealed_at_utc": sealedAtValue,
@@ -611,6 +653,7 @@ final class FieldRunCoordinator: ObservableObject {
         sealedAtUTC = nil
         startReadiness = [:]
         sealReadiness = [:]
+        runOutcome = .completed
     }
 
     private func fail(_ error: Error) {
