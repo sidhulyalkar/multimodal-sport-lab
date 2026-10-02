@@ -91,11 +91,11 @@ final class PlayerCardTests: XCTestCase {
         )
 
         XCTAssertEqual(
-            card.dimensions.map(.dimension),
+            card.dimensions.map { $0.dimension },
             [.movement, .power, .mobility]
         )
         XCTAssertEqual(
-            card.highlights.map(.dimension),
+            card.highlights.map { $0.dimension },
             [.movement, .power, .mobility]
         )
         XCTAssertFalse(
@@ -221,7 +221,7 @@ final class PlayerCardTests: XCTestCase {
 
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent(
-                "player-card-(UUID().uuidString).json"
+                "player-card-" + UUID().uuidString + ".json"
             )
         defer {
             try? FileManager.default.removeItem(at: url)
