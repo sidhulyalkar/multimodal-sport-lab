@@ -689,6 +689,21 @@ struct ProductRunDetailView: View {
                     )
                 }
 
+                if let triedCue = savedFeedback.coachTriedCue {
+                    Label(
+                        triedCue
+                            ? "Watch cue tried"
+                            : "Watch cue not tried",
+                        systemImage: triedCue
+                            ? "checkmark.circle.fill"
+                            : "minus.circle"
+                    )
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(
+                        triedCue ? .green : .secondary
+                    )
+                }
+
                 if let usefulness = savedFeedback.coachUsefulness {
                     Label(
                         "Coach feedback · \(usefulness.label)",
