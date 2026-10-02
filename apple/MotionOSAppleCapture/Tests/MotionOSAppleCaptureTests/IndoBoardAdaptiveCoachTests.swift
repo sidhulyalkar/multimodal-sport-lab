@@ -81,9 +81,10 @@ final class IndoBoardAdaptiveCoachTests: XCTestCase {
             intervention.id
         )
         XCTAssertTrue(
-            report.observation.localizedCaseInsensitiveContains(
-                "coached retry"
-            )
+            report.experimentResult?.summary
+                .localizedCaseInsensitiveContains(
+                    "coached retry"
+                ) == true
         )
     }
 
