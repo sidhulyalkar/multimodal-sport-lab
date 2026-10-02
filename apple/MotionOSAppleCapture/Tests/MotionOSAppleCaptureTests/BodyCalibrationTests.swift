@@ -148,6 +148,99 @@ final class BodyCalibrationTests: XCTestCase {
         )
     }
 
+    func testReferenceScaleVisionFailsWithoutStandingHeight() {
+        var accumulator = BodyCalibrationAccumulator()
+
+        for index in 0..<30 {
+            var frame = fixtureFrame(
+                sequence: UInt64(index),
+                jitter: 0
+            )
+            frame = BodyMovementFrame(
+                sessionID: frame.sessionID,
+                sequence: frame.sequence,
+                deviceTimeNS: frame.deviceTimeNS,
+                source: frame.source,
+                coordinateFrame: frame.coordinateFrame,
+                bodyHeightM: 1.8,
+                bodyHeightEstimation: "reference",
+                rootPositionCameraM: frame.rootPositionCameraM,
+                joints: frame.joints,
+                pelvisReference: frame.pelvisReference,
+                centerOfMass: frame.centerOfMass,
+                supportPoints: frame.supportPoints,
+                muscleActivations: frame.muscleActivations
+            )
+            _ = accumulator.observe(frame)
+        }
+
+        XCTAssertFalse(accumulator.canFinalize)
+        XCTAssertEqual(
+            accumulator.unscaledVisionFrameCount,
+            30
+        )
+        XCTAssertThrowsError(
+            try accumulator.finalize(
+                versionID: "body-v1",
+                sourceID: "vision"
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? BodyCalibrationAccumulator.CalibrationError,
+                .absoluteScaleUnavailable
+            )
+        }
+    }
+
+    func testReferenceScaleVisionUsesExplicitStandingHeight() throws {
+        var accumulator = BodyCalibrationAccumulator()
+
+        for index in 0..<30 {
+            let frame = BodyMovementFrame(
+                sessionID: "reference-scale",
+                sequence: UInt64(index),
+                deviceTimeNS: UInt64(index) * 100_000_000,
+                source: "vision_3d_pose_from_camera_frame",
+                coordinateFrame: "vision_root_joint_relative_meters",
+                bodyHeightM: 1.8,
+                bodyHeightEstimation: "reference",
+                joints: fixtureFrame(
+                    sequence: UInt64(index),
+                    jitter: 0
+                ).joints
+            )
+            _ = accumulator.observe(
+                frame,
+                standingHeightMeters: 1.62
+            )
+        }
+
+        let result = try accumulator.finalize(
+            versionID: "scaled",
+            sourceID: "vision"
+        )
+        let shoulder = try XCTUnwrap(
+            result.model.parameter(.shoulderWidth)
+        )
+
+        XCTAssertEqual(
+            shoulder.valueMeters,
+            0.36,
+            accuracy: 0.01
+        )
+        XCTAssertEqual(
+            result.scaleSourceCounts[
+                "external_standing_height"
+            ],
+            30
+        )
+        XCTAssertEqual(
+            result.model.parameter(.standingHeight)?.valueMeters,
+            1.62,
+            accuracy: 1e-9
+        )
+    }
+
     func testTooFewFramesCannotFinalize() {
         var accumulator = BodyCalibrationAccumulator()
 
@@ -180,6 +273,7 @@ final class BodyCalibrationTests: XCTestCase {
             source: "fixture",
             coordinateFrame: "vision_root_joint_relative_meters",
             bodyHeightM: 1.70 + jitter,
+            bodyHeightEstimation: "measured",
             joints: [
                 .init(id: "root", parentID: nil, position: .init(0, 0, 0)),
                 .init(id: "centerShoulder", parentID: "root", position: .init(0, 0.48 + jitter, 0)),
