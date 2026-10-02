@@ -4,6 +4,195 @@
   "records": [
     {
       "platform": "youtube",
+      "source_id": "youtube/1yaY1injqfM",
+      "source_url": "https://www.youtube.com/watch?v=1yaY1injqfM",
+      "creator": "INDOBOARD",
+      "title": "Embedded video from official INDO BOARD tricks library",
+      "published_at": null,
+      "rights_status": "unknown",
+      "retention_policy": "derived_only",
+      "weak_labels": [
+        "indo-board",
+        "official-page-embed",
+        "trick-library",
+        "movement-vocabulary"
+      ],
+      "discovery": {
+        "method": "official_tricks_page_embed",
+        "source_page": "https://indoboard.com/pages/roller-tricks",
+        "needs_metadata_enrichment": true
+      }
+    },
+    {
+      "platform": "youtube",
+      "source_id": "youtube/4cL4S5rYpWA",
+      "source_url": "https://www.youtube.com/watch?v=4cL4S5rYpWA",
+      "creator": "INDOBOARD",
+      "title": "Embedded video from official INDO BOARD tricks library",
+      "published_at": null,
+      "rights_status": "unknown",
+      "retention_policy": "derived_only",
+      "weak_labels": [
+        "indo-board",
+        "official-page-embed",
+        "trick-library",
+        "movement-vocabulary"
+      ],
+      "discovery": {
+        "method": "official_tricks_page_embed",
+        "source_page": "https://indoboard.com/pages/roller-tricks",
+        "needs_metadata_enrichment": true
+      }
+    },
+    {
+      "platform": "youtube",
+      "source_id": "youtube/53ADGj0u1uo",
+      "source_url": "https://www.youtube.com/watch?v=53ADGj0u1uo",
+      "creator": "INDOBOARD",
+      "title": "Embedded video from official INDO BOARD tricks library",
+      "published_at": null,
+      "rights_status": "unknown",
+      "retention_policy": "derived_only",
+      "weak_labels": [
+        "indo-board",
+        "official-page-embed",
+        "trick-library",
+        "movement-vocabulary"
+      ],
+      "discovery": {
+        "method": "official_tricks_page_embed",
+        "source_page": "https://indoboard.com/pages/roller-tricks",
+        "needs_metadata_enrichment": true
+      }
+    },
+    {
+      "platform": "youtube",
+      "source_id": "youtube/7joNOm-TOLE",
+      "source_url": "https://www.youtube.com/watch?v=7joNOm-TOLE",
+      "creator": "INDOBOARD",
+      "title": "Embedded video from official INDO BOARD tricks library",
+      "published_at": null,
+      "rights_status": "unknown",
+      "retention_policy": "derived_only",
+      "weak_labels": [
+        "indo-board",
+        "official-page-embed",
+        "trick-library",
+        "movement-vocabulary"
+      ],
+      "discovery": {
+        "method": "official_tricks_page_embed",
+        "source_page": "https://indoboard.com/pages/roller-tricks",
+        "needs_metadata_enrichment": true
+      }
+    },
+    {
+      "platform": "youtube",
+      "source_id": "youtube/9PDHlgXtI8E",
+      "source_url": "https://www.youtube.com/watch?v=9PDHlgXtI8E",
+      "creator": "INDOBOARD",
+      "title": "Embedded video from official INDO BOARD tricks library",
+      "published_at": null,
+      "rights_status": "unknown",
+      "retention_policy": "derived_only",
+      "weak_labels": [
+        "indo-board",
+        "official-page-embed",
+        "trick-library",
+        "movement-vocabulary"
+      ],
+      "discovery": {
+        "method": "official_tricks_page_embed",
+        "source_page": "https://indoboard.com/pages/roller-tricks",
+        "needs_metadata_enrichment": true
+      }
+    },
+    {
+      "platform": "youtube",
+      "source_id": "youtube/ABZfC2RRmHE",
+      "source_url": "https://www.youtube.com/watch?v=ABZfC2RRmHE",
+      "creator": "INDOBOARD",
+      "title": "Embedded video from official INDO BOARD tricks library",
+      "published_at": null,
+      "rights_status": "unknown",
+      "retention_policy": "derived_only",
+      "weak_labels": [
+        "indo-board",
+        "official-page-embed",
+        "trick-library",
+        "movement-vocabulary"
+      ],
+      "discovery": {
+        "method": "official_tricks_page_embed",
+        "source_page": "https://indoboard.com/pages/roller-tricks",
+        "needs_metadata_enrichment": true
+      }
+    },
+    {
+      "platform": "youtube",
+      "source_id": "youtube/ccBMvfiEbbM",
+      "source_url": "https://www.youtube.com/watch?v=ccBMvfiEbbM",
+      "creator": "INDOBOARD",
+      "title": "Embedded video from official INDO BOARD tricks library",
+      "published_at": null,
+      "rights_status": "unknown",
+      "retention_policy": "derived_only",
+      "weak_labels": [
+        "indo-board",
+        "official-page-embed",
+        "trick-library",
+        "movement-vocabulary"
+      ],
+      "discovery": {
+        "method": "official_tricks_page_embed",
+        "source_page": "https://indoboard.com/pages/roller-tricks",
+        "needs_metadata_enrichment": true
+      }
+    },
+    {
+      "platform": "youtube",
+      "source_id": "youtube/dHf3jSgc5s0",
+      "source_url": "https://www.youtube.com/watch?v=dHf3jSgc5s0",
+      "creator": "INDOBOARD",
+      "title": "Embedded video from official INDO BOARD tricks library",
+      "published_at": null,
+      "rights_status": "unknown",
+      "retention_policy": "derived_only",
+      "weak_labels": [
+        "indo-board",
+        "official-page-embed",
+        "trick-library",
+        "movement-vocabulary"
+      ],
+      "discovery": {
+        "method": "official_tricks_page_embed",
+        "source_page": "https://indoboard.com/pages/roller-tricks",
+        "needs_metadata_enrichment": true
+      }
+    },
+    {
+      "platform": "youtube",
+      "source_id": "youtube/DIhYjiytQPk",
+      "source_url": "https://www.youtube.com/watch?v=DIhYjiytQPk",
+      "creator": "INDOBOARD",
+      "title": "Embedded video from official INDO BOARD tricks library",
+      "published_at": null,
+      "rights_status": "unknown",
+      "retention_policy": "derived_only",
+      "weak_labels": [
+        "indo-board",
+        "official-page-embed",
+        "trick-library",
+        "movement-vocabulary"
+      ],
+      "discovery": {
+        "method": "official_tricks_page_embed",
+        "source_page": "https://indoboard.com/pages/roller-tricks",
+        "needs_metadata_enrichment": true
+      }
+    },
+    {
+      "platform": "youtube",
       "source_id": "youtube/eIcsTt2kZUk",
       "source_url": "https://www.youtube.com/watch?v=eIcsTt2kZUk",
       "creator": "INDOBOARD",
@@ -28,6 +217,90 @@
     },
     {
       "platform": "youtube",
+      "source_id": "youtube/FP6D6-wCeQk",
+      "source_url": "https://www.youtube.com/watch?v=FP6D6-wCeQk",
+      "creator": "INDOBOARD",
+      "title": "Embedded video from official INDO BOARD tricks library",
+      "published_at": null,
+      "rights_status": "unknown",
+      "retention_policy": "derived_only",
+      "weak_labels": [
+        "indo-board",
+        "official-page-embed",
+        "trick-library",
+        "movement-vocabulary"
+      ],
+      "discovery": {
+        "method": "official_tricks_page_embed",
+        "source_page": "https://indoboard.com/pages/roller-tricks",
+        "needs_metadata_enrichment": true
+      }
+    },
+    {
+      "platform": "youtube",
+      "source_id": "youtube/gdil4T1UENc",
+      "source_url": "https://www.youtube.com/watch?v=gdil4T1UENc",
+      "creator": "INDOBOARD",
+      "title": "Embedded video from official INDO BOARD tricks library",
+      "published_at": null,
+      "rights_status": "unknown",
+      "retention_policy": "derived_only",
+      "weak_labels": [
+        "indo-board",
+        "official-page-embed",
+        "trick-library",
+        "movement-vocabulary"
+      ],
+      "discovery": {
+        "method": "official_tricks_page_embed",
+        "source_page": "https://indoboard.com/pages/roller-tricks",
+        "needs_metadata_enrichment": true
+      }
+    },
+    {
+      "platform": "youtube",
+      "source_id": "youtube/gRBShA7q8VI",
+      "source_url": "https://www.youtube.com/watch?v=gRBShA7q8VI",
+      "creator": "INDOBOARD",
+      "title": "Embedded video from official INDO BOARD tricks library",
+      "published_at": null,
+      "rights_status": "unknown",
+      "retention_policy": "derived_only",
+      "weak_labels": [
+        "indo-board",
+        "official-page-embed",
+        "trick-library",
+        "movement-vocabulary"
+      ],
+      "discovery": {
+        "method": "official_tricks_page_embed",
+        "source_page": "https://indoboard.com/pages/roller-tricks",
+        "needs_metadata_enrichment": true
+      }
+    },
+    {
+      "platform": "youtube",
+      "source_id": "youtube/Hwz5at_VN_Y",
+      "source_url": "https://www.youtube.com/watch?v=Hwz5at_VN_Y",
+      "creator": "INDOBOARD",
+      "title": "Embedded video from official INDO BOARD tricks library",
+      "published_at": null,
+      "rights_status": "unknown",
+      "retention_policy": "derived_only",
+      "weak_labels": [
+        "indo-board",
+        "official-page-embed",
+        "trick-library",
+        "movement-vocabulary"
+      ],
+      "discovery": {
+        "method": "official_tricks_page_embed",
+        "source_page": "https://indoboard.com/pages/roller-tricks",
+        "needs_metadata_enrichment": true
+      }
+    },
+    {
+      "platform": "youtube",
       "source_id": "youtube/jcl08-u-_Fg",
       "source_url": "https://www.youtube.com/watch?v=jcl08-u-_Fg",
       "creator": "INDOBOARD",
@@ -46,6 +319,342 @@
       "discovery": {
         "method": "manual_authoritative_seed",
         "reason": "Official INDOBOARD mounting and centering instruction"
+      }
+    },
+    {
+      "platform": "youtube",
+      "source_id": "youtube/ks-YyUPnwgQ",
+      "source_url": "https://www.youtube.com/watch?v=ks-YyUPnwgQ",
+      "creator": "INDOBOARD",
+      "title": "Embedded video from official INDO BOARD tricks library",
+      "published_at": null,
+      "rights_status": "unknown",
+      "retention_policy": "derived_only",
+      "weak_labels": [
+        "indo-board",
+        "official-page-embed",
+        "trick-library",
+        "movement-vocabulary"
+      ],
+      "discovery": {
+        "method": "official_tricks_page_embed",
+        "source_page": "https://indoboard.com/pages/roller-tricks",
+        "needs_metadata_enrichment": true
+      }
+    },
+    {
+      "platform": "youtube",
+      "source_id": "youtube/Ky4eR9gPYEA",
+      "source_url": "https://www.youtube.com/watch?v=Ky4eR9gPYEA",
+      "creator": "INDOBOARD",
+      "title": "Embedded video from official INDO BOARD tricks library",
+      "published_at": null,
+      "rights_status": "unknown",
+      "retention_policy": "derived_only",
+      "weak_labels": [
+        "indo-board",
+        "official-page-embed",
+        "trick-library",
+        "movement-vocabulary"
+      ],
+      "discovery": {
+        "method": "official_tricks_page_embed",
+        "source_page": "https://indoboard.com/pages/roller-tricks",
+        "needs_metadata_enrichment": true
+      }
+    },
+    {
+      "platform": "youtube",
+      "source_id": "youtube/nNlqxXdQrus",
+      "source_url": "https://www.youtube.com/watch?v=nNlqxXdQrus",
+      "creator": "INDOBOARD",
+      "title": "Embedded video from official INDO BOARD tricks library",
+      "published_at": null,
+      "rights_status": "unknown",
+      "retention_policy": "derived_only",
+      "weak_labels": [
+        "indo-board",
+        "official-page-embed",
+        "trick-library",
+        "movement-vocabulary"
+      ],
+      "discovery": {
+        "method": "official_tricks_page_embed",
+        "source_page": "https://indoboard.com/pages/roller-tricks",
+        "needs_metadata_enrichment": true
+      }
+    },
+    {
+      "platform": "youtube",
+      "source_id": "youtube/nWQprs_6ivY",
+      "source_url": "https://www.youtube.com/watch?v=nWQprs_6ivY",
+      "creator": "INDOBOARD",
+      "title": "Embedded video from official INDO BOARD tricks library",
+      "published_at": null,
+      "rights_status": "unknown",
+      "retention_policy": "derived_only",
+      "weak_labels": [
+        "indo-board",
+        "official-page-embed",
+        "trick-library",
+        "movement-vocabulary"
+      ],
+      "discovery": {
+        "method": "official_tricks_page_embed",
+        "source_page": "https://indoboard.com/pages/roller-tricks",
+        "needs_metadata_enrichment": true
+      }
+    },
+    {
+      "platform": "youtube",
+      "source_id": "youtube/q0_3xZEBDcE",
+      "source_url": "https://www.youtube.com/watch?v=q0_3xZEBDcE",
+      "creator": "INDOBOARD",
+      "title": "Embedded video from official INDO BOARD tricks library",
+      "published_at": null,
+      "rights_status": "unknown",
+      "retention_policy": "derived_only",
+      "weak_labels": [
+        "indo-board",
+        "official-page-embed",
+        "trick-library",
+        "movement-vocabulary"
+      ],
+      "discovery": {
+        "method": "official_tricks_page_embed",
+        "source_page": "https://indoboard.com/pages/roller-tricks",
+        "needs_metadata_enrichment": true
+      }
+    },
+    {
+      "platform": "youtube",
+      "source_id": "youtube/Q9zId6mjFiA",
+      "source_url": "https://www.youtube.com/watch?v=Q9zId6mjFiA",
+      "creator": "INDOBOARD",
+      "title": "Embedded video from official INDO BOARD tricks library",
+      "published_at": null,
+      "rights_status": "unknown",
+      "retention_policy": "derived_only",
+      "weak_labels": [
+        "indo-board",
+        "official-page-embed",
+        "trick-library",
+        "movement-vocabulary"
+      ],
+      "discovery": {
+        "method": "official_tricks_page_embed",
+        "source_page": "https://indoboard.com/pages/roller-tricks",
+        "needs_metadata_enrichment": true
+      }
+    },
+    {
+      "platform": "youtube",
+      "source_id": "youtube/qJp-Jn5U6bg",
+      "source_url": "https://www.youtube.com/watch?v=qJp-Jn5U6bg",
+      "creator": "INDOBOARD",
+      "title": "Embedded video from official INDO BOARD tricks library",
+      "published_at": null,
+      "rights_status": "unknown",
+      "retention_policy": "derived_only",
+      "weak_labels": [
+        "indo-board",
+        "official-page-embed",
+        "trick-library",
+        "movement-vocabulary"
+      ],
+      "discovery": {
+        "method": "official_tricks_page_embed",
+        "source_page": "https://indoboard.com/pages/roller-tricks",
+        "needs_metadata_enrichment": true
+      }
+    },
+    {
+      "platform": "youtube",
+      "source_id": "youtube/qlKMaXjvZMA",
+      "source_url": "https://www.youtube.com/watch?v=qlKMaXjvZMA",
+      "creator": "INDOBOARD",
+      "title": "Embedded video from official INDO BOARD tricks library",
+      "published_at": null,
+      "rights_status": "unknown",
+      "retention_policy": "derived_only",
+      "weak_labels": [
+        "indo-board",
+        "official-page-embed",
+        "trick-library",
+        "movement-vocabulary"
+      ],
+      "discovery": {
+        "method": "official_tricks_page_embed",
+        "source_page": "https://indoboard.com/pages/roller-tricks",
+        "needs_metadata_enrichment": true
+      }
+    },
+    {
+      "platform": "youtube",
+      "source_id": "youtube/rfQQDX2z9xU",
+      "source_url": "https://www.youtube.com/watch?v=rfQQDX2z9xU",
+      "creator": "INDOBOARD",
+      "title": "Embedded video from official INDO BOARD tricks library",
+      "published_at": null,
+      "rights_status": "unknown",
+      "retention_policy": "derived_only",
+      "weak_labels": [
+        "indo-board",
+        "official-page-embed",
+        "trick-library",
+        "movement-vocabulary"
+      ],
+      "discovery": {
+        "method": "official_tricks_page_embed",
+        "source_page": "https://indoboard.com/pages/roller-tricks",
+        "needs_metadata_enrichment": true
+      }
+    },
+    {
+      "platform": "youtube",
+      "source_id": "youtube/sjl9KPv9k6w",
+      "source_url": "https://www.youtube.com/watch?v=sjl9KPv9k6w",
+      "creator": "INDOBOARD",
+      "title": "Embedded video from official INDO BOARD tricks library",
+      "published_at": null,
+      "rights_status": "unknown",
+      "retention_policy": "derived_only",
+      "weak_labels": [
+        "indo-board",
+        "official-page-embed",
+        "trick-library",
+        "movement-vocabulary"
+      ],
+      "discovery": {
+        "method": "official_tricks_page_embed",
+        "source_page": "https://indoboard.com/pages/roller-tricks",
+        "needs_metadata_enrichment": true
+      }
+    },
+    {
+      "platform": "youtube",
+      "source_id": "youtube/SKrk7YPq7RU",
+      "source_url": "https://www.youtube.com/watch?v=SKrk7YPq7RU",
+      "creator": "INDOBOARD",
+      "title": "Embedded video from official INDO BOARD tricks library",
+      "published_at": null,
+      "rights_status": "unknown",
+      "retention_policy": "derived_only",
+      "weak_labels": [
+        "indo-board",
+        "official-page-embed",
+        "trick-library",
+        "movement-vocabulary"
+      ],
+      "discovery": {
+        "method": "official_tricks_page_embed",
+        "source_page": "https://indoboard.com/pages/roller-tricks",
+        "needs_metadata_enrichment": true
+      }
+    },
+    {
+      "platform": "youtube",
+      "source_id": "youtube/sxj8TMzsQSE",
+      "source_url": "https://www.youtube.com/watch?v=sxj8TMzsQSE",
+      "creator": "INDOBOARD",
+      "title": "Embedded video from official INDO BOARD tricks library",
+      "published_at": null,
+      "rights_status": "unknown",
+      "retention_policy": "derived_only",
+      "weak_labels": [
+        "indo-board",
+        "official-page-embed",
+        "trick-library",
+        "movement-vocabulary"
+      ],
+      "discovery": {
+        "method": "official_tricks_page_embed",
+        "source_page": "https://indoboard.com/pages/roller-tricks",
+        "needs_metadata_enrichment": true
+      }
+    },
+    {
+      "platform": "youtube",
+      "source_id": "youtube/vFU4cSC1YXI",
+      "source_url": "https://www.youtube.com/watch?v=vFU4cSC1YXI",
+      "creator": "INDOBOARD",
+      "title": "Embedded video from official INDO BOARD tricks library",
+      "published_at": null,
+      "rights_status": "unknown",
+      "retention_policy": "derived_only",
+      "weak_labels": [
+        "indo-board",
+        "official-page-embed",
+        "trick-library",
+        "movement-vocabulary"
+      ],
+      "discovery": {
+        "method": "official_tricks_page_embed",
+        "source_page": "https://indoboard.com/pages/roller-tricks",
+        "needs_metadata_enrichment": true
+      }
+    },
+    {
+      "platform": "youtube",
+      "source_id": "youtube/VYhy1GoGmGw",
+      "source_url": "https://www.youtube.com/watch?v=VYhy1GoGmGw",
+      "creator": "INDOBOARD",
+      "title": "Embedded video from official INDO BOARD tricks library",
+      "published_at": null,
+      "rights_status": "unknown",
+      "retention_policy": "derived_only",
+      "weak_labels": [
+        "indo-board",
+        "official-page-embed",
+        "trick-library",
+        "movement-vocabulary"
+      ],
+      "discovery": {
+        "method": "official_tricks_page_embed",
+        "source_page": "https://indoboard.com/pages/roller-tricks",
+        "needs_metadata_enrichment": true
+      }
+    },
+    {
+      "platform": "youtube",
+      "source_id": "youtube/W89xaI5UyxY",
+      "source_url": "https://www.youtube.com/watch?v=W89xaI5UyxY",
+      "creator": "INDOBOARD",
+      "title": "Embedded video from official INDO BOARD tricks library",
+      "published_at": null,
+      "rights_status": "unknown",
+      "retention_policy": "derived_only",
+      "weak_labels": [
+        "indo-board",
+        "official-page-embed",
+        "trick-library",
+        "movement-vocabulary"
+      ],
+      "discovery": {
+        "method": "official_tricks_page_embed",
+        "source_page": "https://indoboard.com/pages/roller-tricks",
+        "needs_metadata_enrichment": true
+      }
+    },
+    {
+      "platform": "youtube",
+      "source_id": "youtube/WF92BsaYZjQ",
+      "source_url": "https://www.youtube.com/watch?v=WF92BsaYZjQ",
+      "creator": "INDOBOARD",
+      "title": "Embedded video from official INDO BOARD tricks library",
+      "published_at": null,
+      "rights_status": "unknown",
+      "retention_policy": "derived_only",
+      "weak_labels": [
+        "indo-board",
+        "official-page-embed",
+        "trick-library",
+        "movement-vocabulary"
+      ],
+      "discovery": {
+        "method": "official_tricks_page_embed",
+        "source_page": "https://indoboard.com/pages/roller-tricks",
+        "needs_metadata_enrichment": true
       }
     }
   ],
