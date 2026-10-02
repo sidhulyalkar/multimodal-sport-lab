@@ -1,6 +1,6 @@
 import Foundation
 
-public struct BodyCalibrationProgress: Sendable, Equatable {
+public struct BodyCalibrationProgress: Codable, Sendable, Equatable {
     public let framesSeen: Int
     public let acceptedFrames: Int
     public let parameterSampleCounts: [BodyParameterKind: Int]
@@ -21,7 +21,7 @@ public struct BodyCalibrationProgress: Sendable, Equatable {
     }
 }
 
-public struct BodyCalibrationResult: Sendable, Equatable {
+public struct BodyCalibrationResult: Codable, Sendable, Equatable {
     public let model: PersonalBodyModel
     public let framesSeen: Int
     public let acceptedFrames: Int
