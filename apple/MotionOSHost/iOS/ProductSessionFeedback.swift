@@ -1,5 +1,32 @@
 import Foundation
 
+enum ProductSessionCoachUsefulness:
+    String,
+    Codable,
+    CaseIterable,
+    Identifiable,
+    Sendable {
+    case helpful
+    case notSure = "not_sure"
+    case wrong
+    case unclear
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .helpful:
+            "Helpful"
+        case .notSure:
+            "Not sure"
+        case .wrong:
+            "Wrong"
+        case .unclear:
+            "Unclear"
+        }
+    }
+}
+
 struct ProductSessionFeedback: Codable, Equatable, Sendable {
     static let schemaVersion =
         "motionos.product-session-feedback.v1"
@@ -11,6 +38,8 @@ struct ProductSessionFeedback: Codable, Equatable, Sendable {
     let perceivedEffort: Int
     let movementNotes: String
     let productNotes: String
+    let coachUsefulness: ProductSessionCoachUsefulness?
+    let coachTriedCue: Bool?
     let claimBoundary: String
 
     init(
@@ -18,7 +47,9 @@ struct ProductSessionFeedback: Codable, Equatable, Sendable {
         perceivedStability: Int,
         perceivedEffort: Int,
         movementNotes: String,
-        productNotes: String
+        productNotes: String,
+        coachUsefulness: ProductSessionCoachUsefulness? = nil,
+        coachTriedCue: Bool? = nil
     ) {
         self.schemaVersion = Self.schemaVersion
         self.runID = runID
@@ -36,6 +67,8 @@ struct ProductSessionFeedback: Codable, Equatable, Sendable {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         self.productNotes = productNotes
             .trimmingCharacters(in: .whitespacesAndNewlines)
+        self.coachUsefulness = coachUsefulness
+        self.coachTriedCue = coachTriedCue
         self.claimBoundary = (
             "Self-reported session context for product iteration. "
                 + "It is not a biomechanical measurement, diagnosis, "
