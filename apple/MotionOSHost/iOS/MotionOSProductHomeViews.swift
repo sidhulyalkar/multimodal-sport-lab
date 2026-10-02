@@ -4,6 +4,7 @@ enum MotionOSTab: Hashable {
     case observe
     case capture
     case sessions
+    case persona
     case devices
 }
 
