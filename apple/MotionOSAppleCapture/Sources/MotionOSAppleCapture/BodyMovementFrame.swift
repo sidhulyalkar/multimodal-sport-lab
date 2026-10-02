@@ -38,6 +38,25 @@ public struct BodyJoint3D: Codable, Sendable, Equatable, Identifiable {
     }
 }
 
+public struct BodyJoint2D: Codable, Sendable, Equatable, Identifiable {
+    public let id: String
+    public let x: Double
+    public let y: Double
+    public let confidence: Double
+
+    public init(
+        id: String,
+        x: Double,
+        y: Double,
+        confidence: Double
+    ) {
+        self.id = id
+        self.x = x
+        self.y = y
+        self.confidence = min(1, max(0, confidence))
+    }
+}
+
 public struct NormalizedImageBounds: Codable, Sendable, Equatable {
     public let minX: Double
     public let minY: Double
@@ -137,6 +156,7 @@ public struct BodyMovementFrame: Codable, Sendable, Equatable {
     public let supportPoints: [MotionVector3]
     public let muscleActivations: [MuscleActivationEstimate]
     public let imageFraming: BodyImageFraming?
+    public let imageJoints: [BodyJoint2D]?
 
     public init(
         schemaVersion: String = BodyMovementFrame.schemaVersion,
@@ -151,7 +171,8 @@ public struct BodyMovementFrame: Codable, Sendable, Equatable {
         centerOfMass: MovementEstimate3D? = nil,
         supportPoints: [MotionVector3] = [],
         muscleActivations: [MuscleActivationEstimate] = [],
-        imageFraming: BodyImageFraming? = nil
+        imageFraming: BodyImageFraming? = nil,
+        imageJoints: [BodyJoint2D]? = nil
     ) {
         self.schemaVersion = schemaVersion
         self.sessionID = sessionID
@@ -166,10 +187,19 @@ public struct BodyMovementFrame: Codable, Sendable, Equatable {
         self.supportPoints = supportPoints
         self.muscleActivations = muscleActivations
         self.imageFraming = imageFraming
+        self.imageJoints = imageJoints
     }
 
     public var jointMap: [String: BodyJoint3D] {
         Dictionary(uniqueKeysWithValues: joints.map { ($0.id, $0) })
+    }
+
+    public var imageJointMap: [String: BodyJoint2D] {
+        Dictionary(
+            uniqueKeysWithValues: (imageJoints ?? []).map {
+                ($0.id, $0)
+            }
+        )
     }
 
     public var hasModelEstimatedMuscleActivity: Bool {
@@ -276,7 +306,8 @@ public enum BodyMovementFrameParser {
             centerOfMass: parseCenterOfMass(payload),
             supportPoints: support,
             muscleActivations: parseMuscleActivations(payload),
-            imageFraming: parseImageFraming(payload)
+            imageFraming: parseImageFraming(payload),
+            imageJoints: parseImageJoints(payload)
         )
     }
 
@@ -339,6 +370,51 @@ public enum BodyMovementFrameParser {
         return aliases.compactMap { names in
             findJoint(aliases: names, in: joints)?.position
         }
+    }
+
+    private static func parseImageJoints(
+        _ payload: [String: JSONValue]
+    ) -> [BodyJoint2D]? {
+        guard case .object(let object) =
+                payload["body_pose_2d_joints"]
+        else {
+            return nil
+        }
+
+        let joints = object.compactMap { id, value -> BodyJoint2D? in
+            guard case .array(let values) = value,
+                  values.count >= 2,
+                  case .number(let x) = values[0],
+                  case .number(let y) = values[1],
+                  x.isFinite,
+                  y.isFinite
+            else {
+                return nil
+            }
+
+            let confidence: Double
+            if values.count >= 3,
+               case .number(let value) = values[2],
+               value.isFinite {
+                confidence = value
+            } else {
+                confidence = 1
+            }
+
+            guard confidence >= 0.25 else {
+                return nil
+            }
+
+            return BodyJoint2D(
+                id: id,
+                x: x,
+                y: y,
+                confidence: confidence
+            )
+        }
+        .sorted { $0.id < $1.id }
+
+        return joints.isEmpty ? nil : joints
     }
 
     private static func parseImageFraming(
