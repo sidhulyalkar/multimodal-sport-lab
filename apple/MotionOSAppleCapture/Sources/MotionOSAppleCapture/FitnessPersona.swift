@@ -284,17 +284,22 @@ public enum FitnessPersonaEngine {
         generatedAt: Date = Date()
     ) -> FitnessPersonaSnapshot {
         let completed = deduplicatedCompletedEvidence(evidence)
+        let contributing = completed.filter { session in
+            session.metrics.contains {
+                $0.value.isFinite
+            }
+        }
 
         let dimensions = FitnessPersonaDimension.allCases.map { dimension in
             buildDimensionState(
                 dimension,
-                evidence: completed
+                evidence: contributing
             )
         }
 
         return FitnessPersonaSnapshot(
             generatedAt: generatedAt,
-            sourceSessionCount: completed.count,
+            sourceSessionCount: contributing.count,
             bodyModelVersion: bodyModelVersion,
             dimensions: dimensions
         )
