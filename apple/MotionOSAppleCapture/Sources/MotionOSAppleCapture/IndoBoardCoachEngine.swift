@@ -1,5 +1,97 @@
 import Foundation
 
+public enum IndoBoardCoachTargetMetric:
+    String,
+    Codable,
+    Sendable,
+    Equatable {
+    case trunkExcursionP90 = "trunk_excursion_p90"
+    case medianKneeFlexion = "median_knee_flexion_deg"
+    case pelvisMotionSpread = "pelvis_motion_spread"
+}
+
+public enum IndoBoardCoachDirection:
+    String,
+    Codable,
+    Sendable,
+    Equatable {
+    case increase
+    case decrease
+}
+
+public enum IndoBoardCoachExperimentOutcome:
+    String,
+    Codable,
+    Sendable,
+    Equatable {
+    case improved
+    case noClearChange = "no_clear_change"
+    case oppositeDirection = "opposite_direction"
+    case insufficientEvidence = "insufficient_evidence"
+}
+
+public struct IndoBoardCoachIntervention:
+    Codable,
+    Equatable,
+    Sendable {
+    public let id: String
+    public let title: String
+    public let cue: String
+    public let drill: String
+    public let targetMetric: IndoBoardCoachTargetMetric
+    public let desiredDirection: IndoBoardCoachDirection
+    public let confidence: Double
+    public let evidenceLabel: String
+
+    public init(
+        id: String,
+        title: String,
+        cue: String,
+        drill: String,
+        targetMetric: IndoBoardCoachTargetMetric,
+        desiredDirection: IndoBoardCoachDirection,
+        confidence: Double,
+        evidenceLabel: String
+    ) {
+        self.id = id
+        self.title = title
+        self.cue = cue
+        self.drill = drill
+        self.targetMetric = targetMetric
+        self.desiredDirection = desiredDirection
+        self.confidence = min(1, max(0, confidence))
+        self.evidenceLabel = evidenceLabel
+    }
+}
+
+public struct IndoBoardCoachExperimentResult:
+    Codable,
+    Equatable,
+    Sendable {
+    public let targetMetric: IndoBoardCoachTargetMetric
+    public let before: Double?
+    public let after: Double?
+    public let relativeChange: Double?
+    public let outcome: IndoBoardCoachExperimentOutcome
+    public let summary: String
+
+    public init(
+        targetMetric: IndoBoardCoachTargetMetric,
+        before: Double?,
+        after: Double?,
+        relativeChange: Double?,
+        outcome: IndoBoardCoachExperimentOutcome,
+        summary: String
+    ) {
+        self.targetMetric = targetMetric
+        self.before = before
+        self.after = after
+        self.relativeChange = relativeChange
+        self.outcome = outcome
+        self.summary = summary
+    }
+}
+
 public struct IndoBoardCoachMetric: Equatable, Sendable, Identifiable {
     public let id: String
     public let label: String
@@ -25,6 +117,8 @@ public struct IndoBoardCoachReport: Equatable, Sendable {
     public let evidenceLabel: String
     public let metrics: [IndoBoardCoachMetric]
     public let numericMetrics: [String: Double]
+    public let intervention: IndoBoardCoachIntervention?
+    public let experimentResult: IndoBoardCoachExperimentResult?
 
     public init(
         headline: String,
@@ -34,7 +128,9 @@ public struct IndoBoardCoachReport: Equatable, Sendable {
         confidence: Double,
         evidenceLabel: String,
         metrics: [IndoBoardCoachMetric],
-        numericMetrics: [String: Double] = [:]
+        numericMetrics: [String: Double] = [:],
+        intervention: IndoBoardCoachIntervention? = nil,
+        experimentResult: IndoBoardCoachExperimentResult? = nil
     ) {
         self.headline = headline
         self.observation = observation
@@ -44,6 +140,8 @@ public struct IndoBoardCoachReport: Equatable, Sendable {
         self.evidenceLabel = evidenceLabel
         self.metrics = metrics
         self.numericMetrics = numericMetrics
+        self.intervention = intervention
+        self.experimentResult = experimentResult
     }
 
     public var confidencePercent: Int {
@@ -238,6 +336,161 @@ public final class IndoBoardCoachEngine {
         if samples.count > 4_000 {
             samples.removeFirst(samples.count - 4_000)
         }
+    }
+
+    public func makeIntervention() -> IndoBoardCoachIntervention? {
+        let baseline = blockSamples("neutral-settle")
+            + blockSamples("free-balance-a")
+        guard baseline.count >= 40 else {
+            return nil
+        }
+
+        let confidence = min(
+            0.90,
+            max(
+                0.25,
+                mean(baseline.map(\.poseConfidence))
+                    * min(1, Double(baseline.count) / 180.0)
+            )
+        )
+        let medianKnee = median(
+            baseline.compactMap(\.kneeFlexionDeg)
+        )
+        let trunkP90 = percentile(
+            baseline.compactMap(\.trunkOffsetRatio),
+            q: 0.90
+        )
+        let correctionProxy = correctionCount(
+            blockSamples("controlled-shifts")
+        )
+        let squatDepth = percentile(
+            blockSamples("partial-squats")
+                .compactMap(\.kneeFlexionDeg),
+            q: 0.75
+        )
+
+        if let medianKnee,
+           let trunkP90,
+           medianKnee < 14,
+           trunkP90 > 0.09 {
+            return IndoBoardCoachIntervention(
+                id: "soft-knee-quiet-shoulders",
+                title: "Try softer knees",
+                cue:
+                    "On the next balance block, start each correction with a small knee and hip bend before moving the shoulders.",
+                drill:
+                    "Natural balance for 20 seconds with soft knees",
+                targetMetric: .trunkExcursionP90,
+                desiredDirection: .decrease,
+                confidence: confidence * 0.88,
+                evidenceLabel:
+                    "Camera body pose · within-session experiment"
+            )
+        }
+
+        if correctionProxy >= 10 {
+            return IndoBoardCoachIntervention(
+                id: "smaller-second-correction",
+                title: "Use one clean return",
+                cue:
+                    "On the next balance block, make one small early correction and soften the second instead of chasing center.",
+                drill:
+                    "Natural balance with smaller early corrections",
+                targetMetric: .pelvisMotionSpread,
+                desiredDirection: .decrease,
+                confidence: confidence * 0.76,
+                evidenceLabel:
+                    "Camera body pose · correction proxy experiment"
+            )
+        }
+
+        if let squatDepth,
+           squatDepth < 18 {
+            return IndoBoardCoachIntervention(
+                id: "slightly-softer-stance",
+                title: "Keep a softer stance",
+                cue:
+                    "On the next balance block, keep a little more knee bend than before without forcing a deep squat.",
+                drill:
+                    "Natural balance with a comfortable soft-knee stance",
+                targetMetric: .medianKneeFlexion,
+                desiredDirection: .increase,
+                confidence: confidence * 0.72,
+                evidenceLabel:
+                    "Camera body pose · within-session experiment"
+            )
+        }
+
+        return IndoBoardCoachIntervention(
+            id: "smaller-earlier-corrections",
+            title: "Make corrections smaller",
+            cue:
+                "On the next balance block, correct a little earlier and pause briefly when you pass through center.",
+            drill:
+                "Natural balance with small early corrections",
+            targetMetric: .pelvisMotionSpread,
+            desiredDirection: .decrease,
+            confidence: confidence * 0.68,
+            evidenceLabel:
+                "Camera body pose · cold-start experiment"
+        )
+    }
+
+    public func makeReport(
+        intervention: IndoBoardCoachIntervention?
+    ) -> IndoBoardCoachReport {
+        let base = makeReport()
+        guard let intervention else {
+            return base
+        }
+
+        let experiment = evaluate(intervention)
+        var numeric = base.numericMetrics
+        if let before = experiment.before {
+            numeric[
+                "intervention_before_"
+                    + intervention.targetMetric.rawValue
+            ] = before
+        }
+        if let after = experiment.after {
+            numeric[
+                "intervention_after_"
+                    + intervention.targetMetric.rawValue
+            ] = after
+        }
+        if let change = experiment.relativeChange {
+            numeric[
+                "intervention_relative_change_"
+                    + intervention.targetMetric.rawValue
+            ] = change
+        }
+
+        var metrics = base.metrics
+        if let change = experiment.relativeChange {
+            let percent = Int((abs(change) * 100).rounded())
+            let prefix = change < 0 ? "−" : "+"
+            metrics.append(
+                IndoBoardCoachMetric(
+                    id: "cue-response",
+                    label: "Cue response",
+                    value: prefix + "\(percent)%"
+                )
+            )
+        }
+
+        return IndoBoardCoachReport(
+            headline: base.headline,
+            observation:
+                base.observation + " " + experiment.summary,
+            tip: base.tip,
+            drill: base.drill,
+            confidence: base.confidence,
+            evidenceLabel: base.evidenceLabel,
+            metrics: Array(metrics.prefix(6)),
+            numericMetrics: numeric,
+            intervention: intervention,
+            experimentResult: experiment
+        )
     }
 
     public func makeReport() -> IndoBoardCoachReport {
@@ -462,6 +715,127 @@ public final class IndoBoardCoachEngine {
         _ id: String
     ) -> [Sample] {
         samples.filter { $0.blockID == id }
+    }
+
+    private func evaluate(
+        _ intervention: IndoBoardCoachIntervention
+    ) -> IndoBoardCoachExperimentResult {
+        let beforeSamples = blockSamples("free-balance-a")
+        let afterSamples = blockSamples("free-balance-b")
+
+        guard beforeSamples.count >= 20,
+              afterSamples.count >= 20
+        else {
+            return IndoBoardCoachExperimentResult(
+                targetMetric: intervention.targetMetric,
+                before: nil,
+                after: nil,
+                relativeChange: nil,
+                outcome: .insufficientEvidence,
+                summary:
+                    "The coached retry did not contain enough clean pose evidence to judge the cue."
+            )
+        }
+
+        let before: Double?
+        let after: Double?
+
+        switch intervention.targetMetric {
+        case .trunkExcursionP90:
+            before = percentile(
+                beforeSamples.compactMap(\.trunkOffsetRatio),
+                q: 0.90
+            )
+            after = percentile(
+                afterSamples.compactMap(\.trunkOffsetRatio),
+                q: 0.90
+            )
+
+        case .medianKneeFlexion:
+            before = median(
+                beforeSamples.compactMap(\.kneeFlexionDeg)
+            )
+            after = median(
+                afterSamples.compactMap(\.kneeFlexionDeg)
+            )
+
+        case .pelvisMotionSpread:
+            before = robustSpread(
+                beforeSamples.compactMap(\.pelvisX)
+            )
+            after = robustSpread(
+                afterSamples.compactMap(\.pelvisX)
+            )
+        }
+
+        guard let before,
+              let after
+        else {
+            return IndoBoardCoachExperimentResult(
+                targetMetric: intervention.targetMetric,
+                before: nil,
+                after: nil,
+                relativeChange: nil,
+                outcome: .insufficientEvidence,
+                summary:
+                    "MotionOS could not compute the target metric reliably enough to score the coached retry."
+            )
+        }
+
+        let denominator = max(abs(before), 1e-6)
+        let relativeChange = (after - before) / denominator
+        let signedImprovement: Double
+        switch intervention.desiredDirection {
+        case .increase:
+            signedImprovement = relativeChange
+        case .decrease:
+            signedImprovement = -relativeChange
+        }
+
+        let outcome: IndoBoardCoachExperimentOutcome
+        if signedImprovement >= 0.05 {
+            outcome = .improved
+        } else if signedImprovement <= -0.05 {
+            outcome = .oppositeDirection
+        } else {
+            outcome = .noClearChange
+        }
+
+        let percent = Int((abs(relativeChange) * 100).rounded())
+        let metricLabel: String
+        switch intervention.targetMetric {
+        case .trunkExcursionP90:
+            metricLabel = "upper-body excursion"
+        case .medianKneeFlexion:
+            metricLabel = "median knee flexion"
+        case .pelvisMotionSpread:
+            metricLabel = "pelvis-motion spread"
+        }
+
+        let summary: String
+        switch outcome {
+        case .improved:
+            summary =
+                "During the coached retry, \(metricLabel) moved about \(percent)% in the intended direction."
+        case .oppositeDirection:
+            summary =
+                "During the coached retry, \(metricLabel) moved about \(percent)% opposite the intended direction, so this cue should not be treated as a win yet."
+        case .noClearChange:
+            summary =
+                "The coached retry changed \(metricLabel) by only about \(percent)%, so the effect was not clear in this session."
+        case .insufficientEvidence:
+            summary =
+                "The coached retry did not contain enough evidence to evaluate this cue."
+        }
+
+        return IndoBoardCoachExperimentResult(
+            targetMetric: intervention.targetMetric,
+            before: before,
+            after: after,
+            relativeChange: relativeChange,
+            outcome: outcome,
+            summary: summary
+        )
     }
 
     private func metricCards(
