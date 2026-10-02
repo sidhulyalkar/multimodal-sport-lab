@@ -374,6 +374,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
             return
         }
         countdownRemaining = nil
+        camera.beginIndoCoachingSession()
         startedAt = Date()
         phase = .running
         startProtocolTimeline(
@@ -514,6 +515,8 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         } else {
             stopRequested = false
         }
+
+        camera.finishIndoCoachingSession()
 
         // Stop the camera immediately after issuing the Watch stop so
         // its media endpoint stays close to the 120 s product boundary.
