@@ -27,6 +27,7 @@ class RecoveryEvent:
     peak_excursion: float
     recovery_time_ms: float
     overshoot_ratio: float
+    secondary_correction_count: int
 
 
 def analyze_board_observations(
@@ -61,6 +62,9 @@ def analyze_board_observations(
         event.recovery_time_ms for event in recoveries
     ]
     overshoots = [event.overshoot_ratio for event in recoveries]
+    secondary_corrections = [
+        event.secondary_correction_count for event in recoveries
+    ]
 
     left_recovery = [
         event.recovery_time_ms
@@ -107,6 +111,10 @@ def analyze_board_observations(
         metrics["overshoot_ratio"] = statistics.median(
             overshoots
         )
+    if secondary_corrections:
+        metrics["secondary_correction_count"] = statistics.median(
+            secondary_corrections
+        )
     if left_recovery:
         metrics["left_recovery_ms"] = statistics.median(
             left_recovery
@@ -133,6 +141,8 @@ def analyze_board_observations(
                 "peak_excursion": event.peak_excursion,
                 "recovery_time_ms": event.recovery_time_ms,
                 "overshoot_ratio": event.overshoot_ratio,
+                "secondary_correction_count":
+                    event.secondary_correction_count,
             }
             for event in recoveries
         ],
@@ -294,9 +304,11 @@ def detect_recoveries(
         peak_excursion = abs(peak.roller_position)
 
         opposite_peak = 0.0
+        post_recovery: list[BoardFrameState] = [recovered]
         for later in frames[index + 1 :]:
             if later.time_s - recovered.time_s > overshoot_window_s:
                 break
+            post_recovery.append(later)
             if (
                 later.roller_position
                 * peak.roller_position
@@ -322,6 +334,8 @@ def detect_recoveries(
                     if peak_excursion > 1e-9
                     else 0.0
                 ),
+                secondary_correction_count=
+                    _direction_change_count(post_recovery),
             )
         )
 
