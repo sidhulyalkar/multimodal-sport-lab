@@ -1093,12 +1093,26 @@ final class WatchSessionController: ObservableObject {
         }
 
         if let status = IndoBoardRemoteStatus(message: message) {
-            let becameReady =
-                indoRemoteStatus?.framingReady != true
-                    && status.framingReady
+            let previous = indoRemoteStatus
+            let becameStartReady =
+                previous?.startReady != true
+                    && status.startReady
+            let countdownChanged =
+                status.countdownRemaining != nil
+                    && status.countdownRemaining
+                        != previous?.countdownRemaining
+            let sessionStarted =
+                previous?.sessionPhase.lowercased() != "running"
+                    && status.sessionPhase.lowercased() == "running"
+
             indoRemoteStatus = status
             indoRemoteErrorMessage = nil
-            if becameReady {
+
+            if sessionStarted {
+                WKInterfaceDevice.current().play(.start)
+            } else if countdownChanged {
+                WKInterfaceDevice.current().play(.click)
+            } else if becameStartReady {
                 WKInterfaceDevice.current().play(.success)
             }
             return
