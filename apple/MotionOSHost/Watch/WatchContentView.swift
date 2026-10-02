@@ -233,19 +233,84 @@ struct WatchContentView: View {
                 color: .yellow
             )
         } else if phase == "sealed" {
-            remoteInstruction(
-                title: "Session saved",
-                detail:
-                    "Your camera and Watch evidence are sealed. Set up the next attempt when ready.",
-                symbol: "checkmark.seal.fill",
-                color: .green
-            )
+            if let headline = status.coachHeadline,
+               let tip = status.coachTip,
+               let drill = status.coachDrill {
+                VStack(alignment: .leading, spacing: 7) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "figure.mind.and.body")
+                            .foregroundStyle(.cyan)
+                        Text("COACH")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        if let confidence =
+                            status.coachConfidencePercent {
+                            Text("\(confidence)%")
+                                .font(
+                                    .system(
+                                        size: 9,
+                                        design: .monospaced
+                                    )
+                                )
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    Text(headline)
+                        .font(.headline)
+                        .fixedSize(
+                            horizontal: false,
+                            vertical: true
+                        )
+
+                    Text(tip)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(
+                            horizontal: false,
+                            vertical: true
+                        )
+
+                    Divider()
+
+                    Label(drill, systemImage: "repeat")
+                        .font(.caption.weight(.semibold))
+                        .fixedSize(
+                            horizontal: false,
+                            vertical: true
+                        )
+
+                    if let evidence = status.coachEvidenceLabel {
+                        Text(evidence)
+                            .font(.system(size: 8))
+                            .foregroundStyle(.tertiary)
+                            .fixedSize(
+                                horizontal: false,
+                                vertical: true
+                            )
+                    }
+                }
+            } else {
+                remoteInstruction(
+                    title: "Session saved",
+                    detail:
+                        "Your camera and Watch evidence are sealed. MotionOS needs a cleaner pose capture before giving a coaching cue.",
+                    symbol: "checkmark.seal.fill",
+                    color: .green
+                )
+            }
 
             Button {
                 _ = controller.sendIndoRemoteCommand(.resetSession)
             } label: {
-                Label("Next Session", systemImage: "arrow.clockwise")
-                    .frame(maxWidth: .infinity)
+                Label(
+                    status.coachDrill == nil
+                        ? "Next Session"
+                        : "Try This Drill",
+                    systemImage: "arrow.clockwise"
+                )
+                .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
             .tint(.cyan)
