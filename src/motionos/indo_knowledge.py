@@ -45,6 +45,37 @@ def validate_indo_skill_taxonomy(payload: object) -> None:
             "unsupported INDO BOARD taxonomy schema version"
         )
 
+    source_registry = payload.get("source_registry")
+    if not isinstance(source_registry, list):
+        raise TypeError("source_registry must be a list")
+
+    source_ids: set[str] = set()
+    for index, source in enumerate(source_registry):
+        if not isinstance(source, dict):
+            raise TypeError(
+                f"source_registry[{index}] must be an object"
+            )
+        source_id = source.get("id")
+        if not isinstance(source_id, str) or not source_id:
+            raise ValueError(
+                f"source_registry[{index}].id must be non-empty"
+            )
+        if source_id in source_ids:
+            raise ValueError(
+                f"duplicate source registry id: {source_id}"
+            )
+        source_ids.add(source_id)
+
+        evidence_level = source.get("evidence_level")
+        if evidence_level not in {
+            "official_instruction",
+            "community_practice",
+            "system_hypothesis",
+        }:
+            raise ValueError(
+                f"{source_id} has unsupported evidence_level"
+            )
+
     skills = payload.get("skills")
     if not isinstance(skills, list) or not skills:
         raise ValueError("taxonomy requires a non-empty skills list")
@@ -88,6 +119,13 @@ def validate_indo_skill_taxonomy(payload: object) -> None:
                 raise ValueError(
                     f"{skill['id']} references unknown prerequisite "
                     f"{prerequisite}"
+                )
+
+        for source_id in skill["source_ids"]:
+            if source_id not in source_ids:
+                raise ValueError(
+                    f"{skill['id']} references unknown source_id "
+                    f"{source_id}"
                 )
 
     rules = payload.get("coaching_rules", [])
