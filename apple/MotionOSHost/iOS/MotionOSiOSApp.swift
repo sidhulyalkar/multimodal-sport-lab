@@ -81,6 +81,8 @@ struct MotionOSiOSApp: App {
             return (value * 10).rounded() / 10.0
         }
 
+        let coach = cameraController.indoCoachReport
+
         return IndoBoardRemoteStatus(
             cameraPhase: cameraController.phase.rawValue,
             framingState: framing.state.rawValue,
@@ -100,7 +102,12 @@ struct MotionOSiOSApp: App {
             startReady: indoRemoteStartBlocker() == nil,
             startBlocker: indoRemoteStartBlocker(),
             phoneBatteryFraction: battery,
-            phoneStorageGB: storageGB
+            phoneStorageGB: storageGB,
+            coachHeadline: coach?.headline,
+            coachTip: coach?.tip,
+            coachDrill: coach?.drill,
+            coachConfidencePercent: coach?.confidencePercent,
+            coachEvidenceLabel: coach?.evidenceLabel
         )
     }
 
