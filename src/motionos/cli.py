@@ -58,6 +58,7 @@ from .p1 import (
     write_p1_receipt,
 )
 from .public_data import index_totalcapture
+from .public_video import build_public_video_catalog
 from .qc import session_qc
 from .replay import replay_frames
 from .session import SessionReader
@@ -403,6 +404,13 @@ def _parser() -> argparse.ArgumentParser:
     )
     totalcapture.add_argument("root")
     totalcapture.add_argument("output")
+
+    public_video = sub.add_parser(
+        "build-public-video-catalog",
+        help="build a rights-aware catalog of public movement-video references",
+    )
+    public_video.add_argument("spec")
+    public_video.add_argument("output")
 
     public_export = sub.add_parser(
         "validate-public-export",
@@ -854,6 +862,21 @@ def main(argv: list[str] | None = None) -> int:
                     "schema_version": payload["schema_version"],
                     "dataset": payload["dataset"],
                     "sample_count": len(payload["samples"]),
+                    "output": args.output,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    if args.command == "build-public-video-catalog":
+        payload = build_public_video_catalog(args.spec, args.output)
+        print(
+            json.dumps(
+                {
+                    "schema_version": payload["schema_version"],
+                    "record_count": len(payload["records"]),
                     "output": args.output,
                 },
                 indent=2,
