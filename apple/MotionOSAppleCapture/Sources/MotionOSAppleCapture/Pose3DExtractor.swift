@@ -77,7 +77,7 @@ public enum Pose3DExtractor {
 
                 var imageJoints: [String: JSONValue] = [:]
                 for (name, point) in visible {
-                    imageJoints[name.rawValue] = .array([
+                    imageJoints[name.rawValue.rawValue] = .array([
                         .number(Double(point.location.x)),
                         .number(Double(point.location.y)),
                         .number(Double(point.confidence)),
