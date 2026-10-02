@@ -152,6 +152,8 @@ public struct IndoBoardRemoteStatus: Equatable, Sendable {
     public let coachDrill: String?
     public let coachConfidencePercent: Int?
     public let coachEvidenceLabel: String?
+    public let coachExperimentOutcome: String?
+    public let coachExperimentSummary: String?
     public let sentAtUnixSeconds: Double
 
     public init(
@@ -175,6 +177,8 @@ public struct IndoBoardRemoteStatus: Equatable, Sendable {
         coachDrill: String? = nil,
         coachConfidencePercent: Int? = nil,
         coachEvidenceLabel: String? = nil,
+        coachExperimentOutcome: String? = nil,
+        coachExperimentSummary: String? = nil,
         sentAtUnixSeconds: Double = Date().timeIntervalSince1970
     ) {
         self.cameraPhase = cameraPhase
@@ -200,6 +204,8 @@ public struct IndoBoardRemoteStatus: Equatable, Sendable {
             min(100, max(0, $0))
         }
         self.coachEvidenceLabel = coachEvidenceLabel
+        self.coachExperimentOutcome = coachExperimentOutcome
+        self.coachExperimentSummary = coachExperimentSummary
         self.sentAtUnixSeconds = sentAtUnixSeconds
     }
 
@@ -259,6 +265,10 @@ public struct IndoBoardRemoteStatus: Equatable, Sendable {
             }
         self.coachEvidenceLabel =
             message["coach_evidence_label"] as? String
+        self.coachExperimentOutcome =
+            message["coach_experiment_outcome"] as? String
+        self.coachExperimentSummary =
+            message["coach_experiment_summary"] as? String
         self.sentAtUnixSeconds =
             Self.double(message["sent_at_unix_s"])
                 ?? Date().timeIntervalSince1970
@@ -312,6 +322,16 @@ public struct IndoBoardRemoteStatus: Equatable, Sendable {
             payload["coach_evidence_label"] =
                 coachEvidenceLabel
         }
+        if let coachExperimentOutcome,
+           !coachExperimentOutcome.isEmpty {
+            payload["coach_experiment_outcome"] =
+                coachExperimentOutcome
+        }
+        if let coachExperimentSummary,
+           !coachExperimentSummary.isEmpty {
+            payload["coach_experiment_summary"] =
+                coachExperimentSummary
+        }
         return payload
     }
 
@@ -348,6 +368,10 @@ public struct IndoBoardRemoteStatus: Equatable, Sendable {
             && coachDrill == other.coachDrill
             && coachConfidencePercent == other.coachConfidencePercent
             && coachEvidenceLabel == other.coachEvidenceLabel
+            && coachExperimentOutcome
+                == other.coachExperimentOutcome
+            && coachExperimentSummary
+                == other.coachExperimentSummary
     }
 
     private static func double(_ value: Any?) -> Double? {
