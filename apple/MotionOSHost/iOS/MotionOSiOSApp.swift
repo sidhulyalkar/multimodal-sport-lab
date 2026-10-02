@@ -107,7 +107,11 @@ struct MotionOSiOSApp: App {
             coachTip: coach?.tip,
             coachDrill: coach?.drill,
             coachConfidencePercent: coach?.confidencePercent,
-            coachEvidenceLabel: coach?.evidenceLabel
+            coachEvidenceLabel: coach?.evidenceLabel,
+            coachExperimentOutcome:
+                coach?.experimentResult?.outcome.rawValue,
+            coachExperimentSummary:
+                coach?.experimentResult?.summary
         )
     }
 
