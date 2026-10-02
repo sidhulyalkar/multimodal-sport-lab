@@ -234,8 +234,11 @@ final class BodyCalibrationTests: XCTestCase {
             ],
             30
         )
+        let height = try XCTUnwrap(
+            result.model.parameter(.standingHeight)
+        )
         XCTAssertEqual(
-            result.model.parameter(.standingHeight)?.valueMeters,
+            height.valueMeters,
             1.62,
             accuracy: 1e-9
         )
