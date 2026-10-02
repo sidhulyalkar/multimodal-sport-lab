@@ -24,6 +24,7 @@ public struct IndoBoardCoachReport: Equatable, Sendable {
     public let confidence: Double
     public let evidenceLabel: String
     public let metrics: [IndoBoardCoachMetric]
+    public let numericMetrics: [String: Double]
 
     public init(
         headline: String,
@@ -32,7 +33,8 @@ public struct IndoBoardCoachReport: Equatable, Sendable {
         drill: String,
         confidence: Double,
         evidenceLabel: String,
-        metrics: [IndoBoardCoachMetric]
+        metrics: [IndoBoardCoachMetric],
+        numericMetrics: [String: Double] = [:]
     ) {
         self.headline = headline
         self.observation = observation
@@ -41,6 +43,7 @@ public struct IndoBoardCoachReport: Equatable, Sendable {
         self.confidence = min(1, max(0, confidence))
         self.evidenceLabel = evidenceLabel
         self.metrics = metrics
+        self.numericMetrics = numericMetrics
     }
 
     public var confidencePercent: Int {
@@ -254,6 +257,9 @@ public final class IndoBoardCoachEngine {
                         label: "Usable pose frames",
                         value: "\(samples.count)"
                     ),
+                ],
+                numericMetrics: [
+                    "usable_pose_frames": Double(samples.count),
                 ]
             )
         }
@@ -308,6 +314,43 @@ public final class IndoBoardCoachEngine {
             medianStance: medianStance,
             medianArm: medianArm
         )
+        var numericMetrics: [String: Double] = [
+            "usable_pose_frames": Double(samples.count),
+            "pose_confidence": poseConfidence,
+            "correction_direction_changes":
+                Double(correctionProxy),
+        ]
+        if let medianKnee {
+            numericMetrics["median_knee_flexion_deg"] =
+                medianKnee
+        }
+        if let trunkP90 {
+            numericMetrics["trunk_excursion_p90"] = trunkP90
+        }
+        if let medianStance {
+            numericMetrics["stance_width_body_ratio"] =
+                medianStance
+        }
+        if let medianArm {
+            numericMetrics["arm_excursion_body_ratio"] =
+                medianArm
+        }
+        if let startSpread {
+            numericMetrics["neutral_start_spread"] =
+                startSpread
+        }
+        if let finishSpread {
+            numericMetrics["neutral_finish_spread"] =
+                finishSpread
+        }
+        if let shiftRange {
+            numericMetrics["controlled_shift_range"] =
+                shiftRange
+        }
+        if let squatDepth {
+            numericMetrics["squat_flexion_p75_deg"] =
+                squatDepth
+        }
 
         if let medianKnee,
            let trunkP90,
@@ -323,7 +366,8 @@ public final class IndoBoardCoachEngine {
                     "3 shallow squat holds, then 5 slow side-to-side shifts",
                 confidence: confidence * 0.90,
                 evidenceLabel: "Camera body pose · technique hypothesis",
-                metrics: metrics
+                metrics: metrics,
+                numericMetrics: numericMetrics
             )
         }
 
@@ -343,7 +387,8 @@ public final class IndoBoardCoachEngine {
                 drill: "5 slow shifts each direction with a pause at center",
                 confidence: confidence * 0.88,
                 evidenceLabel: "Camera body pose · within-session comparison",
-                metrics: metrics
+                metrics: metrics,
+                numericMetrics: numericMetrics
             )
         }
 
@@ -359,7 +404,8 @@ public final class IndoBoardCoachEngine {
                     "5 slow left/right shifts, returning to a clear center pause each time",
                 confidence: confidence * 0.78,
                 evidenceLabel: "Camera body pose · protocol quality",
-                metrics: metrics
+                metrics: metrics,
+                numericMetrics: numericMetrics
             )
         }
 
@@ -375,7 +421,8 @@ public final class IndoBoardCoachEngine {
                 confidence: confidence * 0.72,
                 evidenceLabel:
                     "Camera body pose · correction proxy, board tracking pending",
-                metrics: metrics
+                metrics: metrics,
+                numericMetrics: numericMetrics
             )
         }
 
@@ -390,7 +437,8 @@ public final class IndoBoardCoachEngine {
                 drill: "3 controlled 5-second partial squat holds",
                 confidence: confidence * 0.76,
                 evidenceLabel: "Camera body pose · drill-quality check",
-                metrics: metrics
+                metrics: metrics,
+                numericMetrics: numericMetrics
             )
         }
 
@@ -405,7 +453,8 @@ public final class IndoBoardCoachEngine {
             confidence: confidence * 0.72,
             evidenceLabel:
                 "Camera body pose · cold-start baseline, board tracking pending",
-            metrics: metrics
+            metrics: metrics,
+            numericMetrics: numericMetrics
         )
     }
 
