@@ -43,16 +43,16 @@ from .experiments import (
     verify_experiment_manifest,
     verify_grouped_split,
 )
-from .insole import (
-    import_opengo_text_export,
-    write_p2_capture_receipt,
-    write_p2_physical_receipt,
-)
 from .indo_public_corpus import (
     build_indo_video_knowledge_base,
     discover_indo_youtube,
     enrich_public_video_urls_with_ytdlp,
     merge_public_video_specs,
+)
+from .insole import (
+    import_opengo_text_export,
+    write_p2_capture_receipt,
+    write_p2_physical_receipt,
 )
 from .mcap_io import export_mcap
 from .observability import load_observability_registry
