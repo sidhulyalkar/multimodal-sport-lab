@@ -10,6 +10,8 @@ struct MotionOSiOSApp: App {
     @StateObject private var indoBoardSession =
         IndoBoardSessionCoordinator()
     @StateObject private var runLibrary = ProductRunLibrary()
+    @StateObject private var fitnessPersona =
+        FitnessPersonaCoordinator()
 
     var body: some Scene {
         WindowGroup {
@@ -22,6 +24,7 @@ struct MotionOSiOSApp: App {
                 .environmentObject(guidedP0)
                 .environmentObject(indoBoardSession)
                 .environmentObject(runLibrary)
+                .environmentObject(fitnessPersona)
                 .task {
                     coordinator.inbox.refreshCatalog()
                     runLibrary.refresh()
@@ -30,6 +33,9 @@ struct MotionOSiOSApp: App {
                     coordinator.inbox.$latestSessionID
                 ) { _ in
                     runLibrary.refresh()
+                }
+                .onReceive(runLibrary.$runs) { runs in
+                    fitnessPersona.rebuild(from: runs)
                 }
                 .onChange(
                     of: indoBoardSession.phase
