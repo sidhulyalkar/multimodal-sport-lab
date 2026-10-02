@@ -1,0 +1,83 @@
+{
+  "schema_version": "motionos.indo-video-query-plan.v1",
+  "queries": [
+    {
+      "query": "Indo Board",
+      "weak_labels": ["indo-board", "general"],
+      "max_pages": 4,
+      "video_license": "any"
+    },
+    {
+      "query": "Indo Board tutorial",
+      "weak_labels": ["indo-board", "tutorial", "fundamentals"],
+      "max_pages": 3,
+      "video_license": "any"
+    },
+    {
+      "query": "Indo Board beginner",
+      "weak_labels": ["indo-board", "beginner", "fundamentals"],
+      "max_pages": 3,
+      "video_license": "any"
+    },
+    {
+      "query": "Indo Board balance training",
+      "weak_labels": ["indo-board", "balance", "training"],
+      "max_pages": 3,
+      "video_license": "any"
+    },
+    {
+      "query": "Indo Board workout",
+      "weak_labels": ["indo-board", "workout", "fitness"],
+      "max_pages": 3,
+      "video_license": "any"
+    },
+    {
+      "query": "Indo Board squat",
+      "weak_labels": ["indo-board", "squat", "lower-body"],
+      "max_pages": 2,
+      "video_license": "any"
+    },
+    {
+      "query": "Indo Board tricks",
+      "weak_labels": ["indo-board", "advanced", "tricks"],
+      "max_pages": 3,
+      "video_license": "any"
+    },
+    {
+      "query": "Indo Board surf training",
+      "weak_labels": ["indo-board", "surf", "sport-transfer"],
+      "max_pages": 2,
+      "video_license": "any"
+    },
+    {
+      "query": "Indo Board snowboard training",
+      "weak_labels": ["indo-board", "snowboard", "sport-transfer"],
+      "max_pages": 2,
+      "video_license": "any"
+    },
+    {
+      "query": "roller balance board tutorial",
+      "weak_labels": ["roller-board", "tutorial", "balance"],
+      "max_pages": 3,
+      "video_license": "any"
+    },
+    {
+      "query": "roller balance board recovery drill",
+      "weak_labels": ["roller-board", "recovery", "drill"],
+      "max_pages": 2,
+      "video_license": "any"
+    },
+    {
+      "query": "balance board arm movement balance",
+      "weak_labels": ["balance-board", "arm-strategy", "coordination"],
+      "max_pages": 2,
+      "video_license": "any"
+    },
+    {
+      "query": "Indo Board Creative Commons",
+      "weak_labels": ["indo-board", "creative-commons-candidate"],
+      "max_pages": 3,
+      "video_license": "creativeCommon"
+    }
+  ]
+}
