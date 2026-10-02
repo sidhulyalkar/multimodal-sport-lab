@@ -26,6 +26,8 @@ struct MotionOSiOSApp: App {
         MobilityChallengeCoordinator()
     @StateObject private var ghostComparison =
         GhostComparisonCoordinator()
+    @StateObject private var personaReliability =
+        PersonaReliabilityCoordinator()
 
     var body: some Scene {
         WindowGroup {
@@ -46,6 +48,7 @@ struct MotionOSiOSApp: App {
                 .environmentObject(powerChallenge)
                 .environmentObject(mobilityChallenge)
                 .environmentObject(ghostComparison)
+                .environmentObject(personaReliability)
                 .task {
                     coordinator.inbox.refreshCatalog()
                     runLibrary.refresh()
@@ -64,6 +67,11 @@ struct MotionOSiOSApp: App {
                         bodyModelVersion:
                             bodyModels.latestModel?.versionID
                     )
+                    personaReliability.rebuild(
+                        from: runs,
+                        supplementalEvidence:
+                            personaEvidence.evidence
+                    )
                 }
                 .onReceive(bodyModels.$latestModel) { model in
                     fitnessPersona.rebuild(
@@ -79,6 +87,10 @@ struct MotionOSiOSApp: App {
                         supplementalEvidence: evidence,
                         bodyModelVersion:
                             bodyModels.latestModel?.versionID
+                    )
+                    personaReliability.rebuild(
+                        from: runLibrary.runs,
+                        supplementalEvidence: evidence
                     )
                 }
                 .onChange(

@@ -15,13 +15,14 @@ struct FitnessPersonaView: View {
                 FitnessChallengesCard(
                     mobilityAvailable: true
                 )
-                PlayerCardLauncher()
                 evidenceMap
+                MeasurementReliabilityCard()
 
                 if !longitudinalBaselines.isEmpty {
                     longitudinalSignals
                 }
 
+                PlayerCardLauncher()
                 evidenceGaps
                 dataBoundary
             }
