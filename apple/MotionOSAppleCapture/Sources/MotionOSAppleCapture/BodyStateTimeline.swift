@@ -344,3 +344,37 @@ public struct BodyStateContextSnapshot: Codable, Sendable, Equatable {
         )
     }
 }
+
+
+public enum BodyStateContextStore {
+    public static let filename = "body-state-context.json"
+
+    @discardableResult
+    public static func write(
+        _ snapshot: BodyStateContextSnapshot,
+        to runDirectory: URL
+    ) throws -> URL {
+        let url = runDirectory.appendingPathComponent(
+            filename
+        )
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        try encoder.encode(snapshot).write(
+            to: url,
+            options: .atomic
+        )
+        return url
+    }
+
+    public static func load(
+        from url: URL
+    ) throws -> BodyStateContextSnapshot {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try decoder.decode(
+            BodyStateContextSnapshot.self,
+            from: Data(contentsOf: url)
+        )
+    }
+}
