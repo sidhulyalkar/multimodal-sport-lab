@@ -173,7 +173,7 @@ final class FitnessPersonaTests: XCTestCase {
         XCTAssertEqual(snapshot.sourceSessionCount, 0)
         XCTAssertEqual(
             snapshot.state(for: .movement)?.coverage,
-            .none
+            PersonaEvidenceCoverage.none
         )
     }
 
