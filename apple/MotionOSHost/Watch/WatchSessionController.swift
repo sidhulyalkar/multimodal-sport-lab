@@ -66,6 +66,12 @@ final class WatchSessionController: ObservableObject {
     @Published private(set) var deviceYawRadians: Double?
     @Published private(set) var visualTelemetryHistory: [VisualTelemetryPoint] = []
     @Published private(set) var productCueInstruction: String?
+    @Published private(set) var indoRemoteStatus: IndoBoardRemoteStatus?
+    @Published private(set) var pendingIndoRemoteCommand:
+        IndoBoardRemoteCommand?
+    @Published private(set) var lastIndoRemoteAck:
+        IndoBoardRemoteCommandAck?
+    @Published private(set) var indoRemoteErrorMessage: String?
     /// Operator diagnostics for late, foreign, or stale events that were not
     /// journaled. Not raw evidence.
     @Published private(set) var captureRejections = CaptureRejectionCounts()
@@ -104,8 +110,10 @@ final class WatchSessionController: ObservableObject {
     private let batteryReadInterval: TimeInterval = 30
     private var lastTransferQueueAttemptAt = Date.distantPast
     private var lastPhonePresenceRequestAt = Date.distantPast
+    private var lastIndoRemoteStatusRequestAt = Date.distantPast
     private let automaticTransferRetryInterval: TimeInterval = 15
     private let phonePresenceRequestMinimumInterval: TimeInterval = 5
+    private let indoRemoteStatusRequestMinimumInterval: TimeInterval = 2
 
     private init() {
         workout.onHeartRateBPM = { [weak self] bpm, timestamp in
@@ -230,6 +238,65 @@ final class WatchSessionController: ObservableObject {
 
     func applicationDidBecomeActive() {
         refreshReadinessAndPresence()
+        requestIndoRemoteStatus()
+    }
+
+    var indoRemoteProductSessionActive: Bool {
+        indoRemoteStatus?.isSessionActive == true
+    }
+
+    var indoRemoteCommandPending: Bool {
+        pendingIndoRemoteCommand != nil
+    }
+
+    @discardableResult
+    func sendIndoRemoteCommand(
+        _ action: IndoBoardRemoteAction
+    ) -> Bool {
+        guard phoneReachable else {
+            indoRemoteErrorMessage =
+                "Keep MotionOS open on the iPhone so the Watch can control the camera."
+            WKInterfaceDevice.current().play(.failure)
+            return false
+        }
+
+        guard pendingIndoRemoteCommand == nil else {
+            return false
+        }
+
+        let command = IndoBoardRemoteCommand(action: action)
+        pendingIndoRemoteCommand = command
+        indoRemoteErrorMessage = nil
+
+        guard transport.sendMessage(command.message) else {
+            pendingIndoRemoteCommand = nil
+            indoRemoteErrorMessage =
+                "The iPhone is not reachable right now."
+            WKInterfaceDevice.current().play(.failure)
+            return false
+        }
+
+        WKInterfaceDevice.current().play(.click)
+        return true
+    }
+
+    func requestIndoRemoteStatus(
+        at date: Date = Date()
+    ) {
+        guard phoneReachable,
+              date.timeIntervalSince(lastIndoRemoteStatusRequestAt)
+                >= indoRemoteStatusRequestMinimumInterval
+        else {
+            return
+        }
+
+        let command = IndoBoardRemoteCommand(
+            action: .refreshStatus,
+            sentAtUnixSeconds: date.timeIntervalSince1970
+        )
+        if transport.sendMessage(command.message) {
+            lastIndoRemoteStatusRequestAt = date
+        }
     }
 
     func requestAuthorization() async {
@@ -448,6 +515,7 @@ final class WatchSessionController: ObservableObject {
         healthAuthorizationStatus = workout.workoutAuthorizationStatus
         publishPresence()
         requestPhonePresenceIfNeeded()
+        requestIndoRemoteStatus()
         retryPendingTransfersIfNeeded()
     }
 
@@ -1021,6 +1089,39 @@ final class WatchSessionController: ObservableObject {
         _ message: [String: Any]
     ) {
         guard let type = message["motionos_message"] as? String else {
+            return
+        }
+
+        if let status = IndoBoardRemoteStatus(message: message) {
+            let becameReady =
+                indoRemoteStatus?.framingReady != true
+                    && status.framingReady
+            indoRemoteStatus = status
+            indoRemoteErrorMessage = nil
+            if becameReady {
+                WKInterfaceDevice.current().play(.success)
+            }
+            return
+        }
+
+        if let acknowledgment =
+            IndoBoardRemoteCommandAck(message: message) {
+            lastIndoRemoteAck = acknowledgment
+            if pendingIndoRemoteCommand?.requestID
+                == acknowledgment.requestID {
+                pendingIndoRemoteCommand = nil
+            }
+            if acknowledgment.accepted {
+                indoRemoteErrorMessage = nil
+                if acknowledgment.action == .finishSession {
+                    WKInterfaceDevice.current().play(.click)
+                }
+            } else {
+                indoRemoteErrorMessage =
+                    acknowledgment.messageText
+                        ?? "The iPhone could not complete that action."
+                WKInterfaceDevice.current().play(.failure)
+            }
             return
         }
 
