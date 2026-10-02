@@ -50,6 +50,7 @@ from .indo_knowledge import (
     generate_coaching_suggestions,
     load_indo_skill_taxonomy,
 )
+from .indo_pose_metrics import analyze_indo_camera_session
 from .indo_public_corpus import (
     build_indo_video_knowledge_base,
     discover_indo_youtube,
@@ -483,6 +484,12 @@ def _parser() -> argparse.ArgumentParser:
     indo_coach.add_argument("taxonomy")
     indo_coach.add_argument("metrics")
     indo_coach.add_argument("--max-suggestions", type=int, default=2)
+
+    indo_body_metrics = sub.add_parser(
+        "indo-body-metrics",
+        help="derive body-only INDO BOARD posture metrics from camera pose evidence",
+    )
+    indo_body_metrics.add_argument("session")
 
     indo_next = sub.add_parser(
         "indo-next-skills",
@@ -1086,6 +1093,11 @@ def main(argv: list[str] | None = None) -> int:
                 sort_keys=True,
             )
         )
+        return 0
+
+    if args.command == "indo-body-metrics":
+        result = analyze_indo_camera_session(args.session)
+        print(json.dumps(result, indent=2, sort_keys=True))
         return 0
 
     if args.command == "indo-next-skills":
