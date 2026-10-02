@@ -210,12 +210,16 @@ final class FitnessPersonaTests: XCTestCase {
 
         XCTAssertEqual(model.versionID, "body-v1")
         XCTAssertEqual(
-            model.parameter(.standingHeight)?.valueMeters,
+            try XCTUnwrap(
+                model.parameter(.standingHeight)?.valueMeters
+            ),
             1.71,
             accuracy: 1e-9
         )
         XCTAssertEqual(
-            model.parameter(.leftFemurLength)?.valueMeters,
+            try XCTUnwrap(
+                model.parameter(.leftFemurLength)?.valueMeters
+            ),
             0.43,
             accuracy: 1e-9
         )
