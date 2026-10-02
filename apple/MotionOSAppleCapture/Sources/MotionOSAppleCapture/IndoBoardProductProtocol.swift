@@ -63,36 +63,49 @@ public enum IndoBoardProductProtocol {
         .init(
             id: "neutral-settle",
             title: "Neutral settle",
-            instruction: "Settle into a comfortable neutral balance.",
+            instruction:
+                "Balance naturally with soft knees. Let MotionOS learn your baseline.",
             startSeconds: 0,
-            endSeconds: 20
+            endSeconds: 15
         ),
         .init(
             id: "free-balance-a",
             title: "Natural free balance",
-            instruction: "Balance naturally. Stay comfortable and visible to camera.",
-            startSeconds: 20,
-            endSeconds: 55
+            instruction:
+                "Balance normally. Do not exaggerate corrections for the camera.",
+            startSeconds: 15,
+            endSeconds: 35
         ),
         .init(
-            id: "tilt-recover",
-            title: "Tilt + recover",
-            instruction: "Perform five comfortable controlled tilt-and-recover cycles, alternating directions.",
-            startSeconds: 55,
-            endSeconds: 95
+            id: "controlled-shifts",
+            title: "Controlled side shifts",
+            instruction:
+                "Make five slow left/right shifts. Return to a clear center pause each time.",
+            startSeconds: 35,
+            endSeconds: 60
+        ),
+        .init(
+            id: "partial-squats",
+            title: "Partial squat control",
+            instruction:
+                "Perform three shallow controlled squats. Hold each bottom position briefly.",
+            startSeconds: 60,
+            endSeconds: 85
         ),
         .init(
             id: "free-balance-b",
-            title: "Free balance repeat",
-            instruction: "Return to natural free balance, then settle toward neutral.",
-            startSeconds: 95,
-            endSeconds: 110
+            title: "Natural balance repeat",
+            instruction:
+                "Return to natural balance. Use whatever strategy now feels most controlled.",
+            startSeconds: 85,
+            endSeconds: 105
         ),
         .init(
             id: "neutral-finish",
             title: "Neutral finish",
-            instruction: "Finish near neutral with minimal voluntary motion.",
-            startSeconds: 110,
+            instruction:
+                "Finish near neutral with quiet, comfortable corrections.",
+            startSeconds: 105,
             endSeconds: 120
         ),
     ]
@@ -101,26 +114,29 @@ public enum IndoBoardProductProtocol {
         .init(
             id: "sync-start",
             label: "start",
-            startSeconds: 10,
-            preferredSeconds: 12,
-            endSeconds: 20,
-            instruction: "When the Watch cues START sync, make one sharp arm gesture while keeping the board near neutral."
+            startSeconds: 8,
+            preferredSeconds: 10,
+            endSeconds: 14,
+            instruction:
+                "When the Watch cues START sync, make one sharp arm gesture while keeping the board near neutral."
         ),
         .init(
             id: "sync-middle",
             label: "middle",
-            startSeconds: 45,
-            preferredSeconds: 50,
-            endSeconds: 60,
-            instruction: "When the Watch cues MIDDLE sync, make one sharp arm gesture while keeping the board near neutral."
+            startSeconds: 82,
+            preferredSeconds: 85,
+            endSeconds: 89,
+            instruction:
+                "When the Watch cues MIDDLE sync, make one sharp arm gesture, then return to natural balance."
         ),
         .init(
             id: "sync-end",
             label: "end",
-            startSeconds: 105,
-            preferredSeconds: 110,
-            endSeconds: 120,
-            instruction: "When the Watch cues END sync, make one sharp arm gesture while keeping the board near neutral."
+            startSeconds: 110,
+            preferredSeconds: 114,
+            endSeconds: 119,
+            instruction:
+                "When the Watch cues END sync, make one sharp arm gesture while keeping the board near neutral."
         ),
     ]
 
