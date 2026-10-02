@@ -57,6 +57,8 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
     @Published private(set) var liveTelemetry = LiveTelemetryBuffer()
     @Published private(set) var lastSessionSyncAcknowledgment:
         SessionSyncAcknowledgment?
+    @Published private(set) var latestIndoRemoteCommand:
+        IndoBoardRemoteCommand?
     @Published private(set) var iPhoneBatteryLevel: Double?
     @Published private(set) var iPhoneAvailableStorageBytes: Int64?
     @Published private(set) var systemsLabCurrentReport:
@@ -75,6 +77,8 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
     private var batteryObservers: [NSObjectProtocol] = []
     private var lastWatchPresenceRequestAt = Date.distantPast
     private let watchPresenceRequestMinimumInterval: TimeInterval = 5
+    private var recentIndoRemoteRequestIDs: [String] = []
+    private var lastPublishedIndoRemoteStatus: IndoBoardRemoteStatus?
 
     override init() {
         super.init()
@@ -398,6 +402,21 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
     private func ingestWatchMessage(
         _ message: [String: Any]
     ) {
+        if let command = IndoBoardRemoteCommand(message: message) {
+            guard !recentIndoRemoteRequestIDs.contains(command.requestID)
+            else {
+                return
+            }
+            recentIndoRemoteRequestIDs.append(command.requestID)
+            if recentIndoRemoteRequestIDs.count > 32 {
+                recentIndoRemoteRequestIDs.removeFirst(
+                    recentIndoRemoteRequestIDs.count - 32
+                )
+            }
+            latestIndoRemoteCommand = command
+            return
+        }
+
         let type = message["motionos_message"] as? String
 
         if type == "phone_presence_request_v1" {
@@ -451,6 +470,42 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
         } catch {
             liveTelemetry.recordInvalidPacket()
         }
+    }
+
+    @discardableResult
+    func publishIndoRemoteStatus(
+        _ status: IndoBoardRemoteStatus,
+        force: Bool = false
+    ) -> Bool {
+        guard force
+                || lastPublishedIndoRemoteStatus.map({
+                    !$0.equivalentForDelivery(to: status)
+                }) != false
+        else {
+            return true
+        }
+
+        guard transport.sendMessage(status.message) else {
+            return false
+        }
+
+        lastPublishedIndoRemoteStatus = status
+        return true
+    }
+
+    @discardableResult
+    func acknowledgeIndoRemoteCommand(
+        _ command: IndoBoardRemoteCommand,
+        accepted: Bool,
+        message: String? = nil
+    ) -> Bool {
+        let acknowledgment = IndoBoardRemoteCommandAck(
+            requestID: command.requestID,
+            action: command.action,
+            accepted: accepted,
+            messageText: message
+        )
+        return transport.sendMessage(acknowledgment.message)
     }
 
     private func publishPhonePresence() {
