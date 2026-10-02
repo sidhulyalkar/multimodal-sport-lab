@@ -30,11 +30,15 @@ final class CameraCaptureController: ObservableObject {
         IndoBoardStanceAssessment = .waiting
     @Published private(set) var indoCoachReport:
         IndoBoardCoachReport?
+    @Published private(set) var latestIndoPrimitive:
+        IndoBoardPrimitiveObservation?
     @Published private(set) var errorMessage: String?
 
     private let pipeline = CameraCapturePipeline()
     private let stanceGate = IndoBoardStanceGate()
     private let indoCoach = IndoBoardCoachEngine()
+    private let indoPrimitiveDetector =
+        IndoBoardPrimitiveDetector()
     private var indoCoachStartedAt: Date?
     private var statsTask: Task<Void, Never>?
     private var poseTask: Task<Void, Never>?
@@ -158,13 +162,23 @@ final class CameraCaptureController: ObservableObject {
 
                 if let nextPose,
                    let startedAt = self.indoCoachStartedAt {
+                    let elapsed = max(
+                        0,
+                        Date().timeIntervalSince(startedAt)
+                    )
                     self.indoCoach.ingest(
                         frame: nextPose,
-                        elapsedSeconds: max(
-                            0,
-                            Date().timeIntervalSince(startedAt)
-                        )
+                        elapsedSeconds: elapsed
                     )
+                    self.latestIndoPrimitive =
+                        self.indoPrimitiveDetector.ingest(
+                            frame: nextPose,
+                            protocolBlockID:
+                                IndoBoardProductProtocol
+                                    .activeBlock(
+                                        at: elapsed
+                                    )?.id
+                        )
                 }
 
                 if nextPose?.sessionID != self.latestPoseFrame?.sessionID
@@ -180,7 +194,9 @@ final class CameraCaptureController: ObservableObject {
 
     func beginIndoCoachingSession() {
         indoCoach.reset()
+        indoPrimitiveDetector.reset()
         indoCoachReport = nil
+        latestIndoPrimitive = nil
         indoCoachStartedAt = Date()
     }
 
@@ -195,7 +211,9 @@ final class CameraCaptureController: ObservableObject {
     func resetIndoCoachingSession() {
         indoCoachStartedAt = nil
         indoCoachReport = nil
+        latestIndoPrimitive = nil
         indoCoach.reset()
+        indoPrimitiveDetector.reset()
     }
 
     private func stopLivePolling() {
