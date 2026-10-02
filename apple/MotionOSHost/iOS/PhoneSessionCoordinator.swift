@@ -49,6 +49,8 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
     @Published private(set) var watchAppInstalled = false
     @Published private(set) var systemWatchAppInstalled = false
     @Published private(set) var watchReachable = false
+    @Published private(set) var watchConnectivityActivationState = "starting"
+    @Published private(set) var watchConnectivityActivationError: String?
     @Published private(set) var watchPresence: WatchPresence?
     /// Lossy live preview of the active Watch recording. The sealed Watch
     /// journal received through `inbox` is the evidence.
@@ -149,6 +151,9 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
 
     func refreshWatchState() {
         let session = transport.session
+        watchConnectivityActivationState = transport.activationStateLabel
+        watchConnectivityActivationError =
+            transport.lastActivationErrorDescription
         let activated = session.activationState == .activated
 
         if !activated {
@@ -176,6 +181,14 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
 
         requestWatchPresenceIfNeeded()
         refreshHostReadiness()
+    }
+
+    func runWatchLinkCheck() {
+        // A manual check should actually retry WCSession activation, then
+        // force a fresh presence request if the counterpart is reachable.
+        lastWatchPresenceRequestAt = .distantPast
+        transport.activateIfNeeded()
+        refreshWatchState()
     }
 
     private func installHostReadinessObservers() {
