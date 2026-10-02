@@ -11,6 +11,8 @@ struct ProductRunDetailView: View {
     @State private var perceivedEffort = 3
     @State private var movementNotes = ""
     @State private var productNotes = ""
+    @State private var coachUsefulness:
+        ProductSessionCoachUsefulness?
     @State private var savedFeedback:
         ProductSessionFeedback?
     @State private var feedbackError: String?
@@ -26,6 +28,10 @@ struct ProductRunDetailView: View {
                     watchSummary(summary)
                     MotionFingerprintCard(summary: summary)
                     PreviousRunComparisonCard(run: run)
+                }
+
+                if let coach = run.productManifest?.coachSummary {
+                    coachSummary(coach)
                 }
 
                 feedback
@@ -346,6 +352,76 @@ struct ProductRunDetailView: View {
         .cardStyle()
     }
 
+    private func coachSummary(
+        _ coach: ProductSessionManifest.CoachSummary
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            MotionOSSectionHeader(
+                title: "Coach",
+                subtitle:
+                    "\(Int((coach.confidence * 100).rounded()))% confidence · \(coach.evidenceLabel)",
+                systemImage: "figure.mind.and.body",
+                accent: .cyan
+            )
+
+            Text(coach.headline)
+                .font(.title3.weight(.semibold))
+
+            Text(coach.observation)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Divider()
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("TRY NEXT")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.cyan)
+                Text(coach.tip)
+                    .font(.subheadline.weight(.medium))
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("DRILL")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.indigo)
+                Text(coach.drill)
+                    .font(.subheadline.weight(.semibold))
+            }
+
+            if !coach.metrics.isEmpty {
+                Divider()
+                ForEach(
+                    coach.metrics.keys.sorted(),
+                    id: \.self
+                ) { key in
+                    HStack {
+                        Text(humanize(key))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text(coach.metrics[key] ?? "—")
+                            .font(
+                                .system(
+                                    .caption,
+                                    design: .monospaced
+                                )
+                            )
+                    }
+                }
+            }
+
+            Text(
+                "This is an evidence-linked coaching hypothesis, not a diagnosis. "
+                    + "The next comparable attempt is used to test whether the cue helped."
+            )
+            .font(.caption2)
+            .foregroundStyle(.tertiary)
+        }
+        .cardStyle()
+    }
+
     private var feedback: some View {
         VStack(alignment: .leading, spacing: 13) {
             MotionOSSectionHeader(
@@ -380,6 +456,21 @@ struct ProductRunDetailView: View {
                     )
                 }
 
+                if let usefulness = savedFeedback.coachUsefulness {
+                    Label(
+                        "Coach feedback · \(usefulness.label)",
+                        systemImage: usefulness == .helpful
+                            ? "hand.thumbsup.fill"
+                            : "bubble.left"
+                    )
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(
+                        usefulness == .helpful
+                            ? .green
+                            : .secondary
+                    )
+                }
+
                 Text(savedFeedback.claimBoundary)
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
@@ -410,6 +501,36 @@ struct ProductRunDetailView: View {
                     axis: .vertical
                 )
                 .textFieldStyle(.roundedBorder)
+
+                if run.productManifest?.coachSummary != nil {
+                    VStack(alignment: .leading, spacing: 7) {
+                        Text("WAS THE COACHING USEFUL?")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(.secondary)
+
+                        FlowLayout(spacing: 6) {
+                            ForEach(
+                                ProductSessionCoachUsefulness.allCases
+                            ) { option in
+                                Button {
+                                    coachUsefulness = option
+                                } label: {
+                                    Text(option.label)
+                                        .font(.caption.weight(.semibold))
+                                        .padding(.horizontal, 9)
+                                        .padding(.vertical, 7)
+                                        .background(
+                                            coachUsefulness == option
+                                                ? Color.cyan.opacity(0.16)
+                                                : Color.primary.opacity(0.04),
+                                            in: Capsule()
+                                        )
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                }
 
                 Button {
                     saveFeedback()
@@ -637,7 +758,8 @@ struct ProductRunDetailView: View {
             perceivedStability: perceivedStability,
             perceivedEffort: perceivedEffort,
             movementNotes: movementNotes,
-            productNotes: productNotes
+            productNotes: productNotes,
+            coachUsefulness: coachUsefulness
         )
 
         do {
@@ -667,6 +789,7 @@ struct ProductRunDetailView: View {
             perceivedEffort = value.perceivedEffort
             movementNotes = value.movementNotes
             productNotes = value.productNotes
+            coachUsefulness = value.coachUsefulness
         } catch {
             feedbackError = (
                 "Saved feedback could not be read: "
