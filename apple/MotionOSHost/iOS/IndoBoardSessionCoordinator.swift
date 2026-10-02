@@ -742,7 +742,8 @@ final class IndoBoardSessionCoordinator: ObservableObject {
                     externalCameraImported: true,
                     externalCameraSHA256: evidence.sha256,
                     operatorEvidenceSealed: existing.operatorEvidenceSealed,
-                    cameraEvidenceSealed: existing.cameraEvidenceSealed
+                    cameraEvidenceSealed: existing.cameraEvidenceSealed,
+                    coachSummary: existing.coachSummary
                 )
                 productManifestURL = try ProductSessionManifestStore.write(
                     updated,
@@ -1249,7 +1250,22 @@ final class IndoBoardSessionCoordinator: ObservableObject {
             externalCameraImported: externalVideoEvidence != nil,
             externalCameraSHA256: externalVideoEvidence?.sha256,
             operatorEvidenceSealed: fieldRun.phase == .sealed,
-            cameraEvidenceSealed: camera.phase == .evidenceReady
+            cameraEvidenceSealed: camera.phase == .evidenceReady,
+            coachSummary: camera.indoCoachReport.map {
+                ProductSessionManifest.CoachSummary(
+                    headline: $0.headline,
+                    observation: $0.observation,
+                    tip: $0.tip,
+                    drill: $0.drill,
+                    confidence: $0.confidence,
+                    evidenceLabel: $0.evidenceLabel,
+                    metrics: Dictionary(
+                        uniqueKeysWithValues: $0.metrics.map {
+                            ($0.id, $0.value)
+                        }
+                    )
+                )
+            }
         )
 
         return try ProductSessionManifestStore.write(
