@@ -24,6 +24,8 @@ final class CameraCaptureController: ObservableObject {
     @Published private(set) var liveStats: CameraLiveCaptureStats?
     @Published private(set) var latestPoseFrame: BodyMovementFrame?
     @Published private(set) var latestPoseReceivedAt: Date?
+    @Published private(set) var framingAssessment:
+        CameraFramingAssessment = .waiting
     @Published private(set) var errorMessage: String?
 
     private let pipeline = CameraCapturePipeline()
@@ -50,6 +52,7 @@ final class CameraCaptureController: ObservableObject {
         liveStats = nil
         latestPoseFrame = nil
         latestPoseReceivedAt = nil
+        framingAssessment = .waiting
 
         do {
             let authorized = try await ensureAuthorization()
@@ -60,6 +63,7 @@ final class CameraCaptureController: ObservableObject {
 
             configuration = try await pipeline.startPreview()
             phase = .ready
+            startLivePolling()
         } catch {
             fail(error)
         }
@@ -71,6 +75,7 @@ final class CameraCaptureController: ObservableObject {
         liveStats = nil
         latestPoseFrame = nil
         latestPoseReceivedAt = nil
+        framingAssessment = .waiting
 
         do {
             let authorized = try await ensureAuthorization()
@@ -130,6 +135,8 @@ final class CameraCaptureController: ObservableObject {
                 guard let self else { return }
                 let nextPose = await self.pipeline.livePoseFrame()
                 guard !Task.isCancelled else { return }
+                self.framingAssessment =
+                    CameraFramingAssessment.evaluate(nextPose)
                 if nextPose?.sessionID != self.latestPoseFrame?.sessionID
                     || nextPose?.sequence != self.latestPoseFrame?.sequence {
                     self.latestPoseFrame = nextPose
