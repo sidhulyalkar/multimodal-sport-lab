@@ -134,6 +134,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
     @Published private(set) var externalVideoEvidence:
         ExternalVideoEvidence?
     @Published private(set) var productManifestURL: URL?
+    @Published private(set) var bodyStateContextURL: URL?
     @Published var externalCameraConfirmed = false
 
     private var protocolTask: Task<Void, Never>?
@@ -237,7 +238,8 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         phone: PhoneSessionCoordinator,
         camera: CameraCaptureController,
         fieldRun: FieldRunCoordinator,
-        pod: EquipmentPodController
+        pod: EquipmentPodController,
+        health: HealthDataCoordinator
     ) async {
         if phase != .ready {
             await prepare(phone: phone, camera: camera)
@@ -262,6 +264,17 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         else {
             fail(SessionError.fieldRunUnavailable)
             return
+        }
+
+        bodyStateContextURL = nil
+        if let directory = fieldRun.evidenceBundle?.directory {
+            let context = health.contextSnapshot(
+                at: Date()
+            )
+            bodyStateContextURL = try? BodyStateContextStore.write(
+                context,
+                to: directory
+            )
         }
 
         let previousWatchSessionID =
@@ -779,6 +792,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         externalVideoEvidence = nil
         externalCameraConfirmed = false
         productManifestURL = nil
+        bodyStateContextURL = nil
         errorMessage = nil
     }
 
