@@ -480,8 +480,7 @@ public final class IndoBoardCoachEngine {
 
         return IndoBoardCoachReport(
             headline: base.headline,
-            observation:
-                base.observation + " " + experiment.summary,
+            observation: base.observation,
             tip: base.tip,
             drill: base.drill,
             confidence: base.confidence,
