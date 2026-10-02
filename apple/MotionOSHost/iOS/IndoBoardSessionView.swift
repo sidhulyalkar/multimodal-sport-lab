@@ -841,6 +841,10 @@ struct IndoBoardSessionView: View {
                 )
             )
 
+            if let coach = camera.indoCoachReport {
+                coachSummaryCard(coach)
+            }
+
             if let run = currentRunRecord {
                 NavigationLink {
                     ProductRunDetailView(run: run)
@@ -1045,6 +1049,93 @@ struct IndoBoardSessionView: View {
             return false
         }
         return phone.inbox.latestProductRunID == runID
+    }
+
+    private func coachSummaryCard(
+        _ coach: IndoBoardCoachReport
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center, spacing: 9) {
+                ZStack {
+                    Circle()
+                        .fill(Color.cyan.opacity(0.13))
+                        .frame(width: 38, height: 38)
+                    Image(systemName: "figure.mind.and.body")
+                        .foregroundStyle(.cyan)
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("MOTIONOS COACH")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.secondary)
+                    Text(coach.headline)
+                        .font(.headline)
+                }
+
+                Spacer()
+
+                Text("\(coach.confidencePercent)%")
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(coach.observation)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            VStack(alignment: .leading, spacing: 5) {
+                Label("TRY", systemImage: "lightbulb.fill")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.cyan)
+                Text(coach.tip)
+                    .font(.subheadline.weight(.medium))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            VStack(alignment: .leading, spacing: 5) {
+                Label("NEXT DRILL", systemImage: "repeat")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.indigo)
+                Text(coach.drill)
+                    .font(.subheadline.weight(.semibold))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if !coach.metrics.isEmpty {
+                Divider()
+
+                ForEach(coach.metrics.prefix(4)) { metric in
+                    HStack {
+                        Text(metric.label)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text(metric.value)
+                            .font(.system(.caption, design: .monospaced))
+                    }
+                }
+            }
+
+            Text(coach.evidenceLabel)
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+        }
+        .padding(14)
+        .background(
+            LinearGradient(
+                colors: [
+                    Color.cyan.opacity(0.08),
+                    Color.indigo.opacity(0.05),
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            ),
+            in: RoundedRectangle(
+                cornerRadius: 18,
+                style: .continuous
+            )
+        )
     }
 
     private func completionRow(
