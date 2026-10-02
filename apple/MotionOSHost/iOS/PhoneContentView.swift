@@ -41,6 +41,17 @@ struct PhoneContentView: View {
             }
 
             NavigationStack {
+                FitnessPersonaView()
+            }
+            .tag(MotionOSTab.persona)
+            .tabItem {
+                Label(
+                    "Persona",
+                    systemImage: "person.crop.circle"
+                )
+            }
+
+            NavigationStack {
                 DeviceHubView()
             }
             .tag(MotionOSTab.devices)
