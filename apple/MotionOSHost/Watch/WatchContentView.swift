@@ -272,6 +272,32 @@ struct WatchContentView: View {
                             vertical: true
                         )
 
+                    if let summary =
+                            status.coachExperimentSummary {
+                        Label(
+                            coachExperimentTitle(
+                                status.coachExperimentOutcome
+                            ),
+                            systemImage: coachExperimentSymbol(
+                                status.coachExperimentOutcome
+                            )
+                        )
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(
+                            coachExperimentColor(
+                                status.coachExperimentOutcome
+                            )
+                        )
+
+                        Text(summary)
+                            .font(.system(size: 9))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(
+                                horizontal: false,
+                                vertical: true
+                            )
+                    }
+
                     Divider()
 
                     Label(drill, systemImage: "repeat")
@@ -494,6 +520,49 @@ struct WatchContentView: View {
     ) -> String {
         status.startBlocker
             ?? "Start the camera preview, then walk into frame. The Watch will tell you how to adjust."
+    }
+
+    private func coachExperimentTitle(
+        _ outcome: String?
+    ) -> String {
+        switch outcome {
+        case "improved":
+            return "Cue moved the target"
+        case "opposite_direction":
+            return "Cue moved the wrong way"
+        case "no_clear_change":
+            return "No clear cue effect yet"
+        default:
+            return "Cue effect not scored"
+        }
+    }
+
+    private func coachExperimentSymbol(
+        _ outcome: String?
+    ) -> String {
+        switch outcome {
+        case "improved":
+            return "checkmark.circle.fill"
+        case "opposite_direction":
+            return "arrow.uturn.backward.circle"
+        case "no_clear_change":
+            return "equal.circle"
+        default:
+            return "questionmark.circle"
+        }
+    }
+
+    private func coachExperimentColor(
+        _ outcome: String?
+    ) -> Color {
+        switch outcome {
+        case "improved":
+            return .green
+        case "opposite_direction":
+            return .orange
+        default:
+            return .secondary
+        }
     }
 
     private func remoteFramingColor(
