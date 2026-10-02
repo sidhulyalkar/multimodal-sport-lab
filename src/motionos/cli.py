@@ -48,6 +48,12 @@ from .insole import (
     write_p2_capture_receipt,
     write_p2_physical_receipt,
 )
+from .indo_public_corpus import (
+    build_indo_video_knowledge_base,
+    discover_indo_youtube,
+    enrich_public_video_urls_with_ytdlp,
+    merge_public_video_specs,
+)
 from .mcap_io import export_mcap
 from .observability import load_observability_registry
 from .operator_evidence import write_operator_evidence_receipt
@@ -411,6 +417,34 @@ def _parser() -> argparse.ArgumentParser:
     )
     public_video.add_argument("spec")
     public_video.add_argument("output")
+
+    indo_discover = sub.add_parser(
+        "discover-indo-youtube",
+        help="discover Indo Board videos through the official YouTube Data API",
+    )
+    indo_discover.add_argument("queries")
+    indo_discover.add_argument("output")
+
+    indo_enrich = sub.add_parser(
+        "enrich-indo-video-urls",
+        help="extract metadata only for an explicit list of public video URLs",
+    )
+    indo_enrich.add_argument("urls")
+    indo_enrich.add_argument("output")
+
+    indo_merge = sub.add_parser(
+        "merge-indo-video-specs",
+        help="merge and deduplicate Indo Board public-video discovery specs",
+    )
+    indo_merge.add_argument("inputs", nargs="+")
+    indo_merge.add_argument("output")
+
+    indo_kb = sub.add_parser(
+        "build-indo-video-kb",
+        help="build a weak-label retrieval index from an Indo video catalog",
+    )
+    indo_kb.add_argument("catalog")
+    indo_kb.add_argument("output")
 
     public_export = sub.add_parser(
         "validate-public-export",
@@ -877,6 +911,74 @@ def main(argv: list[str] | None = None) -> int:
                 {
                     "schema_version": payload["schema_version"],
                     "record_count": len(payload["records"]),
+                    "output": args.output,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    if args.command == "discover-indo-youtube":
+        payload = discover_indo_youtube(args.queries, args.output)
+        print(
+            json.dumps(
+                {
+                    "schema_version": payload["schema_version"],
+                    "unique_video_count": len(payload["records"]),
+                    "output": args.output,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    if args.command == "enrich-indo-video-urls":
+        payload = enrich_public_video_urls_with_ytdlp(
+            args.urls,
+            args.output,
+        )
+        print(
+            json.dumps(
+                {
+                    "schema_version": payload["schema_version"],
+                    "record_count": len(payload["records"]),
+                    "failure_count": len(payload["failures"]),
+                    "output": args.output,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    if args.command == "merge-indo-video-specs":
+        payload = merge_public_video_specs(args.inputs, args.output)
+        print(
+            json.dumps(
+                {
+                    "schema_version": payload["schema_version"],
+                    "record_count": len(payload["records"]),
+                    "output": args.output,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    if args.command == "build-indo-video-kb":
+        payload = build_indo_video_knowledge_base(
+            args.catalog,
+            args.output,
+        )
+        print(
+            json.dumps(
+                {
+                    "schema_version": payload["schema_version"],
+                    "source_count": payload["source_count"],
+                    "topic_count": len(payload["topics"]),
                     "output": args.output,
                 },
                 indent=2,
