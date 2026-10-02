@@ -29,9 +29,18 @@ struct FitnessChallengesCard: View {
                 .padding(.leading, 42)
 
             if mobilityAvailable {
-                Text("Mobility protocol available on this build.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                NavigationLink {
+                    MobilityChallengeView()
+                } label: {
+                    challengeRow(
+                        title: "Mobility challenge",
+                        detail: "Guided Vision pose envelope · 40 seconds",
+                        symbol: "figure.flexibility",
+                        tint: .purple,
+                        status: "READY"
+                    )
+                }
+                .buttonStyle(.plain)
             } else {
                 challengeRow(
                     title: "Mobility challenge",

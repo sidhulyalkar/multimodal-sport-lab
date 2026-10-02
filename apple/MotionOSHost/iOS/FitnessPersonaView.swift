@@ -12,7 +12,7 @@ struct FitnessPersonaView: View {
                 PersonalBodyModelCard()
                 BodyStateCard()
                 FitnessChallengesCard(
-                    mobilityAvailable: false
+                    mobilityAvailable: true
                 )
                 evidenceMap
 

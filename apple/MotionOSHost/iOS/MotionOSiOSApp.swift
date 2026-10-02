@@ -22,6 +22,8 @@ struct MotionOSiOSApp: App {
         PersonaEvidenceLibrary()
     @StateObject private var powerChallenge =
         PowerChallengeCoordinator()
+    @StateObject private var mobilityChallenge =
+        MobilityChallengeCoordinator()
 
     var body: some Scene {
         WindowGroup {
@@ -40,6 +42,7 @@ struct MotionOSiOSApp: App {
                 .environmentObject(bodyCalibration)
                 .environmentObject(personaEvidence)
                 .environmentObject(powerChallenge)
+                .environmentObject(mobilityChallenge)
                 .task {
                     coordinator.inbox.refreshCatalog()
                     runLibrary.refresh()
