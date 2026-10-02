@@ -277,11 +277,11 @@ def _assign_grouped_splits(
 
 
 def _priority(record: dict[str, Any]) -> int:
-    labels = set(
+    labels = {
         str(value)
         for value in record.get("weak_labels", [])
         if str(value)
-    )
+    }
     creator = str(record.get("creator") or "").lower()
     score = 0
     if "official" in labels or creator == "indoboard":
