@@ -42,6 +42,15 @@ public struct ProductSessionManifest: Codable, Equatable, Sendable {
         public let evidenceLabel: String
         public let metrics: [String: String]
         public let numericMetrics: [String: Double]?
+        public let interventionID: String?
+        public let interventionCue: String?
+        public let interventionTargetMetric: String?
+        public let interventionDesiredDirection: String?
+        public let experimentOutcome: String?
+        public let experimentBefore: Double?
+        public let experimentAfter: Double?
+        public let experimentRelativeChange: Double?
+        public let experimentSummary: String?
 
         public init(
             headline: String,
@@ -51,7 +60,16 @@ public struct ProductSessionManifest: Codable, Equatable, Sendable {
             confidence: Double,
             evidenceLabel: String,
             metrics: [String: String],
-            numericMetrics: [String: Double]? = nil
+            numericMetrics: [String: Double]? = nil,
+            interventionID: String? = nil,
+            interventionCue: String? = nil,
+            interventionTargetMetric: String? = nil,
+            interventionDesiredDirection: String? = nil,
+            experimentOutcome: String? = nil,
+            experimentBefore: Double? = nil,
+            experimentAfter: Double? = nil,
+            experimentRelativeChange: Double? = nil,
+            experimentSummary: String? = nil
         ) {
             self.headline = headline
             self.observation = observation
@@ -61,6 +79,18 @@ public struct ProductSessionManifest: Codable, Equatable, Sendable {
             self.evidenceLabel = evidenceLabel
             self.metrics = metrics
             self.numericMetrics = numericMetrics
+            self.interventionID = interventionID
+            self.interventionCue = interventionCue
+            self.interventionTargetMetric =
+                interventionTargetMetric
+            self.interventionDesiredDirection =
+                interventionDesiredDirection
+            self.experimentOutcome = experimentOutcome
+            self.experimentBefore = experimentBefore
+            self.experimentAfter = experimentAfter
+            self.experimentRelativeChange =
+                experimentRelativeChange
+            self.experimentSummary = experimentSummary
         }
     }
 
