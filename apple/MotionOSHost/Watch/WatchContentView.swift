@@ -515,7 +515,32 @@ struct WatchContentView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(.red)
-                .disabled(controller.indoRemoteCommandPending)
+                .disabled(
+                    controller.indoRemoteCommandPending
+                        || !controller.phoneReachable
+                )
+
+                if !controller.phoneReachable {
+                    Text(
+                        "iPhone link lost. The timed protocol can still auto-finish. "
+                            + "Use the local stop only if you need to end the Watch recording now."
+                    )
+                    .font(.system(size: 9))
+                    .foregroundStyle(.yellow)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                    Button {
+                        confirmStop = true
+                    } label: {
+                        Label(
+                            "Stop Watch Recording",
+                            systemImage: "stop.circle"
+                        )
+                        .font(.caption2)
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                }
             } else {
                 HStack(spacing: 7) {
                     Button {
