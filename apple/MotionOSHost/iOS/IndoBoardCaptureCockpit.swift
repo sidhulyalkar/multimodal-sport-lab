@@ -1,4 +1,5 @@
 import Charts
+import MotionOSAppleCapture
 import SwiftUI
 
 struct IndoBoardFramingCard: View {
