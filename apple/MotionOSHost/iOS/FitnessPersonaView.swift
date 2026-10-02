@@ -11,6 +11,9 @@ struct FitnessPersonaView: View {
                 hero
                 PersonalBodyModelCard()
                 BodyStateCard()
+                FitnessChallengesCard(
+                    mobilityAvailable: false
+                )
                 evidenceMap
 
                 if !longitudinalBaselines.isEmpty {

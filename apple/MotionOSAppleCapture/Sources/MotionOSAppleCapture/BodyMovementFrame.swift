@@ -86,6 +86,10 @@ public struct BodyMovementFrame: Codable, Sendable, Equatable {
     public let coordinateFrame: String
     public let bodyHeightM: Double?
     public let bodyHeightEstimation: String?
+    /// Skeleton-root position in the camera coordinate frame, derived from
+    /// Vision's cameraOriginMatrix translation. Useful only with a fixed camera
+    /// and retained as geometry, not as validated jump height or force.
+    public let rootPositionCameraM: MotionVector3?
     public let joints: [BodyJoint3D]
     public let pelvisReference: MovementEstimate3D?
     public let centerOfMass: MovementEstimate3D?
@@ -101,6 +105,7 @@ public struct BodyMovementFrame: Codable, Sendable, Equatable {
         coordinateFrame: String,
         bodyHeightM: Double?,
         bodyHeightEstimation: String? = nil,
+        rootPositionCameraM: MotionVector3? = nil,
         joints: [BodyJoint3D],
         pelvisReference: MovementEstimate3D? = nil,
         centerOfMass: MovementEstimate3D? = nil,
@@ -115,6 +120,7 @@ public struct BodyMovementFrame: Codable, Sendable, Equatable {
         self.coordinateFrame = coordinateFrame
         self.bodyHeightM = bodyHeightM
         self.bodyHeightEstimation = bodyHeightEstimation
+        self.rootPositionCameraM = rootPositionCameraM
         self.joints = joints
         self.pelvisReference = pelvisReference
         self.centerOfMass = centerOfMass
@@ -214,6 +220,11 @@ public enum BodyMovementFrameParser {
             coordinateFrame = "vision_root_joint_relative_meters"
         }
 
+        let rootPositionCameraM =
+            parseCameraRootTranslation(
+                payload["camera_origin_matrix"]
+            )
+
         let source: String
         if case .string(let value) = payload["source"] {
             source = value
@@ -229,6 +240,7 @@ public enum BodyMovementFrameParser {
             coordinateFrame: coordinateFrame,
             bodyHeightM: bodyHeight,
             bodyHeightEstimation: bodyHeightEstimation,
+            rootPositionCameraM: rootPositionCameraM,
             joints: joints,
             pelvisReference: pelvis.map {
                 MovementEstimate3D(
@@ -240,6 +252,38 @@ public enum BodyMovementFrameParser {
             centerOfMass: parseCenterOfMass(payload),
             supportPoints: support,
             muscleActivations: parseMuscleActivations(payload)
+        )
+    }
+
+    private static func parseCameraRootTranslation(
+        _ value: JSONValue?
+    ) -> MotionVector3? {
+        // Pose3DExtractor serializes a simd_float4x4 as rows, so the
+        // translation column is [row0[3], row1[3], row2[3]].
+        guard case .array(let rows) = value,
+              rows.count == 4
+        else {
+            return nil
+        }
+
+        var translation: [Double] = []
+        translation.reserveCapacity(3)
+
+        for rowIndex in 0..<3 {
+            guard case .array(let row) = rows[rowIndex],
+                  row.count == 4,
+                  case .number(let component) = row[3],
+                  component.isFinite
+            else {
+                return nil
+            }
+            translation.append(component)
+        }
+
+        return MotionVector3(
+            translation[0],
+            translation[1],
+            translation[2]
         )
     }
 
