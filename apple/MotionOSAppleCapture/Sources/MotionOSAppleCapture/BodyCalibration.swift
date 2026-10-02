@@ -63,8 +63,12 @@ public struct BodyCalibrationAccumulator: Sendable, Equatable {
         var frameMeasurements: [BodyParameterKind: Double] = [:]
 
         if let height = frame.bodyHeightM,
+           frame.bodyHeightEstimation == "measured",
            height.isFinite,
            (0.5...2.5).contains(height) {
+            // Vision's reference fallback is 1.8 m when depth is unavailable.
+            // Only LiDAR/depth-backed "measured" height may become a personal
+            // standing-height calibration observation.
             frameMeasurements[.standingHeight] = height
         }
 
