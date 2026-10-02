@@ -12,12 +12,35 @@ public final class WatchConnectivityTransport: NSObject, WCSessionDelegate {
     public var onMessageReceived: (([String: Any]) -> Void)?
     public var onApplicationContextReceived: (([String: Any]) -> Void)?
     public var onStateChanged: (() -> Void)?
+    public private(set) var lastActivationErrorDescription: String?
+    public private(set) var lastActivationAt: Date?
+
+    public var activationStateLabel: String {
+        switch session.activationState {
+        case .notActivated:
+            return "not activated"
+        case .inactive:
+            return "inactive"
+        case .activated:
+            return "activated"
+        @unknown default:
+            return "unknown"
+        }
+    }
 
     public override init() {
         session = .default
         super.init()
         if WCSession.isSupported() {
             session.delegate = self
+            session.activate()
+        }
+    }
+
+    public func activateIfNeeded() {
+        guard WCSession.isSupported() else { return }
+        session.delegate = self
+        if session.activationState != .activated {
             session.activate()
         }
     }
@@ -99,6 +122,8 @@ public final class WatchConnectivityTransport: NSObject, WCSessionDelegate {
         activationDidCompleteWith activationState: WCSessionActivationState,
         error: Error?
     ) {
+        lastActivationAt = Date()
+        lastActivationErrorDescription = error?.localizedDescription
         onStateChanged?()
     }
 
