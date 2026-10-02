@@ -2,55 +2,55 @@
   "schema_version": "motionos.indo-video-query-plan.v1",
   "queries": [
     {
-      "query": "Indo Board",
+      "query": ""INDO BOARD" balance board",
       "weak_labels": ["indo-board", "general"],
       "max_pages": 4,
       "video_license": "any"
     },
     {
-      "query": "Indo Board tutorial",
+      "query": ""INDO BOARD" tutorial",
       "weak_labels": ["indo-board", "tutorial", "fundamentals"],
       "max_pages": 3,
       "video_license": "any"
     },
     {
-      "query": "Indo Board beginner",
+      "query": ""INDO BOARD" beginner",
       "weak_labels": ["indo-board", "beginner", "fundamentals"],
       "max_pages": 3,
       "video_license": "any"
     },
     {
-      "query": "Indo Board balance training",
+      "query": ""INDO BOARD" balance training",
       "weak_labels": ["indo-board", "balance", "training"],
       "max_pages": 3,
       "video_license": "any"
     },
     {
-      "query": "Indo Board workout",
+      "query": ""INDO BOARD" workout",
       "weak_labels": ["indo-board", "workout", "fitness"],
       "max_pages": 3,
       "video_license": "any"
     },
     {
-      "query": "Indo Board squat",
+      "query": ""INDO BOARD" squat",
       "weak_labels": ["indo-board", "squat", "lower-body"],
       "max_pages": 2,
       "video_license": "any"
     },
     {
-      "query": "Indo Board tricks",
+      "query": ""INDO BOARD" tricks",
       "weak_labels": ["indo-board", "advanced", "tricks"],
       "max_pages": 3,
       "video_license": "any"
     },
     {
-      "query": "Indo Board surf training",
+      "query": ""INDO BOARD" surf training",
       "weak_labels": ["indo-board", "surf", "sport-transfer"],
       "max_pages": 2,
       "video_license": "any"
     },
     {
-      "query": "Indo Board snowboard training",
+      "query": ""INDO BOARD" snowboard training",
       "weak_labels": ["indo-board", "snowboard", "sport-transfer"],
       "max_pages": 2,
       "video_license": "any"
@@ -74,7 +74,7 @@
       "video_license": "any"
     },
     {
-      "query": "Indo Board Creative Commons",
+      "query": ""INDO BOARD" balance board",
       "weak_labels": ["indo-board", "creative-commons-candidate"],
       "max_pages": 3,
       "video_license": "creativeCommon"
