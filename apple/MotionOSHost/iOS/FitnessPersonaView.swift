@@ -9,6 +9,7 @@ struct FitnessPersonaView: View {
         ScrollView {
             LazyVStack(spacing: MotionOSDesign.pageSpacing) {
                 hero
+                BodyStateCard()
                 evidenceMap
 
                 if !longitudinalBaselines.isEmpty {
