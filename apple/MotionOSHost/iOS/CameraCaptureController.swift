@@ -26,9 +26,12 @@ final class CameraCaptureController: ObservableObject {
     @Published private(set) var latestPoseReceivedAt: Date?
     @Published private(set) var framingAssessment:
         CameraFramingAssessment = .waiting
+    @Published private(set) var stanceAssessment:
+        IndoBoardStanceAssessment = .waiting
     @Published private(set) var errorMessage: String?
 
     private let pipeline = CameraCapturePipeline()
+    private let stanceGate = IndoBoardStanceGate()
     private var statsTask: Task<Void, Never>?
     private var poseTask: Task<Void, Never>?
 
@@ -53,6 +56,8 @@ final class CameraCaptureController: ObservableObject {
         latestPoseFrame = nil
         latestPoseReceivedAt = nil
         framingAssessment = .waiting
+        stanceAssessment = .waiting
+        stanceGate.reset()
 
         do {
             let authorized = try await ensureAuthorization()
@@ -76,6 +81,8 @@ final class CameraCaptureController: ObservableObject {
         latestPoseFrame = nil
         latestPoseReceivedAt = nil
         framingAssessment = .waiting
+        stanceAssessment = .waiting
+        stanceGate.reset()
 
         do {
             let authorized = try await ensureAuthorization()
@@ -135,8 +142,13 @@ final class CameraCaptureController: ObservableObject {
                 guard let self else { return }
                 let nextPose = await self.pipeline.livePoseFrame()
                 guard !Task.isCancelled else { return }
-                self.framingAssessment =
+                let framing =
                     CameraFramingAssessment.evaluate(nextPose)
+                self.framingAssessment = framing
+                self.stanceAssessment = self.stanceGate.update(
+                    frame: nextPose,
+                    framing: framing
+                )
                 if nextPose?.sessionID != self.latestPoseFrame?.sessionID
                     || nextPose?.sequence != self.latestPoseFrame?.sequence {
                     self.latestPoseFrame = nextPose
