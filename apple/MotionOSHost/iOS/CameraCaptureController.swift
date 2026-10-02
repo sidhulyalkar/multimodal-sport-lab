@@ -30,6 +30,8 @@ final class CameraCaptureController: ObservableObject {
         IndoBoardStanceAssessment = .waiting
     @Published private(set) var indoCoachReport:
         IndoBoardCoachReport?
+    @Published private(set) var indoCoachIntervention:
+        IndoBoardCoachIntervention?
     @Published private(set) var latestIndoPrimitive:
         IndoBoardPrimitiveObservation?
     @Published private(set) var errorMessage: String?
@@ -196,21 +198,37 @@ final class CameraCaptureController: ObservableObject {
         indoCoach.reset()
         indoPrimitiveDetector.reset()
         indoCoachReport = nil
+        indoCoachIntervention = nil
         latestIndoPrimitive = nil
         indoCoachStartedAt = Date()
+    }
+
+    @discardableResult
+    func prepareIndoCoachIntervention()
+        -> IndoBoardCoachIntervention? {
+        if let indoCoachIntervention {
+            return indoCoachIntervention
+        }
+
+        let intervention = indoCoach.makeIntervention()
+        indoCoachIntervention = intervention
+        return intervention
     }
 
     func finishIndoCoachingSession() {
         guard indoCoachStartedAt != nil else {
             return
         }
-        indoCoachReport = indoCoach.makeReport()
+        indoCoachReport = indoCoach.makeReport(
+            intervention: indoCoachIntervention
+        )
         indoCoachStartedAt = nil
     }
 
     func resetIndoCoachingSession() {
         indoCoachStartedAt = nil
         indoCoachReport = nil
+        indoCoachIntervention = nil
         latestIndoPrimitive = nil
         indoCoach.reset()
         indoPrimitiveDetector.reset()
