@@ -32,6 +32,13 @@ struct ProductRunDetailView: View {
 
                 if let coach = run.productManifest?.coachSummary {
                     coachSummary(coach)
+
+                    if let previous = previousCoachSummary {
+                        coachProgressCard(
+                            current: coach,
+                            previous: previous
+                        )
+                    }
                 }
 
                 feedback
@@ -350,6 +357,174 @@ struct ProductRunDetailView: View {
                 .foregroundStyle(.tertiary)
         }
         .cardStyle()
+    }
+
+    private var previousCoachSummary:
+        ProductSessionManifest.CoachSummary? {
+        let currentDate =
+            run.sealedAt ?? run.startedAt ?? .distantFuture
+
+        return library.runs.first { candidate in
+            guard candidate.runID != run.runID,
+                  candidate.protocolKind == run.protocolKind,
+                  candidate.protocolVersion == run.protocolVersion,
+                  let candidateDate =
+                    candidate.sealedAt ?? candidate.startedAt,
+                  candidateDate < currentDate,
+                  candidate.productManifest?
+                    .coachSummary?
+                    .numericMetrics?
+                    .isEmpty == false
+            else {
+                return false
+            }
+            return true
+        }
+        .flatMap { $0.productManifest?.coachSummary }
+    }
+
+    private func coachProgressCard(
+        current: ProductSessionManifest.CoachSummary,
+        previous: ProductSessionManifest.CoachSummary
+    ) -> some View {
+        let currentMetrics = current.numericMetrics ?? [:]
+        let previousMetrics = previous.numericMetrics ?? [:]
+
+        return VStack(alignment: .leading, spacing: 12) {
+            MotionOSSectionHeader(
+                title: "Personal Progress",
+                subtitle:
+                    "Current session vs your previous comparable INDO BOARD capture",
+                systemImage: "chart.line.uptrend.xyaxis",
+                accent: .green
+            )
+
+            if let currentSpread =
+                    currentMetrics["neutral_finish_spread"],
+               let previousSpread =
+                    previousMetrics["neutral_finish_spread"] {
+                personalMetricRow(
+                    title: "Neutral motion spread",
+                    current: currentSpread,
+                    previous: previousSpread,
+                    format: "%.3f",
+                    lowerIsQuieter: true
+                )
+            }
+
+            if let currentChanges =
+                    currentMetrics[
+                        "correction_direction_changes"
+                    ],
+               let previousChanges =
+                    previousMetrics[
+                        "correction_direction_changes"
+                    ] {
+                personalMetricRow(
+                    title: "Direction-change proxy",
+                    current: currentChanges,
+                    previous: previousChanges,
+                    format: "%.0f",
+                    lowerIsQuieter: true
+                )
+            }
+
+            if let currentShift =
+                    currentMetrics["controlled_shift_range"],
+               let previousShift =
+                    previousMetrics["controlled_shift_range"] {
+                personalMetricRow(
+                    title: "Controlled shift range",
+                    current: currentShift,
+                    previous: previousShift,
+                    format: "%.3f",
+                    lowerIsQuieter: false
+                )
+            }
+
+            if let currentSquat =
+                    currentMetrics["squat_flexion_p75_deg"],
+               let previousSquat =
+                    previousMetrics["squat_flexion_p75_deg"] {
+                personalMetricRow(
+                    title: "Squat flexion P75",
+                    current: currentSquat,
+                    previous: previousSquat,
+                    format: "%.0f°",
+                    lowerIsQuieter: false
+                )
+            }
+
+            Text(
+                "This is a within-person comparison, not a population score. "
+                    + "Capture quality and camera placement can still affect these proxies."
+            )
+            .font(.caption2)
+            .foregroundStyle(.tertiary)
+        }
+        .cardStyle()
+    }
+
+    private func personalMetricRow(
+        title: String,
+        current: Double,
+        previous: Double,
+        format: String,
+        lowerIsQuieter: Bool
+    ) -> some View {
+        let change = current - previous
+        let relative = abs(previous) > 1e-9
+            ? change / abs(previous)
+            : nil
+        let icon: String
+        let detail: String
+
+        if lowerIsQuieter,
+           let relative,
+           abs(relative) >= 0.05 {
+            icon = change < 0
+                ? "arrow.down.right.circle.fill"
+                : "arrow.up.right.circle.fill"
+            detail = String(
+                format: "%+.0f%%",
+                relative * 100
+            )
+        } else {
+            icon = "arrow.left.and.right.circle"
+            detail = "compare"
+        }
+
+        return HStack(spacing: 10) {
+            Image(systemName: icon)
+                .foregroundStyle(.secondary)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.caption.weight(.semibold))
+                Text(
+                    "was "
+                        + String(format: format, previous)
+                )
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(String(format: format, current))
+                    .font(
+                        .system(
+                            .caption,
+                            design: .monospaced,
+                            weight: .semibold
+                        )
+                    )
+                Text(detail)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
     }
 
     private func coachSummary(
