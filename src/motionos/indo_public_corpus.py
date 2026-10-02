@@ -481,7 +481,7 @@ def merge_public_video_specs(
             raise TypeError(f"{path} must contain a JSON object")
         records = payload.get("records")
         if not isinstance(records, list):
-            raise ValueError(f"{path} is missing records")
+            raise TypeError(f"{path} is missing records")
 
         for raw in records:
             if not isinstance(raw, dict):
@@ -529,7 +529,7 @@ def build_indo_video_knowledge_base(
         raise TypeError("catalog must be a JSON object")
     records = catalog.get("records")
     if not isinstance(records, list):
-        raise ValueError("catalog requires records")
+        raise TypeError("catalog requires records")
 
     topic_sources: dict[str, list[str]] = defaultdict(list)
     creators: Counter[str] = Counter()
