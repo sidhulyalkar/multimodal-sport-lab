@@ -224,8 +224,84 @@ struct IndoBoardFramingCard: View {
 /// The live Watch signal inside the capture workspace. Same model and
 /// rendering as the Observe tab, so the two can never disagree about LIVE.
 struct IndoBoardLiveSignalCard: View {
+    @EnvironmentObject private var camera:
+        CameraCaptureController
+
     var body: some View {
-        LiveObservatoryView(style: .embedded)
+        VStack(alignment: .leading, spacing: 10) {
+            LiveObservatoryView(style: .embedded)
+
+            if let primitive = camera.latestIndoPrimitive {
+                HStack(spacing: 8) {
+                    Image(systemName: primitiveSymbol(primitive.kind))
+                        .foregroundStyle(.cyan)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("VISION BEHAVIOR")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(.secondary)
+                        Text(primitiveTitle(primitive.kind))
+                            .font(.subheadline.weight(.semibold))
+                    }
+
+                    Spacer()
+
+                    Text(
+                        "\(Int((primitive.confidence * 100).rounded()))%"
+                    )
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                }
+
+                Text(
+                    "Body-pose proxy only · deck and roller state pending"
+                )
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+            }
+        }
+    }
+
+    private func primitiveTitle(
+        _ kind: IndoBoardPrimitiveKind
+    ) -> String {
+        switch kind {
+        case .neutralStance:
+            "Neutral stance"
+        case .lateralShiftLeft:
+            "Left shift"
+        case .lateralShiftRight:
+            "Right shift"
+        case .partialSquat:
+            "Partial squat"
+        case .singleLegCandidate:
+            "Single-leg candidate"
+        case .largeArmRecovery:
+            "Large arm recovery"
+        case .unknown:
+            "Unclassified movement"
+        }
+    }
+
+    private func primitiveSymbol(
+        _ kind: IndoBoardPrimitiveKind
+    ) -> String {
+        switch kind {
+        case .neutralStance:
+            "figure.stand"
+        case .lateralShiftLeft:
+            "arrow.left"
+        case .lateralShiftRight:
+            "arrow.right"
+        case .partialSquat:
+            "figure.strengthtraining.traditional"
+        case .singleLegCandidate:
+            "figure.cooldown"
+        case .largeArmRecovery:
+            "figure.mixed.cardio"
+        case .unknown:
+            "questionmark.circle"
+        }
     }
 }
 
@@ -275,9 +351,11 @@ struct IndoBoardProtocolRibbon: View {
                         )
 
                     let markerFractions: [CGFloat] = [
-                        0.125,
-                        0.4375,
-                        0.917,
+                        15.0 / 120.0,
+                        35.0 / 120.0,
+                        60.0 / 120.0,
+                        85.0 / 120.0,
+                        105.0 / 120.0,
                     ]
 
                     ForEach(markerFractions, id: \.self) { marker in
@@ -310,7 +388,9 @@ struct IndoBoardProtocolRibbon: View {
                 Spacer()
                 Text("balance")
                 Spacer()
-                Text("recoveries")
+                Text("shifts")
+                Spacer()
+                Text("squats")
                 Spacer()
                 Text("finish")
             }
