@@ -28,10 +28,14 @@ final class CameraCaptureController: ObservableObject {
         CameraFramingAssessment = .waiting
     @Published private(set) var stanceAssessment:
         IndoBoardStanceAssessment = .waiting
+    @Published private(set) var indoCoachReport:
+        IndoBoardCoachReport?
     @Published private(set) var errorMessage: String?
 
     private let pipeline = CameraCapturePipeline()
     private let stanceGate = IndoBoardStanceGate()
+    private let indoCoach = IndoBoardCoachEngine()
+    private var indoCoachStartedAt: Date?
     private var statsTask: Task<Void, Never>?
     private var poseTask: Task<Void, Never>?
 
@@ -58,6 +62,7 @@ final class CameraCaptureController: ObservableObject {
         framingAssessment = .waiting
         stanceAssessment = .waiting
         stanceGate.reset()
+        resetIndoCoachingSession()
 
         do {
             let authorized = try await ensureAuthorization()
@@ -83,6 +88,7 @@ final class CameraCaptureController: ObservableObject {
         framingAssessment = .waiting
         stanceAssessment = .waiting
         stanceGate.reset()
+        resetIndoCoachingSession()
 
         do {
             let authorized = try await ensureAuthorization()
@@ -149,6 +155,18 @@ final class CameraCaptureController: ObservableObject {
                     frame: nextPose,
                     framing: framing
                 )
+
+                if let nextPose,
+                   let startedAt = self.indoCoachStartedAt {
+                    self.indoCoach.ingest(
+                        frame: nextPose,
+                        elapsedSeconds: max(
+                            0,
+                            Date().timeIntervalSince(startedAt)
+                        )
+                    )
+                }
+
                 if nextPose?.sessionID != self.latestPoseFrame?.sessionID
                     || nextPose?.sequence != self.latestPoseFrame?.sequence {
                     self.latestPoseFrame = nextPose
@@ -158,6 +176,26 @@ final class CameraCaptureController: ObservableObject {
                 try? await Task.sleep(for: .milliseconds(100))
             }
         }
+    }
+
+    func beginIndoCoachingSession() {
+        indoCoach.reset()
+        indoCoachReport = nil
+        indoCoachStartedAt = Date()
+    }
+
+    func finishIndoCoachingSession() {
+        guard indoCoachStartedAt != nil else {
+            return
+        }
+        indoCoachReport = indoCoach.makeReport()
+        indoCoachStartedAt = nil
+    }
+
+    func resetIndoCoachingSession() {
+        indoCoachStartedAt = nil
+        indoCoachReport = nil
+        indoCoach.reset()
     }
 
     private func stopLivePolling() {
