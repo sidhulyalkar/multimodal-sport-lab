@@ -137,8 +137,12 @@ public struct IndoBoardRemoteStatus: Equatable, Sendable {
     public let framingScore: Int
     public let framingTitle: String
     public let framingInstruction: String
+    public let stanceState: String
+    public let stanceProgressPercent: Int
+    public let stanceTitle: String
     public let sessionPhase: String
     public let sessionInstruction: String?
+    public let countdownRemaining: Int?
     public let startReady: Bool
     public let startBlocker: String?
     public let phoneBatteryFraction: Double?
@@ -151,8 +155,12 @@ public struct IndoBoardRemoteStatus: Equatable, Sendable {
         framingScore: Int,
         framingTitle: String,
         framingInstruction: String,
+        stanceState: String,
+        stanceProgressPercent: Int,
+        stanceTitle: String,
         sessionPhase: String,
         sessionInstruction: String?,
+        countdownRemaining: Int?,
         startReady: Bool,
         startBlocker: String?,
         phoneBatteryFraction: Double?,
@@ -164,8 +172,13 @@ public struct IndoBoardRemoteStatus: Equatable, Sendable {
         self.framingScore = min(100, max(0, framingScore))
         self.framingTitle = framingTitle
         self.framingInstruction = framingInstruction
+        self.stanceState = stanceState
+        self.stanceProgressPercent =
+            min(100, max(0, stanceProgressPercent))
+        self.stanceTitle = stanceTitle
         self.sessionPhase = sessionPhase
         self.sessionInstruction = sessionInstruction
+        self.countdownRemaining = countdownRemaining
         self.startReady = startReady
         self.startBlocker = startBlocker
         self.phoneBatteryFraction = phoneBatteryFraction
@@ -192,9 +205,25 @@ public struct IndoBoardRemoteStatus: Equatable, Sendable {
             Self.int(message["framing_score"]) ?? 0
         self.framingTitle = framingTitle
         self.framingInstruction = framingInstruction
+        self.stanceState =
+            message["stance_state"] as? String
+                ?? "waiting_for_framing"
+        self.stanceProgressPercent =
+            min(
+                100,
+                max(
+                    0,
+                    Self.int(message["stance_progress_percent"]) ?? 0
+                )
+            )
+        self.stanceTitle =
+            message["stance_title"] as? String
+                ?? "Hold a neutral stance"
         self.sessionPhase = sessionPhase
         self.sessionInstruction =
             message["session_instruction"] as? String
+        self.countdownRemaining =
+            Self.int(message["countdown_remaining"])
         self.startReady = startReady
         self.startBlocker = message["start_blocker"] as? String
         self.phoneBatteryFraction =
@@ -214,6 +243,9 @@ public struct IndoBoardRemoteStatus: Equatable, Sendable {
             "framing_score": framingScore,
             "framing_title": framingTitle,
             "framing_instruction": framingInstruction,
+            "stance_state": stanceState,
+            "stance_progress_percent": stanceProgressPercent,
+            "stance_title": stanceTitle,
             "session_phase": sessionPhase,
             "start_ready": startReady,
             "sent_at_unix_s": sentAtUnixSeconds,
@@ -221,6 +253,9 @@ public struct IndoBoardRemoteStatus: Equatable, Sendable {
 
         if let sessionInstruction, !sessionInstruction.isEmpty {
             payload["session_instruction"] = sessionInstruction
+        }
+        if let countdownRemaining {
+            payload["countdown_remaining"] = countdownRemaining
         }
         if let startBlocker, !startBlocker.isEmpty {
             payload["start_blocker"] = startBlocker
@@ -235,7 +270,7 @@ public struct IndoBoardRemoteStatus: Equatable, Sendable {
     }
 
     public var isSessionActive: Bool {
-        ["starting", "running", "finishing"].contains(
+        ["starting", "countdown", "running", "finishing"].contains(
             sessionPhase.lowercased()
         )
     }
@@ -252,8 +287,12 @@ public struct IndoBoardRemoteStatus: Equatable, Sendable {
             && framingScore == other.framingScore
             && framingTitle == other.framingTitle
             && framingInstruction == other.framingInstruction
+            && stanceState == other.stanceState
+            && stanceProgressPercent == other.stanceProgressPercent
+            && stanceTitle == other.stanceTitle
             && sessionPhase == other.sessionPhase
             && sessionInstruction == other.sessionInstruction
+            && countdownRemaining == other.countdownRemaining
             && startReady == other.startReady
             && startBlocker == other.startBlocker
             && phoneBatteryFraction == other.phoneBatteryFraction
