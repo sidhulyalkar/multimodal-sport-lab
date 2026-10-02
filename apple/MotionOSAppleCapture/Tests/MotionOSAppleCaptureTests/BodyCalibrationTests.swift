@@ -164,7 +164,6 @@ final class BodyCalibrationTests: XCTestCase {
                 coordinateFrame: frame.coordinateFrame,
                 bodyHeightM: 1.8,
                 bodyHeightEstimation: "reference",
-                rootPositionCameraM: frame.rootPositionCameraM,
                 joints: frame.joints,
                 pelvisReference: frame.pelvisReference,
                 centerOfMass: frame.centerOfMass,
