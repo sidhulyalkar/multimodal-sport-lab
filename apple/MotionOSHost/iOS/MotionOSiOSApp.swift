@@ -14,6 +14,10 @@ struct MotionOSiOSApp: App {
         FitnessPersonaCoordinator()
     @StateObject private var healthData =
         HealthDataCoordinator()
+    @StateObject private var bodyModels =
+        PersonalBodyModelCoordinator()
+    @StateObject private var bodyCalibration =
+        GuidedBodyCalibrationCoordinator()
 
     var body: some Scene {
         WindowGroup {
@@ -28,6 +32,8 @@ struct MotionOSiOSApp: App {
                 .environmentObject(runLibrary)
                 .environmentObject(fitnessPersona)
                 .environmentObject(healthData)
+                .environmentObject(bodyModels)
+                .environmentObject(bodyCalibration)
                 .task {
                     coordinator.inbox.refreshCatalog()
                     runLibrary.refresh()
@@ -38,7 +44,17 @@ struct MotionOSiOSApp: App {
                     runLibrary.refresh()
                 }
                 .onReceive(runLibrary.$runs) { runs in
-                    fitnessPersona.rebuild(from: runs)
+                    fitnessPersona.rebuild(
+                        from: runs,
+                        bodyModelVersion:
+                            bodyModels.latestModel?.versionID
+                    )
+                }
+                .onReceive(bodyModels.$latestModel) { model in
+                    fitnessPersona.rebuild(
+                        from: runLibrary.runs,
+                        bodyModelVersion: model?.versionID
+                    )
                 }
                 .onChange(
                     of: indoBoardSession.phase
