@@ -114,7 +114,7 @@ final class FitnessPersonaCoordinator: ObservableObject {
         )
     }
 
-    nonisolated private static func sessionEvidence(
+    nonisolated static func sessionEvidence(
         _ run: ProductRunRecord
     ) -> PersonaSessionEvidence {
         let observedAt =
