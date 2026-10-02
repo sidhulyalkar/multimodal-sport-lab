@@ -144,6 +144,41 @@
   ],
   "skills": [
     {
+      "id": "bailout_or_step_off",
+      "family": "safety_event",
+      "level": 0,
+      "display_name": "Bailout / Step-Off",
+      "prerequisites": [],
+      "source_ids": [
+        "official_how_to_ride"
+      ],
+      "detectable_with": [
+        "body_pose_2d",
+        "video_event"
+      ],
+      "best_with": [
+        "board_pose",
+        "roller_state",
+        "watch_imu"
+      ],
+      "phase_signature": [
+        "loss_of_control",
+        "foot_leaves_deck",
+        "body_exits_or_rebalances"
+      ],
+      "metrics": [
+        "preceding_board_excursion",
+        "preceding_correction_count",
+        "time_from_instability_to_step_off"
+      ],
+      "success_pattern": "Event is recorded as a safety outcome, not scored as failure.",
+      "coaching_cues": [
+        "Review the seconds before the step-off to find the first recoverable instability."
+      ],
+      "cold_start_priority": 0,
+      "safety_tier": "all"
+    },
+    {
       "id": "neutral_balance_hold",
       "family": "foundation",
       "level": 1,
@@ -304,6 +339,160 @@
       "safety_tier": "beginner"
     },
     {
+      "id": "section_balancing",
+      "family": "position_control",
+      "level": 2,
+      "display_name": "Section Balancing",
+      "prerequisites": [
+        "controlled_side_shift"
+      ],
+      "source_ids": [
+        "forum_section_balance"
+      ],
+      "detectable_with": [
+        "board_pose",
+        "roller_state"
+      ],
+      "best_with": [
+        "body_pose_2d"
+      ],
+      "phase_signature": [
+        "target_section",
+        "settle",
+        "hold",
+        "transition"
+      ],
+      "metrics": [
+        "target_error",
+        "hold_duration",
+        "entry_overshoot",
+        "exit_control"
+      ],
+      "success_pattern": "Move the roller/board relationship to a chosen zone and hold it there intentionally.",
+      "coaching_cues": [
+        "Arrive softly at the target zone.",
+        "Reduce the last correction before the hold."
+      ],
+      "cold_start_priority": 5,
+      "safety_tier": "intermediate"
+    },
+    {
+      "id": "surf_stance_hold",
+      "family": "sport_transfer",
+      "level": 2,
+      "display_name": "Surf-Stance Hold",
+      "prerequisites": [
+        "neutral_balance_hold"
+      ],
+      "source_ids": [
+        "official_surf_training",
+        "reddit_surf_indoboard"
+      ],
+      "detectable_with": [
+        "body_pose_2d"
+      ],
+      "best_with": [
+        "board_pose",
+        "roller_state"
+      ],
+      "phase_signature": [
+        "stance_entry",
+        "settle",
+        "hold"
+      ],
+      "metrics": [
+        "stance_width",
+        "foot_angle_proxy",
+        "pelvis_orientation",
+        "trunk_stack",
+        "hold_variance"
+      ],
+      "success_pattern": "Repeatable staggered stance with soft knees and a centered trunk.",
+      "coaching_cues": [
+        "Set the feet first, then settle.",
+        "Keep the torso stacked instead of folding at the waist."
+      ],
+      "cold_start_priority": 6,
+      "safety_tier": "intermediate"
+    },
+    {
+      "id": "weighted_70_30_hold",
+      "family": "position_control",
+      "level": 2,
+      "display_name": "70/30 Weighted Hold",
+      "prerequisites": [
+        "neutral_balance_hold"
+      ],
+      "source_ids": [
+        "forum_section_balance"
+      ],
+      "detectable_with": [
+        "body_pose_2d"
+      ],
+      "best_with": [
+        "board_pose",
+        "roller_state"
+      ],
+      "phase_signature": [
+        "neutral",
+        "asymmetric_load",
+        "hold",
+        "recover"
+      ],
+      "metrics": [
+        "pelvis_lateral_offset",
+        "hold_variance",
+        "left_right_duration",
+        "return_to_center_time"
+      ],
+      "success_pattern": "Sustain an intentionally asymmetric load without collapsing the torso or losing deck control.",
+      "coaching_cues": [
+        "Shift pressure without leaning the whole torso.",
+        "Return to center before switching sides."
+      ],
+      "cold_start_priority": 9,
+      "safety_tier": "intermediate"
+    },
+    {
+      "id": "eyes_closed_hold",
+      "family": "sensory_challenge",
+      "level": 2,
+      "display_name": "Eyes-Closed Balance Hold",
+      "prerequisites": [
+        "neutral_balance_hold"
+      ],
+      "source_ids": [
+        "official_exercise_ladder"
+      ],
+      "detectable_with": [
+        "body_pose_2d"
+      ],
+      "best_with": [
+        "board_pose",
+        "roller_state"
+      ],
+      "phase_signature": [
+        "neutral",
+        "eyes_closed_intent",
+        "hold",
+        "eyes_open_recover"
+      ],
+      "metrics": [
+        "hold_duration",
+        "trunk_excursion",
+        "correction_rate_hz",
+        "center_time_fraction"
+      ],
+      "success_pattern": "Maintain a controlled stance during a deliberately labeled eyes-closed block without large emergency corrections.",
+      "coaching_cues": [
+        "Use this only after the normal neutral hold is comfortable.",
+        "Keep the block short and stop if control degrades."
+      ],
+      "cold_start_priority": 15,
+      "safety_tier": "intermediate",
+      "protocol_intent_required": true
+    },
+    {
       "id": "deep_squat",
       "family": "strength_control",
       "level": 3,
@@ -341,6 +530,46 @@
         "Pause briefly at the bottom instead of bouncing."
       ],
       "cold_start_priority": 7,
+      "safety_tier": "intermediate"
+    },
+    {
+      "id": "quick_recovery_drill",
+      "family": "reactive_control",
+      "level": 3,
+      "display_name": "Quick Recovery Drill",
+      "prerequisites": [
+        "controlled_side_shift"
+      ],
+      "source_ids": [
+        "official_surf_training"
+      ],
+      "detectable_with": [
+        "body_pose_2d"
+      ],
+      "best_with": [
+        "board_pose",
+        "roller_state",
+        "watch_imu"
+      ],
+      "phase_signature": [
+        "deliberate_departure",
+        "peak_deviation",
+        "recovery_onset",
+        "return_center",
+        "settle"
+      ],
+      "metrics": [
+        "recovery_time_ms",
+        "overshoot_ratio",
+        "secondary_correction_count",
+        "peak_excursion"
+      ],
+      "success_pattern": "Deliberate departure from center followed by an early, controlled return with little overshoot.",
+      "coaching_cues": [
+        "Start the recovery before the deviation becomes a rescue.",
+        "Aim for one clean return, then settle."
+      ],
+      "cold_start_priority": 8,
       "safety_tier": "intermediate"
     },
     {
@@ -385,82 +614,6 @@
       "safety_tier": "intermediate"
     },
     {
-      "id": "section_balancing",
-      "family": "position_control",
-      "level": 2,
-      "display_name": "Section Balancing",
-      "prerequisites": [
-        "controlled_side_shift"
-      ],
-      "source_ids": [
-        "forum_section_balance"
-      ],
-      "detectable_with": [
-        "board_pose",
-        "roller_state"
-      ],
-      "best_with": [
-        "body_pose_2d"
-      ],
-      "phase_signature": [
-        "target_section",
-        "settle",
-        "hold",
-        "transition"
-      ],
-      "metrics": [
-        "target_error",
-        "hold_duration",
-        "entry_overshoot",
-        "exit_control"
-      ],
-      "success_pattern": "Move the roller/board relationship to a chosen zone and hold it there intentionally.",
-      "coaching_cues": [
-        "Arrive softly at the target zone.",
-        "Reduce the last correction before the hold."
-      ],
-      "cold_start_priority": 5,
-      "safety_tier": "intermediate"
-    },
-    {
-      "id": "weighted_70_30_hold",
-      "family": "position_control",
-      "level": 2,
-      "display_name": "70/30 Weighted Hold",
-      "prerequisites": [
-        "neutral_balance_hold"
-      ],
-      "source_ids": [
-        "forum_section_balance"
-      ],
-      "detectable_with": [
-        "body_pose_2d"
-      ],
-      "best_with": [
-        "board_pose",
-        "roller_state"
-      ],
-      "phase_signature": [
-        "neutral",
-        "asymmetric_load",
-        "hold",
-        "recover"
-      ],
-      "metrics": [
-        "pelvis_lateral_offset",
-        "hold_variance",
-        "left_right_duration",
-        "return_to_center_time"
-      ],
-      "success_pattern": "Sustain an intentionally asymmetric load without collapsing the torso or losing deck control.",
-      "coaching_cues": [
-        "Shift pressure without leaning the whole torso.",
-        "Return to center before switching sides."
-      ],
-      "cold_start_priority": 9,
-      "safety_tier": "intermediate"
-    },
-    {
       "id": "dynamic_weight_transfer",
       "family": "reactive_control",
       "level": 3,
@@ -501,124 +654,44 @@
       "safety_tier": "advanced"
     },
     {
-      "id": "surf_stance_hold",
-      "family": "sport_transfer",
-      "level": 2,
-      "display_name": "Surf-Stance Hold",
+      "id": "hip_rotation",
+      "family": "rotation",
+      "level": 3,
+      "display_name": "Rotational Hip Shift",
       "prerequisites": [
         "neutral_balance_hold"
       ],
       "source_ids": [
-        "official_surf_training",
-        "reddit_surf_indoboard"
-      ],
-      "detectable_with": [
-        "body_pose_2d"
-      ],
-      "best_with": [
-        "board_pose",
-        "roller_state"
-      ],
-      "phase_signature": [
-        "stance_entry",
-        "settle",
-        "hold"
-      ],
-      "metrics": [
-        "stance_width",
-        "foot_angle_proxy",
-        "pelvis_orientation",
-        "trunk_stack",
-        "hold_variance"
-      ],
-      "success_pattern": "Repeatable staggered stance with soft knees and a centered trunk.",
-      "coaching_cues": [
-        "Set the feet first, then settle.",
-        "Keep the torso stacked instead of folding at the waist."
-      ],
-      "cold_start_priority": 6,
-      "safety_tier": "intermediate"
-    },
-    {
-      "id": "pop_up",
-      "family": "sport_transfer",
-      "level": 3,
-      "display_name": "Pop-Up to Balanced Stance",
-      "prerequisites": [
-        "surf_stance_hold"
-      ],
-      "source_ids": [
-        "official_surf_training"
+        "official_exercise_ladder",
+        "reddit_shortboard_posture"
       ],
       "detectable_with": [
         "body_pose_2d",
         "body_pose_3d"
       ],
       "best_with": [
-        "board_pose",
-        "roller_state",
-        "watch_imu"
+        "board_pose"
       ],
       "phase_signature": [
-        "prone_or_low_start",
-        "rapid_transition",
-        "foot_plant",
-        "stabilize"
+        "neutral",
+        "hip_rotate_left",
+        "center",
+        "hip_rotate_right",
+        "center"
       ],
       "metrics": [
-        "transition_time_ms",
-        "foot_plant_width",
-        "landing_board_motion",
-        "stabilization_time_ms"
+        "pelvis_rotation",
+        "shoulder_rotation",
+        "pelvis_shoulder_dissociation",
+        "board_stability"
       ],
-      "success_pattern": "Fast transition followed by a controlled landing and short stabilization period.",
+      "success_pattern": "Pelvis rotates while the upper body stays relatively controlled and the board remains stable.",
       "coaching_cues": [
-        "Land into a position you can own.",
-        "Judge the rep by the recovery after foot plant, not just speed."
+        "Start the motion at the hips.",
+        "Keep the shoulders from leading the turn."
       ],
-      "cold_start_priority": 12,
-      "safety_tier": "advanced"
-    },
-    {
-      "id": "cross_step",
-      "family": "footwork",
-      "level": 4,
-      "display_name": "Cross-Step",
-      "prerequisites": [
-        "surf_stance_hold",
-        "single_leg_unweight"
-      ],
-      "source_ids": [
-        "official_tricks",
-        "official_surf_training",
-        "reddit_surf_indoboard"
-      ],
-      "detectable_with": [
-        "body_pose_2d"
-      ],
-      "best_with": [
-        "board_pose",
-        "roller_state"
-      ],
-      "phase_signature": [
-        "single_leg_support",
-        "crossing_step",
-        "weight_acceptance",
-        "next_step_or_recover"
-      ],
-      "metrics": [
-        "step_timing",
-        "single_leg_support_time",
-        "pelvis_stability",
-        "board_motion_per_step"
-      ],
-      "success_pattern": "Feet cross with controlled weight acceptance while the torso remains centered.",
-      "coaching_cues": [
-        "Make the step quiet and deliberate.",
-        "Keep the body centered while the feet move."
-      ],
-      "cold_start_priority": 13,
-      "safety_tier": "advanced"
+      "cold_start_priority": 10,
+      "safety_tier": "intermediate"
     },
     {
       "id": "nose_press",
@@ -697,44 +770,250 @@
       "safety_tier": "advanced"
     },
     {
-      "id": "hip_rotation",
-      "family": "rotation",
+      "id": "pop_up",
+      "family": "sport_transfer",
       "level": 3,
-      "display_name": "Rotational Hip Shift",
+      "display_name": "Pop-Up to Balanced Stance",
       "prerequisites": [
-        "neutral_balance_hold"
+        "surf_stance_hold"
       ],
       "source_ids": [
-        "official_exercise_ladder",
-        "reddit_shortboard_posture"
+        "official_surf_training"
       ],
       "detectable_with": [
         "body_pose_2d",
         "body_pose_3d"
       ],
       "best_with": [
-        "board_pose"
+        "board_pose",
+        "roller_state",
+        "watch_imu"
       ],
       "phase_signature": [
-        "neutral",
-        "hip_rotate_left",
-        "center",
-        "hip_rotate_right",
-        "center"
+        "prone_or_low_start",
+        "rapid_transition",
+        "foot_plant",
+        "stabilize"
       ],
       "metrics": [
+        "transition_time_ms",
+        "foot_plant_width",
+        "landing_board_motion",
+        "stabilization_time_ms"
+      ],
+      "success_pattern": "Fast transition followed by a controlled landing and short stabilization period.",
+      "coaching_cues": [
+        "Land into a position you can own.",
+        "Judge the rep by the recovery after foot plant, not just speed."
+      ],
+      "cold_start_priority": 12,
+      "safety_tier": "advanced"
+    },
+    {
+      "id": "switch_stance_hold",
+      "family": "sport_transfer",
+      "level": 3,
+      "display_name": "Switch-Stance Hold",
+      "prerequisites": [
+        "surf_stance_hold"
+      ],
+      "source_ids": [
+        "reddit_snowboard_balance",
+        "forum_section_balance"
+      ],
+      "detectable_with": [
+        "body_pose_2d"
+      ],
+      "best_with": [
+        "board_pose",
+        "roller_state"
+      ],
+      "phase_signature": [
+        "stance_switch",
+        "settle",
+        "hold",
+        "return"
+      ],
+      "metrics": [
+        "stance_width",
+        "pelvis_orientation",
+        "hold_variance",
+        "left_right_difference"
+      ],
+      "success_pattern": "Repeat the same controlled stance task with the opposite lead orientation.",
+      "coaching_cues": [
+        "Treat switch as a separate baseline, not a copy of your preferred stance.",
+        "Stabilize first before increasing range or speed."
+      ],
+      "cold_start_priority": 14,
+      "safety_tier": "intermediate"
+    },
+    {
+      "id": "cross_step",
+      "family": "footwork",
+      "level": 4,
+      "display_name": "Cross-Step",
+      "prerequisites": [
+        "surf_stance_hold",
+        "single_leg_unweight"
+      ],
+      "source_ids": [
+        "official_tricks",
+        "official_surf_training",
+        "reddit_surf_indoboard"
+      ],
+      "detectable_with": [
+        "body_pose_2d"
+      ],
+      "best_with": [
+        "board_pose",
+        "roller_state"
+      ],
+      "phase_signature": [
+        "single_leg_support",
+        "crossing_step",
+        "weight_acceptance",
+        "next_step_or_recover"
+      ],
+      "metrics": [
+        "step_timing",
+        "single_leg_support_time",
+        "pelvis_stability",
+        "board_motion_per_step"
+      ],
+      "success_pattern": "Feet cross with controlled weight acceptance while the torso remains centered.",
+      "coaching_cues": [
+        "Make the step quiet and deliberate.",
+        "Keep the body centered while the feet move."
+      ],
+      "cold_start_priority": 13,
+      "safety_tier": "advanced"
+    },
+    {
+      "id": "single_leg_partial_squat",
+      "family": "strength_control",
+      "level": 4,
+      "display_name": "Single-Leg Partial Squat",
+      "prerequisites": [
+        "single_leg_unweight",
+        "partial_squat_hold"
+      ],
+      "source_ids": [
+        "official_exercise_ladder"
+      ],
+      "detectable_with": [
+        "body_pose_2d",
+        "body_pose_3d"
+      ],
+      "best_with": [
+        "board_pose",
+        "roller_state"
+      ],
+      "phase_signature": [
+        "single_leg_support",
+        "controlled_descent",
+        "bottom_control",
+        "rise",
+        "replace_foot"
+      ],
+      "metrics": [
+        "support_leg_knee_flexion",
+        "pelvis_shift",
+        "bottom_stability",
+        "left_right_difference"
+      ],
+      "success_pattern": "Controlled partial squat on one support leg while preserving pelvis and board control.",
+      "coaching_cues": [
+        "Use a small range first.",
+        "Keep the pelvis from hiking or collapsing to create the rep."
+      ],
+      "cold_start_priority": 18,
+      "safety_tier": "advanced"
+    },
+    {
+      "id": "pivot_attempt",
+      "family": "trick",
+      "level": 4,
+      "display_name": "Pivot Attempt",
+      "prerequisites": [
+        "dynamic_weight_transfer",
+        "hip_rotation"
+      ],
+      "source_ids": [
+        "official_exercise_ladder",
+        "official_tricks"
+      ],
+      "detectable_with": [
+        "body_pose_2d",
+        "board_pose"
+      ],
+      "best_with": [
+        "roller_state",
+        "watch_imu"
+      ],
+      "phase_signature": [
+        "compression",
+        "rotation_onset",
+        "deck_rotation",
+        "catch",
+        "recover"
+      ],
+      "metrics": [
+        "deck_rotation_deg",
         "pelvis_rotation",
         "shoulder_rotation",
-        "pelvis_shoulder_dissociation",
-        "board_stability"
+        "landing_stability",
+        "recovery_time_ms"
       ],
-      "success_pattern": "Pelvis rotates while the upper body stays relatively controlled and the board remains stable.",
+      "success_pattern": "Intentional deck/body rotation followed by a controlled catch and recovery.",
       "coaching_cues": [
-        "Start the motion at the hips.",
-        "Keep the shoulders from leading the turn."
+        "Create a repeatable setup before adding rotation.",
+        "Judge the attempt by the catch and recovery, not rotation alone."
       ],
-      "cold_start_priority": 10,
-      "safety_tier": "intermediate"
+      "cold_start_priority": 22,
+      "safety_tier": "expert"
+    },
+    {
+      "id": "kick_turn_attempt",
+      "family": "trick",
+      "level": 4,
+      "display_name": "Kick-Turn Attempt",
+      "prerequisites": [
+        "controlled_side_shift",
+        "hip_rotation"
+      ],
+      "source_ids": [
+        "official_exercise_ladder",
+        "official_tricks"
+      ],
+      "detectable_with": [
+        "body_pose_2d",
+        "board_pose"
+      ],
+      "best_with": [
+        "roller_state",
+        "watch_imu"
+      ],
+      "phase_signature": [
+        "rear_load",
+        "front_unweight",
+        "rotation",
+        "deck_recontact",
+        "recover"
+      ],
+      "metrics": [
+        "deck_rotation_deg",
+        "unweight_duration",
+        "landing_stability",
+        "recovery_time_ms"
+      ],
+      "success_pattern": "Front-end unweight and rotation followed by controlled deck recontact.",
+      "coaching_cues": [
+        "Make the unweight small and deliberate.",
+        "Prioritize a stable recontact before more rotation."
+      ],
+      "cold_start_priority": 24,
+      "safety_tier": "expert"
     },
     {
       "id": "ollie_attempt",
@@ -780,39 +1059,45 @@
       "safety_tier": "expert"
     },
     {
-      "id": "bailout_or_step_off",
-      "family": "safety_event",
-      "level": 0,
-      "display_name": "Bailout / Step-Off",
-      "prerequisites": [],
+      "id": "rail_stand_attempt",
+      "family": "trick",
+      "level": 5,
+      "display_name": "Rail-Stand Attempt",
+      "prerequisites": [
+        "single_leg_partial_squat",
+        "dynamic_weight_transfer"
+      ],
       "source_ids": [
-        "official_how_to_ride"
+        "official_exercise_ladder",
+        "official_tricks"
       ],
       "detectable_with": [
         "body_pose_2d",
-        "video_event"
+        "board_pose"
       ],
       "best_with": [
-        "board_pose",
         "roller_state",
         "watch_imu"
       ],
       "phase_signature": [
-        "loss_of_control",
-        "foot_leaves_deck",
-        "body_exits_or_rebalances"
+        "setup",
+        "deck_edge_transition",
+        "hold_or_touch",
+        "recover"
       ],
       "metrics": [
-        "preceding_board_excursion",
-        "preceding_correction_count",
-        "time_from_instability_to_step_off"
+        "deck_angle_peak_deg",
+        "hold_duration",
+        "recovery_time_ms",
+        "bailout_rate"
       ],
-      "success_pattern": "Event is recorded as a safety outcome, not scored as failure.",
+      "success_pattern": "Controlled transition toward a rail position with an intentional recovery or stable hold.",
       "coaching_cues": [
-        "Review the seconds before the step-off to find the first recoverable instability."
+        "Only progress after edge-control drills are consistent.",
+        "Keep the exit plan deliberate."
       ],
-      "cold_start_priority": 0,
-      "safety_tier": "all"
+      "cold_start_priority": 30,
+      "safety_tier": "expert"
     }
   ],
   "coaching_rules": [
@@ -875,11 +1160,11 @@
       "id": "poor_center_control",
       "requires_metrics": [
         "center_time_fraction",
-        "edge_contact_rate_per_min"
+        "near_edge_fraction"
       ],
       "trigger": {
         "center_time_fraction_lt": 0.55,
-        "edge_contact_rate_per_min_gt": 3
+        "near_edge_fraction_gt": 0.12
       },
       "tip": "Spend a block deliberately owning the center before adding speed or tricks.",
       "drill_id": "neutral_balance_hold",
