@@ -307,7 +307,7 @@ struct WatchContentView: View {
                 Label(
                     status.coachDrill == nil
                         ? "Next Session"
-                        : "Try This Drill",
+                        : "Repeat & Test Cue",
                     systemImage: "arrow.clockwise"
                 )
                 .frame(maxWidth: .infinity)
