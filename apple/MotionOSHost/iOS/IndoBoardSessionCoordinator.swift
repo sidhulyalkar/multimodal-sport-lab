@@ -827,6 +827,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         advanceProtocol(
             elapsed: 0,
             phone: phone,
+            camera: camera,
             fieldRun: fieldRun
         )
 
@@ -843,6 +844,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
                 self.advanceProtocol(
                     elapsed: elapsed,
                     phone: phone,
+                    camera: camera,
                     fieldRun: fieldRun
                 )
 
@@ -874,6 +876,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
     private func advanceProtocol(
         elapsed: TimeInterval,
         phone: PhoneSessionCoordinator,
+        camera: CameraCaptureController,
         fieldRun: FieldRunCoordinator
     ) {
         for block in IndoBoardProductProtocol.blocks {
@@ -895,6 +898,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
                 sendProtocolCueIfNeeded(
                     block,
                     phone: phone,
+                    camera: camera,
                     fieldRun: fieldRun
                 )
             }
@@ -919,6 +923,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
     private func sendProtocolCueIfNeeded(
         _ block: TimedProtocolBlock,
         phone: PhoneSessionCoordinator,
+        camera: CameraCaptureController,
         fieldRun: FieldRunCoordinator
     ) {
         guard !sentProtocolCueIDs.contains(block.id),
@@ -936,14 +941,35 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         }
         lastProtocolCueAttemptAt[block.id] = now
 
+        let intervention: IndoBoardCoachIntervention?
+        let stepID: String
+        let title: String
+        let instruction: String
+
+        if block.id == "free-balance-b",
+           let prepared = camera.prepareIndoCoachIntervention() {
+            intervention = prepared
+            stepID = "coach-" + prepared.id
+            title = "TRY THIS · " + prepared.title
+            instruction = prepared.cue
+        } else {
+            intervention = nil
+            stepID = block.id
+            title = block.title
+            instruction = block.instruction
+        }
+
         if phone.sendSessionProtocolCue(
             runID: runID,
             watchSessionID: watchSessionID,
-            stepID: block.id,
-            title: block.title,
-            instruction: block.instruction
+            stepID: stepID,
+            title: title,
+            instruction: instruction
         ) {
             sentProtocolCueIDs.insert(block.id)
+            if let intervention {
+                fieldRun.addCoachIntervention(intervention)
+            }
         }
     }
 
