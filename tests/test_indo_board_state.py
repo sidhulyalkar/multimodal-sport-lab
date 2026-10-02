@@ -72,6 +72,7 @@ def test_recovery_detector_measures_return_and_overshoot():
     assert event.direction == "right"
     assert 350 <= event.recovery_time_ms <= 500
     assert event.overshoot_ratio > 0.30
+    assert event.secondary_correction_count >= 1
 
 
 def test_board_report_produces_cold_start_balance_metrics():
@@ -105,6 +106,7 @@ def test_board_report_produces_cold_start_balance_metrics():
     assert metrics["roller_excursion_p90"] > 0.2
     assert metrics["correction_count"] > 0
     assert "recovery_time_ms" in metrics
+    assert "secondary_correction_count" in metrics
     assert all(
         0 <= value <= 1
         for value in result["confidence"].values()
