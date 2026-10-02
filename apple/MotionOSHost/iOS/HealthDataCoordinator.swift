@@ -143,18 +143,23 @@ final class HealthDataCoordinator: ObservableObject {
                 sampleType: descriptor.type,
                 predicate: nil
             ) { [weak self] _, completion, error in
+                let completionBox = HealthObserverCompletionBox(
+                    completion
+                )
+
                 guard let self else {
-                    completion()
+                    completionBox.call()
                     return
                 }
 
-                if let error {
-                    Task { @MainActor in
-                        self.lastError = error.localizedDescription
+                let errorMessage = error?.localizedDescription
+                Task { @MainActor in
+                    if let errorMessage {
+                        self.lastError = errorMessage
                         switch self.state {
                         case .requesting, .syncing:
                             self.state = .failed(
-                                error.localizedDescription
+                                errorMessage
                             )
                         default:
                             // Keep existing data and the connect affordance
@@ -162,17 +167,15 @@ final class HealthDataCoordinator: ObservableObject {
                             // user has granted any read access.
                             break
                         }
-                        completion()
+                        completionBox.call()
+                        return
                     }
-                    return
-                }
 
-                Task { @MainActor in
                     await self.sync(
                         descriptor,
                         markGlobalState: false
                     )
-                    completion()
+                    completionBox.call()
                 }
             }
 
@@ -397,7 +400,7 @@ final class HealthDataCoordinator: ObservableObject {
         )
     }
 
-    private static func observation(
+    nonisolated private static func observation(
         from sample: HKSample,
         descriptor: HealthKitSampleDescriptor,
         ingestedAt: Date
@@ -481,7 +484,7 @@ final class HealthDataCoordinator: ObservableObject {
         return nil
     }
 
-    private static func sleepStageLabel(
+    nonisolated private static func sleepStageLabel(
         _ rawValue: Int
     ) -> String {
         guard let value = HKCategoryValueSleepAnalysis(
@@ -611,7 +614,7 @@ final class HealthDataCoordinator: ObservableObject {
     }()
 }
 
-private struct HealthKitSampleDescriptor {
+private struct HealthKitSampleDescriptor: @unchecked Sendable {
     let anchorKey: String
     let kind: BodyStateKind?
     let type: HKSampleType
@@ -704,5 +707,29 @@ private final class HealthKitAnchorStore {
             data,
             forKey: prefix + key
         )
+    }
+}
+
+
+private final class HealthObserverCompletionBox: @unchecked Sendable {
+    private let completion: HKObserverQueryCompletionHandler
+    private let lock = NSLock()
+    private var didCall = false
+
+    init(
+        _ completion: @escaping HKObserverQueryCompletionHandler
+    ) {
+        self.completion = completion
+    }
+
+    func call() {
+        lock.lock()
+        guard !didCall else {
+            lock.unlock()
+            return
+        }
+        didCall = true
+        lock.unlock()
+        completion()
     }
 }
