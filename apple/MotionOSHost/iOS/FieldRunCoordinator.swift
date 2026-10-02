@@ -417,6 +417,38 @@ final class FieldRunCoordinator: ObservableObject {
         }
     }
 
+    func addCoachIntervention(
+        _ intervention: IndoBoardCoachIntervention
+    ) {
+        guard phase == .running else {
+            return
+        }
+
+        do {
+            try append(
+                kind: "coach_intervention_delivered",
+                label: intervention.id,
+                payload: [
+                    "title": intervention.title,
+                    "cue": intervention.cue,
+                    "drill": intervention.drill,
+                    "target_metric":
+                        intervention.targetMetric.rawValue,
+                    "desired_direction":
+                        intervention.desiredDirection.rawValue,
+                    "confidence": String(
+                        format: "%.4f",
+                        intervention.confidence
+                    ),
+                    "evidence_label":
+                        intervention.evidenceLabel,
+                ]
+            )
+        } catch {
+            fail(error)
+        }
+    }
+
     func addFailureNote(_ note: String) {
         guard phase == .running else {
             fail(CoordinatorError.invalidState(
