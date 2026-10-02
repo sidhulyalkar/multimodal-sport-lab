@@ -54,6 +54,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         case preparing
         case ready
         case starting
+        case countdown
         case running
         case finishing
         case watchStopRequired
@@ -128,6 +129,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
     @Published private(set) var activeWatchSessionID: String?
     @Published var captureMode: CaptureMode = .watchAndPhone
     @Published private(set) var startedAt: Date?
+    @Published private(set) var countdownRemaining: Int?
     @Published private(set) var cueReceipts: [CueReceipt] = []
     @Published private(set) var pendingCueID: String?
     @Published private(set) var errorMessage: String?
@@ -255,6 +257,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         outcome = nil
         activeWatchSessionID = nil
         startedAt = nil
+        countdownRemaining = nil
 
         fieldRun.createRun(kind: .indoBoard)
         guard fieldRun.phase == .armed,
@@ -356,9 +359,23 @@ final class IndoBoardSessionCoordinator: ObservableObject {
             return
         }
 
+        UIApplication.shared.isIdleTimerDisabled = true
+        phase = .countdown
+
+        for value in stride(from: 5, through: 1, by: -1) {
+            guard phase == .countdown else {
+                return
+            }
+            countdownRemaining = value
+            try? await Task.sleep(for: .seconds(1))
+        }
+
+        guard phase == .countdown else {
+            return
+        }
+        countdownRemaining = nil
         startedAt = Date()
         phase = .running
-        UIApplication.shared.isIdleTimerDisabled = true
         startProtocolTimeline(
             phone: phone,
             camera: camera,
@@ -472,7 +489,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         fieldRun: FieldRunCoordinator,
         pod: EquipmentPodController
     ) async {
-        guard phase == .running else { return }
+        guard phase == .running || phase == .countdown else { return }
 
         // Freeze the classification boundary before any shutdown await.
         // Otherwise a slow Watch stop could make an early user stop appear
@@ -483,6 +500,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
                 at: finishRequestedElapsed
             )
 
+        countdownRemaining = nil
         phase = .finishing
         errorMessage = nil
 
@@ -755,6 +773,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
 
     func reset() {
         guard phase != .running
+                && phase != .countdown
                 && phase != .starting
                 && phase != .finishing
                 && phase != .watchStopRequired
@@ -774,6 +793,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         outcome = nil
         activeWatchSessionID = nil
         startedAt = nil
+        countdownRemaining = nil
         cueReceipts = []
         pendingCueID = nil
         externalVideoEvidence = nil
@@ -1158,6 +1178,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
                 camera.sessionID ?? "unknown",
             "equipment_pod_phase": pod.phase.rawValue,
             "capture_mode": captureMode.rawValue,
+            "pre_roll_countdown_seconds": "5",
             "external_camera_confirmed":
                 String(externalCameraConfirmed),
             "sync_acknowledged":
