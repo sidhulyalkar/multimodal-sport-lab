@@ -9,6 +9,7 @@ struct FitnessPersonaView: View {
         ScrollView {
             LazyVStack(spacing: MotionOSDesign.pageSpacing) {
                 hero
+                PersonalBodyModelCard()
                 BodyStateCard()
                 evidenceMap
 
