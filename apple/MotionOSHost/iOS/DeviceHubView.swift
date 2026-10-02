@@ -288,6 +288,13 @@ private struct WatchDeviceDetailView: View {
                 }
 
                 Section("Connection") {
+                    DiagnosticRow(
+                        "WCSession",
+                        phone.watchConnectivityActivationState
+                    )
+                    if let error = phone.watchConnectivityActivationError {
+                        DiagnosticRow("Activation error", error)
+                    }
                     DiagnosticRow("System pairing", phone.watchPaired ? "paired" : "not paired")
                     DiagnosticRow(
                         "Watch app installed",
@@ -295,6 +302,10 @@ private struct WatchDeviceDetailView: View {
                     )
                     DiagnosticRow("Live reachability", phone.watchReachable ? "reachable" : "not reachable")
                     DiagnosticRow("Two-way app check", phone.watchTwoWayLinkVerified ? "verified" : "pending")
+                    DiagnosticRow(
+                        "iPhone bundle",
+                        Bundle.main.bundleIdentifier ?? "unknown"
+                    )
                     DiagnosticRow(
                         "Last detected",
                         phone.watchPresence.map {
@@ -307,6 +318,7 @@ private struct WatchDeviceDetailView: View {
                 if let presence = phone.watchPresence {
                     Section("Apple Watch") {
                         DiagnosticRow("watchOS", presence.watchSystemVersion)
+                        DiagnosticRow("Watch bundle", presence.bundleID)
                         DiagnosticRow("MotionOS", "v\(presence.appVersion) · build \(presence.appBuild)")
                         DiagnosticRow("Health access", presence.healthAuthorization)
                         DiagnosticRow("Capture state", presence.captureState)
@@ -340,7 +352,7 @@ private struct WatchDeviceDetailView: View {
 
                 Section {
                     Button {
-                        phone.refreshWatchState()
+                        phone.runWatchLinkCheck()
                     } label: {
                         Label("Check Watch Again", systemImage: "arrow.clockwise")
                     }
