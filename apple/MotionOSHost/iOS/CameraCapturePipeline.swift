@@ -188,6 +188,7 @@ final class CameraCapturePipeline:
     private var firstIntrinsicMatrix: [[Double]]?
     private var lastIntrinsicMatrix: [[Double]]?
     private var latestPoseFrame: BodyMovementFrame?
+    private var previewFrameSequence: UInt64 = 0
     private var encoder = JSONEncoder()
 
     override init() {
@@ -509,7 +510,11 @@ final class CameraCapturePipeline:
         didOutput sampleBuffer: CMSampleBuffer,
         from connection: AVCaptureConnection
     ) {
-        handleFrame(sampleBuffer)
+        if sessionID == nil {
+            handlePreviewFrame(sampleBuffer)
+        } else {
+            handleFrame(sampleBuffer)
+        }
     }
 
     nonisolated func captureOutput(
@@ -518,6 +523,53 @@ final class CameraCapturePipeline:
         from connection: AVCaptureConnection
     ) {
         handleDroppedFrame(sampleBuffer)
+    }
+
+    private func handlePreviewFrame(
+        _ sampleBuffer: CMSampleBuffer
+    ) {
+        let sequence = previewFrameSequence
+        previewFrameSequence += 1
+
+        guard sequence % Self.poseStride == 0,
+              let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer)
+        else {
+            return
+        }
+
+        do {
+            let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+            let ptsNS = try presentationTimeNS(pts)
+
+            guard var payload = try Pose3DExtractor.extract(
+                from: pixelBuffer,
+                orientation: .up
+            ) else {
+                latestPoseFrame = nil
+                return
+            }
+
+            payload["source_frame_sequence"] =
+                .number(Double(sequence))
+            payload["source_frame_pts_ns"] =
+                .number(Double(ptsNS))
+            payload["timestamp_basis"] = .string(
+                "avcapture_presentation_timestamp"
+            )
+            payload["source"] = .string(
+                "vision_preview_pose_from_camera_frame"
+            )
+
+            latestPoseFrame =
+                BodyMovementFrameParser.parseVisionPose(
+                    payload: payload,
+                    sessionID: "camera-preview",
+                    sequence: sequence,
+                    deviceTimeNS: ptsNS
+                )
+        } catch {
+            latestPoseFrame = nil
+        }
     }
 
     private func handleFrame(
