@@ -59,10 +59,10 @@ final class PlayerCardExportCoordinator: ObservableObject {
 
             let stamp = Self.timestamp()
             let imageURL = directory.appendingPathComponent(
-                "motionos-player-card-(stamp).png"
+                "motionos-player-card-" + stamp + ".png"
             )
             let metadataURL = directory.appendingPathComponent(
-                "motionos-player-card-(stamp).json"
+                "motionos-player-card-" + stamp + ".json"
             )
 
             try png.write(
@@ -132,9 +132,10 @@ struct PlayerCardLauncher: View {
                     Text("Movement passport")
                         .font(.headline)
                     Text(
-                        "(shareableCoverageCount) / "
-                            + "(PlayerCardEngine.shareableDimensions.count) "
-                            + "share-safe movement domains"
+                        String(shareableCoverageCount)
+                            + " / "
+                            + String(PlayerCardEngine.shareableDimensions.count)
+                            + " share-safe movement domains"
                     )
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -497,7 +498,7 @@ struct PlayerCardPoster: View {
 
             VStack(alignment: .trailing, spacing: 2 * scale) {
                 Text(
-                    "(snapshot.sourceSessionCount)"
+                    String(snapshot.shareableEvidenceDepth)
                 )
                 .font(
                     .system(
@@ -753,7 +754,7 @@ struct PlayerCardPoster: View {
                             Text(
                                 highlight.sampleCount == 1
                                     ? "1 sample"
-                                    : "(highlight.sampleCount) samples"
+                                    : String(highlight.sampleCount) + " samples"
                             )
                             .font(
                                 .system(
