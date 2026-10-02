@@ -1,6 +1,7 @@
 import AVFoundation
 import Combine
 import Foundation
+import MotionOSAppleCapture
 import UIKit
 
 @MainActor
@@ -21,10 +22,13 @@ final class CameraCaptureController: ObservableObject {
     @Published private(set) var sessionID: String?
     @Published private(set) var evidenceBundle: CameraEvidenceBundle?
     @Published private(set) var liveStats: CameraLiveCaptureStats?
+    @Published private(set) var latestPoseFrame: BodyMovementFrame?
+    @Published private(set) var latestPoseReceivedAt: Date?
     @Published private(set) var errorMessage: String?
 
     private let pipeline = CameraCapturePipeline()
     private var statsTask: Task<Void, Never>?
+    private var poseTask: Task<Void, Never>?
 
     var authorizationStatus: AVAuthorizationStatus {
         AVCaptureDevice.authorizationStatus(for: .video)
@@ -35,6 +39,7 @@ final class CameraCaptureController: ObservableObject {
     }
 
     func prepare() async {
+        stopLivePolling()
         errorMessage = nil
 
         // Preview preparation starts a new capture opportunity. Never let a
@@ -43,6 +48,8 @@ final class CameraCaptureController: ObservableObject {
         sessionID = nil
         evidenceBundle = nil
         liveStats = nil
+        latestPoseFrame = nil
+        latestPoseReceivedAt = nil
 
         do {
             let authorized = try await ensureAuthorization()
@@ -62,6 +69,8 @@ final class CameraCaptureController: ObservableObject {
         errorMessage = nil
         evidenceBundle = nil
         liveStats = nil
+        latestPoseFrame = nil
+        latestPoseReceivedAt = nil
 
         do {
             let authorized = try await ensureAuthorization()
@@ -78,7 +87,7 @@ final class CameraCaptureController: ObservableObject {
                 hostOSVersion: UIDevice.current.systemVersion
             )
             phase = .recording
-            startStatsPolling()
+            startLivePolling()
         } catch {
             sessionID = nil
             fail(error)
@@ -89,8 +98,7 @@ final class CameraCaptureController: ObservableObject {
         guard phase == .recording else { return }
         phase = .finalizing
         errorMessage = nil
-        statsTask?.cancel()
-        statsTask = nil
+        stopLivePolling()
 
         do {
             liveStats = await pipeline.liveStats()
@@ -101,15 +109,43 @@ final class CameraCaptureController: ObservableObject {
         }
     }
 
-    private func startStatsPolling() {
-        statsTask?.cancel()
+    private func startLivePolling() {
+        stopLivePolling()
+
         statsTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 guard let self else { return }
-                self.liveStats = await self.pipeline.liveStats()
+                let stats = await self.pipeline.liveStats()
+                guard !Task.isCancelled else { return }
+                self.liveStats = stats
                 try? await Task.sleep(for: .milliseconds(500))
             }
         }
+
+        // Vision pose is already computed on the camera output queue. Polling
+        // the latest completed frame at 10 Hz adds no additional Vision work
+        // and keeps the 3D body scene responsive without touching evidence.
+        poseTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                let nextPose = await self.pipeline.livePoseFrame()
+                guard !Task.isCancelled else { return }
+                if nextPose?.sessionID != self.latestPoseFrame?.sessionID
+                    || nextPose?.sequence != self.latestPoseFrame?.sequence {
+                    self.latestPoseFrame = nextPose
+                    self.latestPoseReceivedAt =
+                        nextPose == nil ? nil : Date()
+                }
+                try? await Task.sleep(for: .milliseconds(100))
+            }
+        }
+    }
+
+    private func stopLivePolling() {
+        statsTask?.cancel()
+        poseTask?.cancel()
+        statsTask = nil
+        poseTask = nil
     }
 
     private func ensureAuthorization() async throws -> Bool {
@@ -133,8 +169,7 @@ final class CameraCaptureController: ObservableObject {
     }
 
     private func fail(_ error: Error) {
-        statsTask?.cancel()
-        statsTask = nil
+        stopLivePolling()
         phase = .failed
         errorMessage = error.localizedDescription
     }

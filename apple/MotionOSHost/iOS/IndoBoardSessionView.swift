@@ -111,6 +111,7 @@ struct IndoBoardSessionView: View {
         case .running, .finishing:
             sessionControl
             IndoBoardProtocolRibbon()
+            BodyMovementSceneCard()
             IndoBoardLiveSignalCard()
             liveProtocol
 
