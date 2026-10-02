@@ -81,6 +81,7 @@ final class GuidedBodyCalibrationCoordinator: ObservableObject {
     private var accumulator = BodyCalibrationAccumulator()
     private var captureTask: Task<Void, Never>?
     private var lastConsumedFrameKey: String?
+    private var standingHeightMeters: Double?
 
     var elapsedSeconds: TimeInterval {
         guard let startedAt else { return 0 }
@@ -134,7 +135,8 @@ final class GuidedBodyCalibrationCoordinator: ObservableObject {
 
     func start(
         camera: CameraCaptureController,
-        bodyModels: PersonalBodyModelCoordinator
+        bodyModels: PersonalBodyModelCoordinator,
+        standingHeightMeters: Double?
     ) async {
         if phase != .ready {
             await prepare(camera: camera)
@@ -148,6 +150,10 @@ final class GuidedBodyCalibrationCoordinator: ObservableObject {
         errorMessage = nil
         lastConsumedFrameKey = nil
         startedAt = nil
+        self.standingHeightMeters =
+            Self.validatedHeight(
+                standingHeightMeters
+            )
         phase = .recording
 
         await camera.startRecording()
@@ -226,6 +232,7 @@ final class GuidedBodyCalibrationCoordinator: ObservableObject {
         modelURL = nil
         startedAt = nil
         lastConsumedFrameKey = nil
+        standingHeightMeters = nil
         errorMessage = nil
         phase = .idle
     }
@@ -277,8 +284,24 @@ final class GuidedBodyCalibrationCoordinator: ObservableObject {
         }
         lastConsumedFrameKey = key
 
-        _ = accumulator.observe(frame)
+        _ = accumulator.observe(
+            frame,
+            standingHeightMeters:
+                standingHeightMeters
+        )
         progress = accumulator.progress
+    }
+
+    private static func validatedHeight(
+        _ value: Double?
+    ) -> Double? {
+        guard let value,
+              value.isFinite,
+              (0.5...2.5).contains(value)
+        else {
+            return nil
+        }
+        return value
     }
 
     private func fail(
