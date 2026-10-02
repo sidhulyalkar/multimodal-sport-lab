@@ -5,6 +5,9 @@ struct GuidedBodyCalibrationView: View {
     @EnvironmentObject private var camera: CameraCaptureController
     @EnvironmentObject private var calibration: GuidedBodyCalibrationCoordinator
     @EnvironmentObject private var bodyModels: PersonalBodyModelCoordinator
+    @EnvironmentObject private var health: HealthDataCoordinator
+
+    @State private var standingHeightCM = ""
 
     var body: some View {
         ScrollView {
@@ -13,6 +16,7 @@ struct GuidedBodyCalibrationView: View {
 
                 switch calibration.phase {
                 case .idle, .preparing, .ready, .failed:
+                    scaleSourceCard
                     cameraSetup
                     controls
 
@@ -43,6 +47,9 @@ struct GuidedBodyCalibrationView: View {
         }
         .navigationTitle("Body Calibration")
         .navigationBarTitleDisplayMode(.inline)
+        .task {
+            seedHeightFromHealthIfNeeded()
+        }
     }
 
     private var introduction: some View {
@@ -65,6 +72,80 @@ struct GuidedBodyCalibrationView: View {
             .fixedSize(horizontal: false, vertical: true)
         }
         .cardStyle()
+    }
+
+    private var scaleSourceCard: some View {
+        VStack(alignment: .leading, spacing: 11) {
+            MotionOSSectionHeader(
+                title: "Absolute body scale",
+                subtitle: scaleSubtitle,
+                systemImage: "ruler.fill",
+                accent: validatedStandingHeightMeters == nil
+                    ? .orange
+                    : .green
+            )
+
+            TextField(
+                "Standing height in cm",
+                text: $standingHeightCM
+            )
+            .keyboardType(.decimalPad)
+            .textFieldStyle(.roundedBorder)
+
+            if let healthHeight = healthStandingHeightMeters {
+                HStack {
+                    Label(
+                        "Apple Health height",
+                        systemImage: "heart.fill"
+                    )
+                    .font(.caption.weight(.semibold))
+
+                    Spacer()
+
+                    Button(
+                        String(
+                            format: "%.1f cm",
+                            healthHeight * 100
+                        )
+                    ) {
+                        standingHeightCM = String(
+                            format: "%.1f",
+                            healthHeight * 100
+                        )
+                    }
+                    .font(
+                        .system(
+                            .caption,
+                            design: .monospaced,
+                            weight: .semibold
+                        )
+                    )
+                    .buttonStyle(.bordered)
+                }
+            }
+
+            Text(
+                "Apple Vision can return a reference-height 3D skeleton when "
+                    + "depth is unavailable. MotionOS will not turn that reference "
+                    + "scale into your anatomy. A real standing height lets it "
+                    + "rescale the Vision skeleton; depth-measured Vision can also "
+                    + "provide absolute scale."
+            )
+            .font(.caption2)
+            .foregroundStyle(.tertiary)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        .cardStyle()
+    }
+
+    private var scaleSubtitle: String {
+        if validatedStandingHeightMeters != nil {
+            return "Explicit standing height ready"
+        }
+        if healthStandingHeightMeters != nil {
+            return "Apple Health height available"
+        }
+        return "Enter height unless depth-measured Vision is available"
     }
 
     @ViewBuilder
@@ -273,7 +354,9 @@ struct GuidedBodyCalibrationView: View {
                     Task {
                         await calibration.start(
                             camera: camera,
-                            bodyModels: bodyModels
+                            bodyModels: bodyModels,
+                            standingHeightMeters:
+                                validatedStandingHeightMeters
                         )
                     }
                 } label: {
@@ -418,6 +501,18 @@ struct GuidedBodyCalibrationView: View {
                     }
                 }
 
+                if !result.scaleSourceCounts.isEmpty {
+                    Text(
+                        "Scale source: "
+                            + result.scaleSourceCounts
+                                .keys
+                                .sorted()
+                                .joined(separator: ", ")
+                    )
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                }
+
                 Text(
                     "The ± values are robust frame-to-frame spread, not absolute "
                         + "anatomical accuracy. Recalibration creates a new model "
@@ -440,7 +535,9 @@ struct GuidedBodyCalibrationView: View {
 
             Text(
                 "This calibration estimates stable skeletal segment geometry "
-                    + "from Apple Vision 3D pose across many frames. It does not "
+                    + "from Apple Vision 3D pose across many frames using either "
+                    + "depth-measured Vision scale or an explicit standing-height "
+                    + "scale. It does not "
                     + "measure body fat, muscle size, force, center of mass, "
                     + "injury risk, or medical anatomy."
             )
@@ -448,6 +545,56 @@ struct GuidedBodyCalibrationView: View {
             .foregroundStyle(.secondary)
         }
         .cardStyle()
+    }
+
+    private var healthStandingHeightMeters: Double? {
+        guard let value =
+                health.timeline.latest(.height)?.numericValue,
+              value.isFinite,
+              (0.5...2.5).contains(value)
+        else {
+            return nil
+        }
+        return value
+    }
+
+    private var validatedStandingHeightMeters: Double? {
+        let normalized = standingHeightCM
+            .replacingOccurrences(
+                of: ",",
+                with: "."
+            )
+            .trimmingCharacters(
+                in: .whitespacesAndNewlines
+            )
+        guard let centimeters = Double(normalized),
+              centimeters.isFinite
+        else {
+            return nil
+        }
+
+        let meters = centimeters / 100
+        guard (0.5...2.5).contains(meters) else {
+            return nil
+        }
+        return meters
+    }
+
+    private func seedHeightFromHealthIfNeeded() {
+        guard standingHeightCM
+                .trimmingCharacters(
+                    in: .whitespacesAndNewlines
+                )
+                .isEmpty,
+              let height = healthStandingHeightMeters
+        else {
+            return
+        }
+
+        standingHeightCM = String(
+            format: "%.1f",
+            height * 100
+        )
     }
 
     private func qualityTile(
