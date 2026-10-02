@@ -11,7 +11,8 @@ from motionos.indo_knowledge import (
 
 def _taxonomy(tmp_path):
     source = "configs/indo_skill_taxonomy.v1.json"
-    payload = json.loads(open(source, encoding="utf-8").read())
+    with open(source, encoding="utf-8") as handle:
+        payload = json.load(handle)
     path = tmp_path / "taxonomy.json"
     path.write_text(json.dumps(payload), encoding="utf-8")
     return load_indo_skill_taxonomy(path)
