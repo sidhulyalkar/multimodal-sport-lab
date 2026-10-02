@@ -43,6 +43,7 @@ from .experiments import (
     verify_experiment_manifest,
     verify_grouped_split,
 )
+from .indo_annotations import build_annotation_queue
 from .indo_board_state import (
     analyze_board_observations,
     load_board_observations,
@@ -505,6 +506,15 @@ def _parser() -> argparse.ArgumentParser:
         help="derive deck/roller balance state and recovery metrics",
     )
     indo_board_state.add_argument("observations")
+
+    indo_annotation_queue = sub.add_parser(
+        "indo-annotation-queue",
+        help="build creator-grouped INDO BOARD deck/roller annotation tasks",
+    )
+    indo_annotation_queue.add_argument("catalog")
+    indo_annotation_queue.add_argument("taxonomy")
+    indo_annotation_queue.add_argument("output")
+    indo_annotation_queue.add_argument("--max-sources", type=int)
 
     indo_report = sub.add_parser(
         "indo-session-report",
@@ -1130,6 +1140,27 @@ def main(argv: list[str] | None = None) -> int:
         payload = load_board_observations(args.observations)
         result = analyze_board_observations(payload)
         print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+
+    if args.command == "indo-annotation-queue":
+        payload = build_annotation_queue(
+            args.catalog,
+            args.taxonomy,
+            args.output,
+            max_sources=args.max_sources,
+        )
+        print(
+            json.dumps(
+                {
+                    "schema_version": payload["schema_version"],
+                    "task_count": payload["task_count"],
+                    "split_counts": payload["split_counts"],
+                    "output": args.output,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
         return 0
 
     if args.command == "indo-session-report":
