@@ -115,7 +115,7 @@ final class GhostComparisonTests: XCTestCase {
     func testMixedCameraSessionsFailClosed() throws {
         let directory = FileManager.default.temporaryDirectory
         let url = directory.appendingPathComponent(
-            "mixed-\(UUID().uuidString).jsonl"
+            "mixed-" + UUID().uuidString + ".jsonl"
         )
         let encoder = JSONEncoder()
         var data = Data()
@@ -159,7 +159,7 @@ final class GhostComparisonTests: XCTestCase {
     ) throws -> URL {
         let directory = FileManager.default.temporaryDirectory
         let url = directory.appendingPathComponent(
-            "pose-\(UUID().uuidString).jsonl"
+            "pose-" + UUID().uuidString + ".jsonl"
         )
         let encoder = JSONEncoder()
         var data = Data()
