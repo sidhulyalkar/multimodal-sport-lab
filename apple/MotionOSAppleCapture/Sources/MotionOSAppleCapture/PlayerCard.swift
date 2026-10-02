@@ -121,7 +121,8 @@ public enum PlayerCardEngine {
             )
         }
 
-        let highlights = shareableDimensions.compactMap { dimension in
+        let highlights: [PlayerCardHighlight] =
+            shareableDimensions.compactMap { dimension -> PlayerCardHighlight? in
             guard let state = persona.state(for: dimension) else {
                 return nil
             }
