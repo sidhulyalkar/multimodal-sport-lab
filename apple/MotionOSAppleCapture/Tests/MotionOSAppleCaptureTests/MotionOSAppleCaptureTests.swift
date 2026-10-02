@@ -288,7 +288,7 @@ final class MotionOSAppleCaptureTests: XCTestCase {
     func testIndoBoardProductProtocolFindsActiveBlock() {
         XCTAssertEqual(
             IndoBoardProductProtocol.activeBlock(at: 60)?.id,
-            "tilt-recover"
+            "partial-squats"
         )
         XCTAssertNil(
             IndoBoardProductProtocol.activeBlock(
