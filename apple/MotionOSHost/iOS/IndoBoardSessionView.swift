@@ -9,6 +9,7 @@ struct IndoBoardSessionView: View {
     @EnvironmentObject private var fieldRun: FieldRunCoordinator
     @EnvironmentObject private var session: IndoBoardSessionCoordinator
     @EnvironmentObject private var runLibrary: ProductRunLibrary
+    @EnvironmentObject private var health: HealthDataCoordinator
     @State private var importingExternalVideo = false
 
     var body: some View {
@@ -373,7 +374,8 @@ struct IndoBoardSessionView: View {
                             phone: phone,
                             camera: camera,
                             fieldRun: fieldRun,
-                            pod: pod
+                            pod: pod,
+                            health: health
                         )
                     }
                 } label: {
