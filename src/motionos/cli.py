@@ -43,6 +43,13 @@ from .experiments import (
     verify_experiment_manifest,
     verify_grouped_split,
 )
+from .indo_knowledge import (
+    build_session_learning_targets,
+    classify_observable_skills,
+    cold_start_plan,
+    generate_coaching_suggestions,
+    load_indo_skill_taxonomy,
+)
 from .indo_public_corpus import (
     build_indo_video_knowledge_base,
     discover_indo_youtube,
@@ -445,6 +452,55 @@ def _parser() -> argparse.ArgumentParser:
     )
     indo_kb.add_argument("catalog")
     indo_kb.add_argument("output")
+
+    indo_observability = sub.add_parser(
+        "indo-skill-observability",
+        help="classify which INDO BOARD skills are measurable with available channels",
+    )
+    indo_observability.add_argument("taxonomy")
+    indo_observability.add_argument(
+        "--channels",
+        type=_channel_keys,
+        required=True,
+        help="comma-separated observation channels available to the session",
+    )
+
+    indo_cold_start = sub.add_parser(
+        "indo-cold-start-plan",
+        help="emit the first-session INDO BOARD protocol supported by available channels",
+    )
+    indo_cold_start.add_argument("taxonomy")
+    indo_cold_start.add_argument(
+        "--channels",
+        type=_channel_keys,
+        required=True,
+    )
+
+    indo_coach = sub.add_parser(
+        "indo-coach",
+        help="apply conservative INDO BOARD coaching rules to session metrics",
+    )
+    indo_coach.add_argument("taxonomy")
+    indo_coach.add_argument("metrics")
+    indo_coach.add_argument("--max-suggestions", type=int, default=2)
+
+    indo_next = sub.add_parser(
+        "indo-next-skills",
+        help="choose measurable next INDO BOARD skills from completed prerequisites",
+    )
+    indo_next.add_argument("taxonomy")
+    indo_next.add_argument(
+        "--completed",
+        type=_channel_keys,
+        default=(),
+        help="comma-separated completed skill ids",
+    )
+    indo_next.add_argument(
+        "--channels",
+        type=_channel_keys,
+        required=True,
+    )
+    indo_next.add_argument("--limit", type=int, default=4)
 
     public_export = sub.add_parser(
         "validate-public-export",
@@ -985,6 +1041,62 @@ def main(argv: list[str] | None = None) -> int:
                 sort_keys=True,
             )
         )
+        return 0
+
+    if args.command == "indo-skill-observability":
+        taxonomy = load_indo_skill_taxonomy(args.taxonomy)
+        result = classify_observable_skills(
+            taxonomy,
+            set(args.channels),
+        )
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+
+    if args.command == "indo-cold-start-plan":
+        taxonomy = load_indo_skill_taxonomy(args.taxonomy)
+        result = cold_start_plan(
+            taxonomy,
+            available_channels=set(args.channels),
+        )
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+
+    if args.command == "indo-coach":
+        taxonomy = load_indo_skill_taxonomy(args.taxonomy)
+        with open(args.metrics, encoding="utf-8") as handle:
+            payload = json.load(handle)
+        if not isinstance(payload, dict):
+            raise TypeError("metrics input must be a JSON object")
+        metrics = payload.get("metrics", payload)
+        confidences = payload.get("confidence", {})
+        if not isinstance(metrics, dict):
+            raise TypeError("metrics must be a JSON object")
+        if not isinstance(confidences, dict):
+            raise TypeError("confidence must be a JSON object")
+        result = generate_coaching_suggestions(
+            taxonomy,
+            metrics,
+            metric_confidence=confidences,
+            max_suggestions=args.max_suggestions,
+        )
+        print(
+            json.dumps(
+                [item.to_dict() for item in result],
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    if args.command == "indo-next-skills":
+        taxonomy = load_indo_skill_taxonomy(args.taxonomy)
+        result = build_session_learning_targets(
+            taxonomy,
+            completed_skill_ids=set(args.completed),
+            available_channels=set(args.channels),
+            limit=args.limit,
+        )
+        print(json.dumps(result, indent=2, sort_keys=True))
         return 0
 
     if args.command == "validate-public-export":
