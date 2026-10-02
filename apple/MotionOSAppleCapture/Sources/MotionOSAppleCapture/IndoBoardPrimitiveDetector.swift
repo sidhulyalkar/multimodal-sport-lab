@@ -178,7 +178,7 @@ public final class IndoBoardPrimitiveDetector {
 
         let neutralPelvis = median(neutralPelvisSamples)
         let neutralKnee = median(neutralKneeSamples)
-        let pelvisOffset = {
+        let pelvisOffset: Double? = {
             guard let pelvisX,
                   let neutralPelvis
             else {
@@ -188,7 +188,7 @@ public final class IndoBoardPrimitiveDetector {
                 / framing.bounds.width
         }()
 
-        let ankleHeightDifference = {
+        let ankleHeightDifference: Double? = {
             guard let leftAnkle,
                   let rightAnkle
             else {
@@ -198,7 +198,7 @@ public final class IndoBoardPrimitiveDetector {
                 / framing.bounds.height
         }()
 
-        let armExcursion = {
+        let armExcursion: Double? = {
             guard let shoulders else {
                 return nil
             }
