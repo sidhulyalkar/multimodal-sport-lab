@@ -157,6 +157,8 @@ public struct BodyMovementFrame: Codable, Sendable, Equatable {
     public let muscleActivations: [MuscleActivationEstimate]
     public let imageFraming: BodyImageFraming?
     public let imageJoints: [BodyJoint2D]?
+    public let indoBoardEquipment:
+        IndoBoardEquipmentObservation?
 
     public init(
         schemaVersion: String = BodyMovementFrame.schemaVersion,
@@ -172,7 +174,9 @@ public struct BodyMovementFrame: Codable, Sendable, Equatable {
         supportPoints: [MotionVector3] = [],
         muscleActivations: [MuscleActivationEstimate] = [],
         imageFraming: BodyImageFraming? = nil,
-        imageJoints: [BodyJoint2D]? = nil
+        imageJoints: [BodyJoint2D]? = nil,
+        indoBoardEquipment:
+            IndoBoardEquipmentObservation? = nil
     ) {
         self.schemaVersion = schemaVersion
         self.sessionID = sessionID
@@ -188,6 +192,7 @@ public struct BodyMovementFrame: Codable, Sendable, Equatable {
         self.muscleActivations = muscleActivations
         self.imageFraming = imageFraming
         self.imageJoints = imageJoints
+        self.indoBoardEquipment = indoBoardEquipment
     }
 
     public var jointMap: [String: BodyJoint3D] {
@@ -199,6 +204,16 @@ public struct BodyMovementFrame: Codable, Sendable, Equatable {
             uniqueKeysWithValues: (imageJoints ?? []).map {
                 ($0.id, $0)
             }
+        )
+    }
+
+    public var indoBoardBalanceState:
+        IndoBoardBalanceState? {
+        guard let indoBoardEquipment else {
+            return nil
+        }
+        return IndoBoardBalanceStateEstimator.estimate(
+            from: indoBoardEquipment
         )
     }
 
@@ -307,7 +322,9 @@ public enum BodyMovementFrameParser {
             supportPoints: support,
             muscleActivations: parseMuscleActivations(payload),
             imageFraming: parseImageFraming(payload),
-            imageJoints: parseImageJoints(payload)
+            imageJoints: parseImageJoints(payload),
+            indoBoardEquipment:
+                parseIndoBoardEquipment(payload)
         )
     }
 
@@ -370,6 +387,153 @@ public enum BodyMovementFrameParser {
         return aliases.compactMap { names in
             findJoint(aliases: names, in: joints)?.position
         }
+    }
+
+    private static func parseIndoBoardEquipment(
+        _ payload: [String: JSONValue]
+    ) -> IndoBoardEquipmentObservation? {
+        guard case .object(let object) =
+                payload["indo_board_equipment"]
+        else {
+            return nil
+        }
+
+        let modelID: String?
+        if case .string(let value) = object["model_id"] {
+            modelID = value
+        } else {
+            modelID = nil
+        }
+
+        let deck: IndoBoardDeckObservation?
+        if case .object(let deckObject) = object["deck"],
+           let leftEnd = imagePoint(deckObject["left_end"]),
+           let rightEnd = imagePoint(deckObject["right_end"]) {
+            let polygon: [NormalizedImagePoint2D]
+            if case .array(let rawPolygon) =
+                    deckObject["polygon"] {
+                polygon = rawPolygon.compactMap(imagePoint)
+            } else {
+                polygon = []
+            }
+
+            let confidence = number(
+                deckObject["confidence"]
+            ) ?? 0
+            let provenance = provenance(
+                deckObject["provenance"]
+            )
+
+            deck = IndoBoardDeckObservation(
+                polygon: polygon,
+                leftEnd: leftEnd,
+                rightEnd: rightEnd,
+                confidence: confidence,
+                provenance: provenance
+            )
+        } else {
+            deck = nil
+        }
+
+        let roller: IndoBoardRollerObservation?
+        if case .object(let rollerObject) =
+                object["roller"],
+           let center = imagePoint(
+                rollerObject["center"]
+           ) {
+            roller = IndoBoardRollerObservation(
+                center: center,
+                axisStart: imagePoint(
+                    rollerObject["axis_start"]
+                ),
+                axisEnd: imagePoint(
+                    rollerObject["axis_end"]
+                ),
+                confidence:
+                    number(rollerObject["confidence"])
+                        ?? 0,
+                provenance: provenance(
+                    rollerObject["provenance"]
+                )
+            )
+        } else {
+            roller = nil
+        }
+
+        guard deck != nil || roller != nil else {
+            return nil
+        }
+
+        return IndoBoardEquipmentObservation(
+            sequence:
+                UInt64(
+                    max(
+                        0,
+                        number(object["sequence"])
+                            ?? 0
+                    )
+                    .rounded()
+                ),
+            deviceTimeNS:
+                UInt64(
+                    max(
+                        0,
+                        number(object["device_time_ns"])
+                            ?? 0
+                    )
+                    .rounded()
+                ),
+            deck: deck,
+            roller: roller,
+            modelID: modelID
+        )
+    }
+
+    private static func imagePoint(
+        _ value: JSONValue?
+    ) -> NormalizedImagePoint2D? {
+        guard let value,
+              case .array(let values) = value,
+              values.count >= 2,
+              case .number(let x) = values[0],
+              case .number(let y) = values[1],
+              x.isFinite,
+              y.isFinite
+        else {
+            return nil
+        }
+
+        return NormalizedImagePoint2D(
+            x: x,
+            y: y
+        )
+    }
+
+    private static func number(
+        _ value: JSONValue?
+    ) -> Double? {
+        guard let value,
+              case .number(let number) = value,
+              number.isFinite
+        else {
+            return nil
+        }
+        return number
+    }
+
+    private static func provenance(
+        _ value: JSONValue?
+    ) -> IndoBoardEquipmentProvenance {
+        guard let value,
+              case .string(let raw) = value,
+              let parsed =
+                IndoBoardEquipmentProvenance(
+                    rawValue: raw
+                )
+        else {
+            return .modelEstimated
+        }
+        return parsed
     }
 
     private static func parseImageJoints(
