@@ -4,6 +4,7 @@ import json
 import math
 import statistics
 from dataclasses import dataclass
+from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
@@ -362,7 +363,7 @@ def _direction_change_count(
     frames: list[BoardFrameState],
 ) -> int:
     signs: list[int] = []
-    for first, second in zip(frames, frames[1:]):
+    for first, second in pairwise(frames):
         dt = second.time_s - first.time_s
         if dt <= 0:
             continue
@@ -375,7 +376,7 @@ def _direction_change_count(
 
     return sum(
         first != second
-        for first, second in zip(signs, signs[1:])
+        for first, second in pairwise(signs)
     )
 
 
