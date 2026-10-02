@@ -185,6 +185,9 @@ struct MotionOSiOSApp: App {
                 indoBoardSession.reset()
             }
             await cameraController.prepare()
+            if cameraController.phase == .ready {
+                UIApplication.shared.isIdleTimerDisabled = true
+            }
             let accepted = cameraController.phase == .ready
             _ = coordinator.acknowledgeIndoRemoteCommand(
                 command,
@@ -284,6 +287,8 @@ struct MotionOSiOSApp: App {
 
             indoBoardSession.reset()
             await cameraController.prepare()
+            UIApplication.shared.isIdleTimerDisabled =
+                cameraController.phase == .ready
             _ = coordinator.acknowledgeIndoRemoteCommand(
                 command,
                 accepted: cameraController.phase == .ready,
