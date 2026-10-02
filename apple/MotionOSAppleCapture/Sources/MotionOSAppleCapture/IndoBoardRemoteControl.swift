@@ -147,6 +147,11 @@ public struct IndoBoardRemoteStatus: Equatable, Sendable {
     public let startBlocker: String?
     public let phoneBatteryFraction: Double?
     public let phoneStorageGB: Double?
+    public let coachHeadline: String?
+    public let coachTip: String?
+    public let coachDrill: String?
+    public let coachConfidencePercent: Int?
+    public let coachEvidenceLabel: String?
     public let sentAtUnixSeconds: Double
 
     public init(
@@ -165,6 +170,11 @@ public struct IndoBoardRemoteStatus: Equatable, Sendable {
         startBlocker: String?,
         phoneBatteryFraction: Double?,
         phoneStorageGB: Double?,
+        coachHeadline: String? = nil,
+        coachTip: String? = nil,
+        coachDrill: String? = nil,
+        coachConfidencePercent: Int? = nil,
+        coachEvidenceLabel: String? = nil,
         sentAtUnixSeconds: Double = Date().timeIntervalSince1970
     ) {
         self.cameraPhase = cameraPhase
@@ -183,6 +193,13 @@ public struct IndoBoardRemoteStatus: Equatable, Sendable {
         self.startBlocker = startBlocker
         self.phoneBatteryFraction = phoneBatteryFraction
         self.phoneStorageGB = phoneStorageGB
+        self.coachHeadline = coachHeadline
+        self.coachTip = coachTip
+        self.coachDrill = coachDrill
+        self.coachConfidencePercent = coachConfidencePercent.map {
+            min(100, max(0, $0))
+        }
+        self.coachEvidenceLabel = coachEvidenceLabel
         self.sentAtUnixSeconds = sentAtUnixSeconds
     }
 
@@ -230,6 +247,18 @@ public struct IndoBoardRemoteStatus: Equatable, Sendable {
             Self.double(message["phone_battery_fraction"])
         self.phoneStorageGB =
             Self.double(message["phone_storage_gb"])
+        self.coachHeadline =
+            message["coach_headline"] as? String
+        self.coachTip =
+            message["coach_tip"] as? String
+        self.coachDrill =
+            message["coach_drill"] as? String
+        self.coachConfidencePercent =
+            Self.int(message["coach_confidence_percent"]).map {
+                min(100, max(0, $0))
+            }
+        self.coachEvidenceLabel =
+            message["coach_evidence_label"] as? String
         self.sentAtUnixSeconds =
             Self.double(message["sent_at_unix_s"])
                 ?? Date().timeIntervalSince1970
@@ -266,6 +295,23 @@ public struct IndoBoardRemoteStatus: Equatable, Sendable {
         if let phoneStorageGB {
             payload["phone_storage_gb"] = phoneStorageGB
         }
+        if let coachHeadline, !coachHeadline.isEmpty {
+            payload["coach_headline"] = coachHeadline
+        }
+        if let coachTip, !coachTip.isEmpty {
+            payload["coach_tip"] = coachTip
+        }
+        if let coachDrill, !coachDrill.isEmpty {
+            payload["coach_drill"] = coachDrill
+        }
+        if let coachConfidencePercent {
+            payload["coach_confidence_percent"] =
+                coachConfidencePercent
+        }
+        if let coachEvidenceLabel, !coachEvidenceLabel.isEmpty {
+            payload["coach_evidence_label"] =
+                coachEvidenceLabel
+        }
         return payload
     }
 
@@ -297,6 +343,11 @@ public struct IndoBoardRemoteStatus: Equatable, Sendable {
             && startBlocker == other.startBlocker
             && phoneBatteryFraction == other.phoneBatteryFraction
             && phoneStorageGB == other.phoneStorageGB
+            && coachHeadline == other.coachHeadline
+            && coachTip == other.coachTip
+            && coachDrill == other.coachDrill
+            && coachConfidencePercent == other.coachConfidencePercent
+            && coachEvidenceLabel == other.coachEvidenceLabel
     }
 
     private static func double(_ value: Any?) -> Double? {
