@@ -141,7 +141,23 @@ final class MotionOSAppleCaptureTests: XCTestCase {
             externalCameraImported: true,
             externalCameraSHA256: "action4",
             operatorEvidenceSealed: true,
-            cameraEvidenceSealed: true
+            cameraEvidenceSealed: true,
+            coachSummary: .init(
+                headline: "Cleaner center return",
+                observation: "Neutral motion settled.",
+                tip: "Pause briefly at center.",
+                drill: "5 controlled shifts",
+                confidence: 0.82,
+                evidenceLabel:
+                    "Camera body pose · within-session comparison",
+                metrics: [
+                    "neutral-change": "0.020 → 0.012",
+                ],
+                numericMetrics: [
+                    "neutral_start_spread": 0.020,
+                    "neutral_finish_spread": 0.012,
+                ]
+            )
         )
 
         let data = try JSONEncoder().encode(manifest)
@@ -158,6 +174,11 @@ final class MotionOSAppleCaptureTests: XCTestCase {
         XCTAssertEqual(decoded.syncReceipts.first?.label, "start")
         XCTAssertEqual(decoded.watchJournalSHA256, "watch-journal")
         XCTAssertEqual(decoded.watchJournalByteCount, 4_096)
+        XCTAssertEqual(
+            decoded.coachSummary?
+                .numericMetrics?["neutral_finish_spread"],
+            0.012
+        )
         XCTAssertTrue(decoded.claimBoundary.contains("does not itself prove"))
     }
 
