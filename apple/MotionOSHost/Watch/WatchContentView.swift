@@ -1,3 +1,4 @@
+import MotionOSAppleCapture
 import SwiftUI
 
 struct WatchContentView: View {
@@ -14,6 +15,7 @@ struct WatchContentView: View {
                 if isCaptureActive {
                     captureDashboard
                 } else {
+                    indoBoardRemoteCard
                     readinessCard
                     stateCard
                 }
@@ -147,18 +149,245 @@ struct WatchContentView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(.pink)
-            } else if controller.canStartCapture {
-                Button {
-                    Task { await controller.startLocalSensorCheck() }
-                } label: {
-                    Label("Sensor Check", systemImage: "record.circle")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(.red)
             }
         }
         .panelStyle()
+    }
+
+    private var indoBoardRemoteCard: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack(spacing: 7) {
+                Image(systemName: "figure.surfing")
+                    .foregroundStyle(.cyan)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Indo Board")
+                        .font(.subheadline.weight(.semibold))
+                    Text("Camera setup + session control")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+            }
+
+            if !controller.phoneReachable {
+                remoteInstruction(
+                    title: "Open MotionOS on iPhone",
+                    detail:
+                        "Leave the iPhone app open with the camera aimed at the board. Then use the Watch from here.",
+                    symbol: "iphone.slash",
+                    color: .yellow
+                )
+            } else if let status = controller.indoRemoteStatus {
+                indoRemoteStatusContent(status)
+            } else {
+                remoteInstruction(
+                    title: "Connecting to camera",
+                    detail:
+                        "MotionOS is asking the iPhone for the current setup state.",
+                    symbol: "arrow.triangle.2.circlepath",
+                    color: .secondary
+                )
+
+                Button {
+                    controller.requestIndoRemoteStatus()
+                } label: {
+                    Label("Check iPhone", systemImage: "arrow.clockwise")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+            }
+
+            if let message = controller.indoRemoteErrorMessage {
+                Text(message)
+                    .font(.system(size: 9))
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .panelStyle()
+    }
+
+    @ViewBuilder
+    private func indoRemoteStatusContent(
+        _ status: IndoBoardRemoteStatus
+    ) -> some View {
+        let phase = status.sessionPhase.lowercased()
+
+        if phase == "starting" || phase == "preparing" {
+            remoteInstruction(
+                title: "Starting session",
+                detail:
+                    "The iPhone is arming video while the Watch opens the workout and motion journal.",
+                symbol: "hourglass",
+                color: .yellow
+            )
+        } else if phase == "finishing" || phase == "watchstoprequired" {
+            remoteInstruction(
+                title: "Saving session",
+                detail:
+                    status.startBlocker
+                        ?? "MotionOS is sealing video and Watch evidence.",
+                symbol: "lock.doc",
+                color: .yellow
+            )
+        } else if phase == "sealed" {
+            remoteInstruction(
+                title: "Session saved",
+                detail:
+                    "Your camera and Watch evidence are sealed. Set up the next attempt when ready.",
+                symbol: "checkmark.seal.fill",
+                color: .green
+            )
+
+            Button {
+                _ = controller.sendIndoRemoteCommand(.resetSession)
+            } label: {
+                Label("Next Session", systemImage: "arrow.clockwise")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.cyan)
+            .disabled(controller.indoRemoteCommandPending)
+        } else if status.cameraPhase.lowercased() != "ready" {
+            remoteInstruction(
+                title: cameraSetupTitle(status),
+                detail: cameraSetupDetail(status),
+                symbol: "camera.viewfinder",
+                color: .cyan
+            )
+
+            Button {
+                _ = controller.sendIndoRemoteCommand(.prepareCamera)
+            } label: {
+                Label(
+                    controller.indoRemoteCommandPending
+                        ? "Starting Camera…"
+                        : "Set Up Camera",
+                    systemImage: "camera.fill"
+                )
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.cyan)
+            .disabled(controller.indoRemoteCommandPending)
+        } else {
+            HStack(spacing: 8) {
+                ZStack {
+                    Circle()
+                        .fill(remoteFramingColor(status).opacity(0.16))
+                        .frame(width: 34, height: 34)
+                    Image(systemName: remoteFramingSymbol(status))
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(remoteFramingColor(status))
+                }
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(status.framingTitle)
+                        .font(.caption.weight(.semibold))
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("\(status.framingScore)% framing")
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer(minLength: 0)
+            }
+
+            Text(status.framingInstruction)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if status.startReady {
+                Button {
+                    _ = controller.sendIndoRemoteCommand(.startSession)
+                } label: {
+                    Label(
+                        controller.indoRemoteCommandPending
+                            ? "Starting…"
+                            : "Start Indo Board",
+                        systemImage: "record.circle.fill"
+                    )
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.green)
+                .disabled(controller.indoRemoteCommandPending)
+            } else if let blocker = status.startBlocker {
+                Label(blocker, systemImage: "arrow.turn.down.right")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.yellow)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func remoteInstruction(
+        title: String,
+        detail: String,
+        symbol: String,
+        color: Color
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Label(title, systemImage: symbol)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(color)
+            Text(detail)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func cameraSetupTitle(
+        _ status: IndoBoardRemoteStatus
+    ) -> String {
+        switch status.cameraPhase.lowercased() {
+        case "authorizing":
+            return "Allow camera on iPhone"
+        case "denied":
+            return "Camera permission needed"
+        case "failed":
+            return "Camera needs attention"
+        case "evidence ready":
+            return "Ready for another setup"
+        default:
+            return "Set up the iPhone camera"
+        }
+    }
+
+    private func cameraSetupDetail(
+        _ status: IndoBoardRemoteStatus
+    ) -> String {
+        status.startBlocker
+            ?? "Start the camera preview, then walk into frame. The Watch will tell you how to adjust."
+    }
+
+    private func remoteFramingColor(
+        _ status: IndoBoardRemoteStatus
+    ) -> Color {
+        switch status.framingState.lowercased() {
+        case "ready":
+            return .green
+        case "adjust":
+            return .yellow
+        default:
+            return .secondary
+        }
+    }
+
+    private func remoteFramingSymbol(
+        _ status: IndoBoardRemoteStatus
+    ) -> String {
+        switch status.framingState.lowercased() {
+        case "ready":
+            return "checkmark.circle.fill"
+        case "adjust":
+            return "viewfinder.circle"
+        default:
+            return "person.crop.rectangle"
+        }
     }
 
     private var phoneLinked: Bool {
@@ -272,37 +501,54 @@ struct WatchContentView: View {
                 protocolCueCard(cue)
             }
 
-            HStack(spacing: 7) {
+            if controller.indoRemoteProductSessionActive {
                 Button {
-                    if controller.state == .running {
-                        controller.pause()
-                    } else {
-                        controller.resume()
-                    }
+                    _ = controller.sendIndoRemoteCommand(.finishSession)
                 } label: {
-                    Image(
-                        systemName: controller.state == .running
-                            ? "pause.fill"
-                            : "play.fill"
+                    Label(
+                        controller.indoRemoteCommandPending
+                            ? "Finishing…"
+                            : "Finish Session",
+                        systemImage: "stop.fill"
                     )
                     .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.bordered)
-                .accessibilityLabel(
-                    controller.state == .running
-                        ? "Pause capture"
-                        : "Resume capture"
-                )
-
-                Button {
-                    confirmStop = true
-                } label: {
-                    Image(systemName: "stop.fill")
-                        .frame(maxWidth: .infinity)
-                }
                 .buttonStyle(.borderedProminent)
                 .tint(.red)
-                .accessibilityLabel("Stop capture")
+                .disabled(controller.indoRemoteCommandPending)
+            } else {
+                HStack(spacing: 7) {
+                    Button {
+                        if controller.state == .running {
+                            controller.pause()
+                        } else {
+                            controller.resume()
+                        }
+                    } label: {
+                        Image(
+                            systemName: controller.state == .running
+                                ? "pause.fill"
+                                : "play.fill"
+                        )
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .accessibilityLabel(
+                        controller.state == .running
+                            ? "Pause capture"
+                            : "Resume capture"
+                    )
+
+                    Button {
+                        confirmStop = true
+                    } label: {
+                        Image(systemName: "stop.fill")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.red)
+                    .accessibilityLabel("Stop capture")
+                }
             }
 
             WatchMotionTrace(
@@ -420,6 +666,19 @@ struct WatchContentView: View {
             .frame(minHeight: 32)
 
             if showDetails {
+                if controller.healthAccessReady
+                    && controller.canStartCapture
+                    && !controller.indoRemoteProductSessionActive {
+                    Button {
+                        Task { await controller.startLocalSensorCheck() }
+                    } label: {
+                        Label("Watch Sensor Check", systemImage: "waveform.path.ecg")
+                            .font(.caption2)
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                }
+
                 let rejections = controller.captureRejections
                 VStack(alignment: .leading, spacing: 3) {
                     detailLine("IMU samples", "\(controller.imuSampleCount)")
