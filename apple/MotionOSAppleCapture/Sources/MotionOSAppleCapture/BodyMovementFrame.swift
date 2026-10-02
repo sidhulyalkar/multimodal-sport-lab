@@ -85,6 +85,7 @@ public struct BodyMovementFrame: Codable, Sendable, Equatable {
     public let source: String
     public let coordinateFrame: String
     public let bodyHeightM: Double?
+    public let bodyHeightEstimation: String?
     public let joints: [BodyJoint3D]
     public let pelvisReference: MovementEstimate3D?
     public let centerOfMass: MovementEstimate3D?
@@ -99,6 +100,7 @@ public struct BodyMovementFrame: Codable, Sendable, Equatable {
         source: String,
         coordinateFrame: String,
         bodyHeightM: Double?,
+        bodyHeightEstimation: String? = nil,
         joints: [BodyJoint3D],
         pelvisReference: MovementEstimate3D? = nil,
         centerOfMass: MovementEstimate3D? = nil,
@@ -112,6 +114,7 @@ public struct BodyMovementFrame: Codable, Sendable, Equatable {
         self.source = source
         self.coordinateFrame = coordinateFrame
         self.bodyHeightM = bodyHeightM
+        self.bodyHeightEstimation = bodyHeightEstimation
         self.joints = joints
         self.pelvisReference = pelvisReference
         self.centerOfMass = centerOfMass
@@ -195,6 +198,15 @@ public enum BodyMovementFrameParser {
             bodyHeight = nil
         }
 
+        let bodyHeightEstimation: String?
+        if case .string(let value) = payload["height_estimation"] {
+            bodyHeightEstimation = value
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased()
+        } else {
+            bodyHeightEstimation = nil
+        }
+
         let coordinateFrame: String
         if case .string(let value) = payload["joint_coordinate_frame"] {
             coordinateFrame = value
@@ -216,6 +228,7 @@ public enum BodyMovementFrameParser {
             source: source,
             coordinateFrame: coordinateFrame,
             bodyHeightM: bodyHeight,
+            bodyHeightEstimation: bodyHeightEstimation,
             joints: joints,
             pelvisReference: pelvis.map {
                 MovementEstimate3D(
