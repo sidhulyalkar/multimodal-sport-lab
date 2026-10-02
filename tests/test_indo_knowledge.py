@@ -1,11 +1,14 @@
 import json
 
+import pytest
+
 from motionos.indo_knowledge import (
     build_session_learning_targets,
     classify_observable_skills,
     cold_start_plan,
     generate_coaching_suggestions,
     load_indo_skill_taxonomy,
+    validate_indo_skill_taxonomy,
 )
 
 
@@ -96,3 +99,11 @@ def test_learning_targets_use_prerequisites_not_session_count(tmp_path):
     assert "controlled_side_shift" in ids
     assert "partial_squat_hold" in ids
     assert "cross_step" not in ids
+
+
+def test_taxonomy_rejects_unknown_provenance_source(tmp_path):
+    taxonomy = _taxonomy(tmp_path)
+    taxonomy["skills"][0]["source_ids"].append("missing-source")
+
+    with pytest.raises(ValueError, match="unknown source_id"):
+        validate_indo_skill_taxonomy(taxonomy)
