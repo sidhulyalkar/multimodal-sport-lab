@@ -9,6 +9,7 @@ struct DeviceHubView: View {
     @EnvironmentObject private var pod: EquipmentPodController
     @EnvironmentObject private var camera: CameraCaptureController
     @EnvironmentObject private var indoBoard: IndoBoardSessionCoordinator
+    @EnvironmentObject private var health: HealthDataCoordinator
 
     var body: some View {
         List {
@@ -53,6 +54,18 @@ struct DeviceHubView: View {
             }
 
             Section("Optional sources") {
+                NavigationLink {
+                    HealthDataDetailView()
+                } label: {
+                    DeviceRow(
+                        title: "Apple Health",
+                        detail: healthDetail,
+                        symbol: "heart.fill",
+                        status: healthBadge,
+                        tint: healthTint
+                    )
+                }
+
                 NavigationLink {
                     CameraDeviceDetailView()
                 } label: {
@@ -149,6 +162,49 @@ struct DeviceHubView: View {
             return .green
         case "VERIFIED":
             return .blue
+        default:
+            return .secondary
+        }
+    }
+
+    private var healthBadge: String {
+        switch health.state {
+        case .unavailable:
+            return "UNAVAILABLE"
+        case .notRequested:
+            return "OPTIONAL"
+        case .requesting, .syncing:
+            return "SYNCING"
+        case .ready:
+            return "CONNECTED"
+        case .failed:
+            return "CHECK"
+        }
+    }
+
+    private var healthDetail: String {
+        switch health.state {
+        case .ready:
+            return "\(health.importedObservationCount) longitudinal observations"
+        case .notRequested:
+            return "Optional body, recovery, sleep, and workout context"
+        case .unavailable:
+            return "HealthKit unavailable"
+        case .requesting, .syncing:
+            return "Refreshing longitudinal context"
+        case .failed:
+            return "Open details to retry"
+        }
+    }
+
+    private var healthTint: Color {
+        switch health.state {
+        case .ready:
+            return .pink
+        case .requesting, .syncing:
+            return .secondary
+        case .failed:
+            return .orange
         default:
             return .secondary
         }
@@ -393,6 +449,113 @@ private struct PhoneDeviceDetailView: View {
         .navigationTitle("iPhone")
         .navigationBarTitleDisplayMode(.inline)
         .task { phone.refreshHostReadiness() }
+    }
+}
+
+private struct HealthDataDetailView: View {
+    @EnvironmentObject private var health: HealthDataCoordinator
+
+    var body: some View {
+        List {
+            Section {
+                DiagnosticRow("Status", health.state.label)
+                DiagnosticRow(
+                    "Imported observations",
+                    "\(health.importedObservationCount)"
+                )
+                DiagnosticRow(
+                    "Last sync",
+                    health.lastSyncAt?.formatted(
+                        date: .abbreviated,
+                        time: .shortened
+                    ) ?? "never"
+                )
+            } footer: {
+                Text(
+                    "HealthKit does not reveal which read permissions were denied. "
+                        + "Missing values can mean no source data exists or that "
+                        + "MotionOS cannot read that type."
+                )
+            }
+
+            Section("Latest sources") {
+                healthSourceRow(.bodyMass)
+                healthSourceRow(.bodyFatPercentage)
+                healthSourceRow(.leanBodyMass)
+                healthSourceRow(.restingHeartRate)
+                healthSourceRow(.heartRateVariabilitySDNN)
+                healthSourceRow(.sleepStage)
+                healthSourceRow(.workout)
+            }
+
+            Section {
+                if health.state == .notRequested {
+                    Button {
+                        Task {
+                            await health.requestAccessAndSync()
+                        }
+                    } label: {
+                        Label(
+                            "Connect Apple Health",
+                            systemImage: "heart.fill"
+                        )
+                    }
+                } else {
+                    Button {
+                        Task {
+                            await health.refresh()
+                        }
+                    } label: {
+                        Label(
+                            "Refresh Health Data",
+                            systemImage: "arrow.clockwise"
+                        )
+                    }
+                }
+
+                if let url = health.timelineURL {
+                    ShareLink(item: url) {
+                        Label(
+                            "Export Body-State Timeline",
+                            systemImage: "square.and.arrow.up"
+                        )
+                    }
+                }
+            } footer: {
+                Text(
+                    "MotionOS reads standard HealthKit samples into a private "
+                        + "source-preserving timeline. It does not write body "
+                        + "measurements, sleep, or recovery estimates back to Health."
+                )
+            }
+
+            if let error = health.lastError {
+                Section("Latest diagnostic") {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                        .textSelection(.enabled)
+                }
+            }
+        }
+        .listStyle(.insetGrouped)
+        .navigationTitle("Apple Health")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    @ViewBuilder
+    private func healthSourceRow(
+        _ kind: BodyStateKind
+    ) -> some View {
+        let names = health.timeline.sourceNames(
+            for: kind
+        )
+        DiagnosticRow(
+            kind.displayName,
+            names.isEmpty
+                ? "no readable source"
+                : names.joined(separator: ", ")
+        )
     }
 }
 
