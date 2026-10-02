@@ -4,6 +4,7 @@ import SwiftUI
 struct FitnessPersonaView: View {
     @EnvironmentObject private var persona: FitnessPersonaCoordinator
     @EnvironmentObject private var library: ProductRunLibrary
+    @EnvironmentObject private var personaEvidence: PersonaEvidenceLibrary
 
     var body: some View {
         ScrollView {
@@ -14,6 +15,7 @@ struct FitnessPersonaView: View {
                 FitnessChallengesCard(
                     mobilityAvailable: true
                 )
+                PlayerCardLauncher()
                 evidenceMap
 
                 if !longitudinalBaselines.isEmpty {
@@ -35,7 +37,7 @@ struct FitnessPersonaView: View {
         .navigationBarTitleDisplayMode(.large)
         .refreshable {
             library.refresh()
-            persona.rebuild(from: library.runs)
+            personaEvidence.refresh()
         }
     }
 
@@ -523,13 +525,13 @@ struct FitnessPersonaView: View {
         case .cardiovascularResponse:
             return "Capture heart rate during a comparable effort."
         case .power:
-            return "A standardized jump or power protocol is not implemented yet."
+            return "Complete the standardized three-jump Power challenge."
         case .mobility:
-            return "A calibrated movement-envelope protocol is not implemented yet."
+            return "Complete the guided Mobility challenge."
         case .recovery:
-            return "Longitudinal recovery context is not connected yet."
+            return "Connect Apple Health and accumulate comparable recovery context."
         case .body:
-            return "Run a future guided body calibration before using geometry here."
+            return "Run the guided PersonalBodyModel calibration."
         }
     }
 }
