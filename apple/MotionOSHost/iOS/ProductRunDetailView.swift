@@ -6,6 +6,7 @@ struct ProductRunDetailView: View {
     let run: ProductRunRecord
 
     @EnvironmentObject private var library: ProductRunLibrary
+    @EnvironmentObject private var ghost: GhostComparisonCoordinator
 
     @State private var perceivedStability = 3
     @State private var perceivedEffort = 3
@@ -22,12 +23,18 @@ struct ProductRunDetailView: View {
                 sourceMap
                 protocolEvidence
 
+                if run.outcome == .completed,
+                   run.cameraJournalURL != nil {
+                    ghostComparison
+                }
+
                 if let summary = run.watchSummary {
                     watchSummary(summary)
                     MotionFingerprintCard(summary: summary)
                     PreviousRunComparisonCard(run: run)
                 }
 
+                GhostComparisonCard(run: run)
                 feedback
                 evidence
             }
@@ -251,6 +258,124 @@ struct ProductRunDetailView: View {
                         )
                     }
                 }
+            }
+        }
+        .cardStyle()
+    }
+
+    private var ghostComparison: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            MotionOSSectionHeader(
+                title: "Reference ghost",
+                subtitle: "Compare comparable Vision movement without automatic ranking",
+                systemImage: "person.2.wave.2",
+                accent: .cyan
+            )
+
+            if ghost.isPinnedReference(run) {
+                Label(
+                    "This session is your pinned reference",
+                    systemImage: "pin.fill"
+                )
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.cyan)
+
+                Button {
+                    ghost.clearReference(for: run)
+                } label: {
+                    Label(
+                        "Clear Reference",
+                        systemImage: "pin.slash"
+                    )
+                }
+                .buttonStyle(.bordered)
+            } else if let reference = ghost.referenceRun(
+                for: run,
+                in: library
+            ) {
+                if reference.runID != run.runID {
+                    NavigationLink {
+                        GhostComparisonView(
+                            current: run,
+                            reference: reference
+                        )
+                    } label: {
+                        Label(
+                            "Compare with Reference Ghost",
+                            systemImage: "person.2.wave.2"
+                        )
+                        .frame(
+                            maxWidth: .infinity,
+                            minHeight: 44
+                        )
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.cyan)
+
+                    HStack {
+                        Text("Reference")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text(
+                            (reference.startedAt ?? reference.sealedAt)?
+                                .formatted(
+                                    date: .abbreviated,
+                                    time: .omitted
+                                )
+                                ?? shortID(reference.runID)
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
+
+                    Button {
+                        ghost.pinReference(run)
+                    } label: {
+                        Label(
+                            "Use This Session Instead",
+                            systemImage: "pin"
+                        )
+                    }
+                    .buttonStyle(.bordered)
+                }
+            } else {
+                Text(
+                    "Pin a session you consider representative or personally "
+                        + "important. MotionOS will use it as a visual reference "
+                        + "for later sessions with the same protocol and capture mode."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+                Button {
+                    ghost.pinReference(run)
+                } label: {
+                    Label(
+                        "Use as Reference Ghost",
+                        systemImage: "pin.fill"
+                    )
+                    .frame(
+                        maxWidth: .infinity,
+                        minHeight: 44
+                    )
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.cyan)
+            }
+
+            Text(
+                "The reference is user-selected. MotionOS does not call it your "
+                    + "best session unless a future validated task metric supports "
+                    + "that interpretation."
+            )
+            .font(.caption2)
+            .foregroundStyle(.tertiary)
+
+            if let error = ghost.errorMessage {
+                Text(error)
+                    .font(.caption2)
+                    .foregroundStyle(.orange)
             }
         }
         .cardStyle()
@@ -673,6 +798,17 @@ struct ProductRunDetailView: View {
                     + error.localizedDescription
             )
         }
+    }
+
+    private func shortID(
+        _ value: String
+    ) -> String {
+        if value.count <= 16 {
+            return value
+        }
+        return String(value.prefix(8))
+            + "…"
+            + String(value.suffix(6))
     }
 
     private func humanize(
