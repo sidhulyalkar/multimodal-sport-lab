@@ -104,7 +104,7 @@ struct IndoBoardSessionView: View {
 
             sessionControl
 
-        case .starting:
+        case .starting, .countdown:
             sessionControl
 
         case .running, .finishing:
@@ -403,6 +403,29 @@ struct IndoBoardSessionView: View {
                 progressRow(
                     "Starting Watch first, then camera and protocol evidence"
                 )
+
+            case .countdown:
+                VStack(spacing: 8) {
+                    Text("\(session.countdownRemaining ?? 1)")
+                        .font(
+                            .system(
+                                size: 52,
+                                weight: .bold,
+                                design: .rounded
+                            )
+                        )
+                        .monospacedDigit()
+                    Text("Settle into your natural stance")
+                        .font(.headline)
+                    Text(
+                        "Watch and camera pre-roll are already capturing. "
+                            + "The 2-minute protocol clock starts after the countdown."
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity)
 
             case .running:
                 runningControl
@@ -1296,6 +1319,8 @@ struct IndoBoardSessionView: View {
             "READY"
         case .starting:
             "STARTING"
+        case .countdown:
+            "COUNTDOWN"
         case .running:
             "RECORDING"
         case .finishing:
@@ -1319,7 +1344,7 @@ struct IndoBoardSessionView: View {
             "exclamationmark.triangle.fill"
         case .watchStopRequired:
             "applewatch"
-        case .preparing, .starting, .finishing:
+        case .preparing, .starting, .countdown, .finishing:
             "clock.fill"
         default:
             "figure.surfing"
@@ -1332,7 +1357,8 @@ struct IndoBoardSessionView: View {
             .red
         case .ready, .sealed:
             .green
-        case .preparing, .starting, .finishing, .watchStopRequired:
+        case .preparing, .starting, .countdown, .finishing,
+                .watchStopRequired:
             .yellow
         case .failed:
             .red
@@ -1351,6 +1377,8 @@ struct IndoBoardSessionView: View {
             "Ready to record"
         case .starting:
             "Starting sources"
+        case .countdown:
+            "Get ready"
         case .running:
             "Session live"
         case .finishing:
@@ -1372,6 +1400,8 @@ struct IndoBoardSessionView: View {
             "Watch first, camera second, protocol evidence third"
         case .starting:
             "Waiting for the Watch workout before video capture begins"
+        case .countdown:
+            "Pre-roll is recording; the protocol starts when the countdown ends"
         case .running:
             "Follow the protocol and collect three journal-backed sync cues"
         case .finishing:
