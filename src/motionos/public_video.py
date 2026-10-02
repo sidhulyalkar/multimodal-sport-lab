@@ -7,7 +7,13 @@ from urllib.parse import urlparse
 
 PUBLIC_VIDEO_CATALOG_SCHEMA_VERSION = "motionos.public-video-catalog.v1"
 
-_ALLOWED_PLATFORMS = {"youtube", "instagram", "tiktok", "other"}
+_ALLOWED_PLATFORMS = {
+    "youtube",
+    "instagram",
+    "tiktok",
+    "reddit",
+    "other",
+}
 _ALLOWED_RIGHTS = {
     "creative_commons",
     "explicit_permission",
