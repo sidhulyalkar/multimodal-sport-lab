@@ -55,6 +55,11 @@ from .indo_knowledge import (
     load_indo_skill_taxonomy,
 )
 from .indo_pose_metrics import analyze_indo_camera_session
+from .indo_session_report import (
+    build_indo_session_report,
+    load_json_object,
+    write_indo_session_report,
+)
 from .indo_public_corpus import (
     build_indo_video_knowledge_base,
     discover_indo_youtube,
@@ -500,6 +505,17 @@ def _parser() -> argparse.ArgumentParser:
         help="derive deck/roller balance state and recovery metrics",
     )
     indo_board_state.add_argument("observations")
+
+    indo_report = sub.add_parser(
+        "indo-session-report",
+        help="merge body/board evidence into a conservative INDO BOARD coaching report",
+    )
+    indo_report.add_argument("session_id")
+    indo_report.add_argument("taxonomy")
+    indo_report.add_argument("output")
+    indo_report.add_argument("--body-metrics")
+    indo_report.add_argument("--board-observations")
+    indo_report.add_argument("--profile")
 
     indo_next = sub.add_parser(
         "indo-next-skills",
@@ -1114,6 +1130,46 @@ def main(argv: list[str] | None = None) -> int:
         payload = load_board_observations(args.observations)
         result = analyze_board_observations(payload)
         print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+
+    if args.command == "indo-session-report":
+        body = (
+            load_json_object(args.body_metrics)
+            if args.body_metrics
+            else None
+        )
+        board = (
+            load_json_object(args.board_observations)
+            if args.board_observations
+            else None
+        )
+        profile = (
+            load_json_object(args.profile)
+            if args.profile
+            else None
+        )
+        report = build_indo_session_report(
+            session_id=args.session_id,
+            taxonomy_path=args.taxonomy,
+            body_metrics=body,
+            board_observations=board,
+            profile=profile,
+        )
+        write_indo_session_report(args.output, report)
+        print(
+            json.dumps(
+                {
+                    "schema_version": report["schema_version"],
+                    "session_id": report["session_id"],
+                    "primary_rule": report[
+                        "primary_coaching"
+                    ]["rule_id"],
+                    "output": args.output,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
         return 0
 
     if args.command == "indo-next-skills":
