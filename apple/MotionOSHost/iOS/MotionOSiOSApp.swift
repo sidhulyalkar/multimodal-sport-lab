@@ -71,6 +71,7 @@ struct MotionOSiOSApp: App {
 
     private func makeIndoRemoteStatus() -> IndoBoardRemoteStatus {
         let framing = cameraController.framingAssessment
+        let stance = cameraController.stanceAssessment
         let battery = coordinator.iPhoneBatteryLevel.map {
             (Double(Int(($0 * 100).rounded())) / 100.0)
         }
@@ -85,11 +86,16 @@ struct MotionOSiOSApp: App {
             framingScore: framing.score,
             framingTitle: framing.title,
             framingInstruction: framing.instruction,
+            stanceState: stance.state.rawValue,
+            stanceProgressPercent:
+                Int((stance.progress * 100).rounded()),
+            stanceTitle: stance.title,
             sessionPhase: indoBoardSession.phase.rawValue,
             sessionInstruction:
                 indoBoardSession.phase == .running
                     ? indoBoardSession.currentInstruction
                     : nil,
+            countdownRemaining: indoBoardSession.countdownRemaining,
             startReady: indoRemoteStartBlocker() == nil,
             startBlocker: indoRemoteStartBlocker(),
             phoneBatteryFraction: battery,
@@ -131,6 +137,10 @@ struct MotionOSiOSApp: App {
             return cameraController.framingAssessment.instruction
         }
 
+        if cameraController.stanceAssessment.state != .stable {
+            return cameraController.stanceAssessment.instruction
+        }
+
         if let battery = coordinator.iPhoneBatteryLevel,
            battery < 0.20 {
             return "Charge the iPhone above 20%."
@@ -144,6 +154,8 @@ struct MotionOSiOSApp: App {
         switch indoBoardSession.phase {
         case .starting:
             return "The session is starting."
+        case .countdown:
+            return "Countdown in progress."
         case .running:
             return "The session is already recording."
         case .finishing, .watchStopRequired:
@@ -233,6 +245,7 @@ struct MotionOSiOSApp: App {
             )
             let accepted =
                 indoBoardSession.phase == .running
+                    || indoBoardSession.phase == .countdown
                     || indoBoardSession.phase == .starting
             _ = coordinator.acknowledgeIndoRemoteCommand(
                 command,
@@ -244,7 +257,9 @@ struct MotionOSiOSApp: App {
             publishIndoRemoteStatus(force: true)
 
         case .finishSession:
-            guard indoBoardSession.phase == .running else {
+            guard indoBoardSession.phase == .running
+                    || indoBoardSession.phase == .countdown
+            else {
                 _ = coordinator.acknowledgeIndoRemoteCommand(
                     command,
                     accepted: false,
@@ -274,6 +289,7 @@ struct MotionOSiOSApp: App {
 
         case .resetSession:
             guard indoBoardSession.phase != .running,
+                  indoBoardSession.phase != .countdown,
                   indoBoardSession.phase != .starting,
                   indoBoardSession.phase != .finishing,
                   indoBoardSession.phase != .watchStopRequired
