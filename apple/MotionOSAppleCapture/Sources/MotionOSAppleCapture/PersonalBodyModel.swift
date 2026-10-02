@@ -1,6 +1,6 @@
 import Foundation
 
-public enum BodyParameterKind: String, Codable, CaseIterable, Sendable {
+public enum BodyParameterKind: String, Codable, CaseIterable, Sendable, Equatable, Hashable {
     case standingHeight = "standing_height"
     case shoulderWidth = "shoulder_width"
     case hipWidth = "hip_width"
@@ -15,7 +15,7 @@ public enum BodyParameterKind: String, Codable, CaseIterable, Sendable {
     case rightTibiaLength = "right_tibia_length"
 }
 
-public enum BodyParameterProvenance: String, Codable, Sendable {
+public enum BodyParameterProvenance: String, Codable, Sendable, Equatable, Hashable {
     case visionCalibration = "vision_calibration"
     case userMeasurement = "user_measurement"
     case importedMeasurement = "imported_measurement"
