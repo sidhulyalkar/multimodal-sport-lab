@@ -227,27 +227,67 @@ public struct BodyStateTimeline: Codable, Sendable, Equatable {
         from start: Date,
         through end: Date
     ) -> TimeInterval {
-        values(.sleepStage, from: start, through: end)
-            .filter { observation in
-                guard let stage = observation.categoryValue else {
-                    return false
-                }
-                return [
+        guard end > start else { return 0 }
+
+        // Sleep can be written by multiple apps/devices. Summing samples
+        // directly can double-count overlapping stages from different sources.
+        // Use the union of all source-reported asleep intervals instead.
+        let intervals = values(
+            .sleepStage,
+            from: start,
+            through: end
+        )
+        .compactMap { observation -> (Date, Date)? in
+            guard let stage = observation.categoryValue,
+                  [
                     "asleep",
                     "asleepCore",
                     "asleepDeep",
                     "asleepREM",
                     "asleepUnspecified",
-                ].contains(stage)
+                  ].contains(stage)
+            else {
+                return nil
             }
-            .reduce(0) { partial, observation in
-                let clippedStart = max(start, observation.startDate)
-                let clippedEnd = min(end, observation.endDate)
-                guard clippedEnd > clippedStart else {
-                    return partial
-                }
-                return partial + clippedEnd.timeIntervalSince(clippedStart)
+
+            let clippedStart = max(start, observation.startDate)
+            let clippedEnd = min(end, observation.endDate)
+            guard clippedEnd > clippedStart else {
+                return nil
             }
+            return (clippedStart, clippedEnd)
+        }
+        .sorted { lhs, rhs in
+            lhs.0 < rhs.0
+        }
+
+        guard let first = intervals.first else {
+            return 0
+        }
+
+        var total: TimeInterval = 0
+        var currentStart = first.0
+        var currentEnd = first.1
+
+        for interval in intervals.dropFirst() {
+            if interval.0 <= currentEnd {
+                currentEnd = max(
+                    currentEnd,
+                    interval.1
+                )
+            } else {
+                total += currentEnd.timeIntervalSince(
+                    currentStart
+                )
+                currentStart = interval.0
+                currentEnd = interval.1
+            }
+        }
+
+        total += currentEnd.timeIntervalSince(
+            currentStart
+        )
+        return total
     }
 }
 
