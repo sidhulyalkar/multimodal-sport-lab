@@ -31,7 +31,33 @@ public struct ProductSessionManifest: Codable, Equatable, Sendable {
     public let operatorEvidenceSealed: Bool
     public let cameraEvidenceSealed: Bool
     public let coachSummary: CoachSummary?
+    public let coachExperiment: CoachExperiment?
     public let claimBoundary: String
+
+    public struct CoachExperiment: Codable, Equatable, Sendable {
+        public let sourceRunID: String
+        public let headline: String
+        public let tip: String
+        public let drill: String
+        public let sourceConfidence: Double
+
+        public init(
+            sourceRunID: String,
+            headline: String,
+            tip: String,
+            drill: String,
+            sourceConfidence: Double
+        ) {
+            self.sourceRunID = sourceRunID
+            self.headline = headline
+            self.tip = tip
+            self.drill = drill
+            self.sourceConfidence = min(
+                1,
+                max(0, sourceConfidence)
+            )
+        }
+    }
 
     public struct CoachSummary: Codable, Equatable, Sendable {
         public let headline: String
@@ -104,7 +130,8 @@ public struct ProductSessionManifest: Codable, Equatable, Sendable {
         externalCameraSHA256: String?,
         operatorEvidenceSealed: Bool,
         cameraEvidenceSealed: Bool,
-        coachSummary: CoachSummary? = nil
+        coachSummary: CoachSummary? = nil,
+        coachExperiment: CoachExperiment? = nil
     ) {
         self.schemaVersion = Self.schemaVersion
         self.runID = runID
@@ -129,6 +156,7 @@ public struct ProductSessionManifest: Codable, Equatable, Sendable {
         self.operatorEvidenceSealed = operatorEvidenceSealed
         self.cameraEvidenceSealed = cameraEvidenceSealed
         self.coachSummary = coachSummary
+        self.coachExperiment = coachExperiment
         self.claimBoundary = (
             "This manifest links product workflow artifacts and operator-confirmed "
                 + "capture intent. It does not itself prove cross-device clock "
