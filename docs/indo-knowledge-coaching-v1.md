@@ -225,6 +225,27 @@ MotionOS compares the next five reps with the previous five.
 
 This makes coaching falsifiable. The drill either improves the target behavior or it does not.
 
+
+## Feedback delivery policy
+
+MotionOS should not chatter continuously while the rider is fighting for balance.
+
+Use three feedback times:
+
+1. **during setup:** continuous simple framing guidance is acceptable;
+2. **during a drill:** mostly haptics / block transitions, with at most one short cue when confidence is high;
+3. **between reps or after the block:** explain what happened and offer the next experiment.
+
+The literature on augmented-feedback frequency is mixed rather than establishing one universally optimal cadence. That is a reason to make feedback timing measurable and rider-configurable instead of hard-coding "more feedback is better."
+
+Research references:
+
+- https://pubmed.ncbi.nlm.nih.gov/34976475/
+- https://www.sciencedirect.com/science/article/pii/S1469029222000334
+- https://www.sciencedirect.com/science/article/abs/pii/S1469029222001455
+
+For the beta, log every delivered cue with its timestamp, target metric, and subsequent response. We can then learn the rider-specific combination of cue type and timing that actually helps.
+
 ## Personalization
 
 Do not retrain a large model per rider.
