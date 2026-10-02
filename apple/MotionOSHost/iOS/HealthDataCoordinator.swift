@@ -42,6 +42,8 @@ final class HealthDataCoordinator: ObservableObject {
     private let anchorStore = HealthKitAnchorStore()
     private var observerQueries: [HKObserverQuery] = []
     private var requestedAccessThisInstall = false
+    private let accessRequestedKey =
+        "motionos.healthkit.access-requested.v1"
 
     init(
         healthStore: HKHealthStore = HKHealthStore()
@@ -58,8 +60,17 @@ final class HealthDataCoordinator: ObservableObject {
         }
 
         if HKHealthStore.isHealthDataAvailable() {
-            state = .notRequested
+            let previouslyRequested = UserDefaults.standard.bool(
+                forKey: accessRequestedKey
+            )
+            state = previouslyRequested ? .ready : .notRequested
             installObserverQueries()
+
+            if previouslyRequested {
+                Task { @MainActor [weak self] in
+                    await self?.refresh()
+                }
+            }
         } else {
             state = .unavailable
         }
@@ -91,6 +102,10 @@ final class HealthDataCoordinator: ObservableObject {
                 read: Set(Self.descriptors.map(\.type))
             )
             requestedAccessThisInstall = true
+            UserDefaults.standard.set(
+                true,
+                forKey: accessRequestedKey
+            )
             await enableBackgroundDelivery()
             await syncAll()
         } catch {
@@ -136,13 +151,16 @@ final class HealthDataCoordinator: ObservableObject {
                 if let error {
                     Task { @MainActor in
                         self.lastError = error.localizedDescription
-                        if case .ready = self.state {
-                            // Keep existing data usable. An observer delivery
-                            // error should not erase the longitudinal timeline.
-                        } else {
+                        switch self.state {
+                        case .requesting, .syncing:
                             self.state = .failed(
                                 error.localizedDescription
                             )
+                        default:
+                            // Keep existing data and the connect affordance
+                            // usable. HealthKit may invoke observers before the
+                            // user has granted any read access.
+                            break
                         }
                         completion()
                     }
@@ -228,24 +246,10 @@ final class HealthDataCoordinator: ObservableObject {
                 anchor: anchor
             )
 
-            let ingestedAt = Date()
-            let observations = result.samples.compactMap {
-                Self.observation(
-                    from: $0,
-                    descriptor: descriptor,
-                    ingestedAt: ingestedAt
-                )
-            }
-            let deletedIDs = Set(
-                result.deleted.map {
-                    $0.uuid.uuidString
-                }
-            )
-
             timeline.apply(
-                upserts: observations,
-                deletedIDs: deletedIDs,
-                at: ingestedAt
+                upserts: result.observations,
+                deletedIDs: result.deletedIDs,
+                at: result.ingestedAt
             )
 
             if let newAnchor = result.newAnchor {
@@ -256,7 +260,7 @@ final class HealthDataCoordinator: ObservableObject {
             }
 
             importedObservationCount = timeline.observations.count
-            lastSyncAt = ingestedAt
+            lastSyncAt = result.ingestedAt
             timelineURL = try persistTimeline()
 
             if markGlobalState {
@@ -282,9 +286,10 @@ final class HealthDataCoordinator: ObservableObject {
         descriptor: HealthKitSampleDescriptor,
         anchor: HKQueryAnchor?
     ) async throws -> (
-        samples: [HKSample],
-        deleted: [HKDeletedObject],
-        newAnchor: HKQueryAnchor?
+        observations: [BodyStateObservation],
+        deletedIDs: Set<String>,
+        newAnchor: HKQueryAnchor?,
+        ingestedAt: Date
     ) {
         try await withCheckedThrowingContinuation { continuation in
             let query = HKAnchoredObjectQuery(
@@ -300,11 +305,29 @@ final class HealthDataCoordinator: ObservableObject {
                     return
                 }
 
+                // Convert HealthKit objects on HealthKit's callback queue.
+                // Only compact Sendable MotionOS observations cross back to
+                // the MainActor, avoiding a large first-sync transform there.
+                let ingestedAt = Date()
+                let observations = (samples ?? []).compactMap {
+                    Self.observation(
+                        from: $0,
+                        descriptor: descriptor,
+                        ingestedAt: ingestedAt
+                    )
+                }
+                let deletedIDs = Set(
+                    (deleted ?? []).map {
+                        $0.uuid.uuidString
+                    }
+                )
+
                 continuation.resume(
                     returning: (
-                        samples ?? [],
-                        deleted ?? [],
-                        newAnchor
+                        observations,
+                        deletedIDs,
+                        newAnchor,
+                        ingestedAt
                     )
                 )
             }
@@ -628,7 +651,8 @@ private enum HealthKitCanonicalUnit {
         case .kilogram:
             return "kg"
         case .percent:
-            return "%"
+            // HealthKit percent values are fractions in [0, 1].
+            return "fraction"
         case .count:
             return "count"
         case .meter:
