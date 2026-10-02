@@ -1,6 +1,6 @@
 import Foundation
 
-public enum FitnessPersonaDimension: String, Codable, CaseIterable, Sendable {
+public enum FitnessPersonaDimension: String, Codable, CaseIterable, Sendable, Equatable, Hashable {
     case movement
     case cardiovascularResponse = "cardiovascular_response"
     case power
@@ -26,14 +26,14 @@ public enum FitnessPersonaDimension: String, Codable, CaseIterable, Sendable {
     }
 }
 
-public enum PersonaEvidenceProvenance: String, Codable, Sendable, Hashable {
+public enum PersonaEvidenceProvenance: String, Codable, Sendable, Equatable, Hashable {
     case measured
     case derived
     case selfReported = "self_reported"
     case modelEstimated = "model_estimated"
 }
 
-public enum PersonaEvidenceSource: String, Codable, Sendable, Hashable {
+public enum PersonaEvidenceSource: String, Codable, Sendable, Equatable, Hashable {
     case appleWatch = "apple_watch"
     case iPhoneVision = "iphone_vision"
     case iPhoneCamera = "iphone_camera"
@@ -42,7 +42,7 @@ public enum PersonaEvidenceSource: String, Codable, Sendable, Hashable {
     case user
 }
 
-public enum PersonaEvidenceCoverage: String, Codable, Sendable {
+public enum PersonaEvidenceCoverage: String, Codable, Sendable, Equatable, Hashable {
     case none
     case singleSession = "single_session"
     case repeated
