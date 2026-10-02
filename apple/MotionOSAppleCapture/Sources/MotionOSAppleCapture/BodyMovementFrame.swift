@@ -38,6 +38,52 @@ public struct BodyJoint3D: Codable, Sendable, Equatable, Identifiable {
     }
 }
 
+public struct NormalizedImageBounds: Codable, Sendable, Equatable {
+    public let minX: Double
+    public let minY: Double
+    public let maxX: Double
+    public let maxY: Double
+
+    public init(
+        minX: Double,
+        minY: Double,
+        maxX: Double,
+        maxY: Double
+    ) {
+        self.minX = minX
+        self.minY = minY
+        self.maxX = maxX
+        self.maxY = maxY
+    }
+
+    public var width: Double { max(0, maxX - minX) }
+    public var height: Double { max(0, maxY - minY) }
+    public var centerX: Double { (minX + maxX) / 2 }
+    public var centerY: Double { (minY + maxY) / 2 }
+}
+
+public struct BodyImageFraming: Codable, Sendable, Equatable {
+    public let bounds: NormalizedImageBounds
+    public let visibleJointCount: Int
+    public let meanConfidence: Double
+    public let visibleJointIDs: [String]
+    public let coordinateFrame: String
+
+    public init(
+        bounds: NormalizedImageBounds,
+        visibleJointCount: Int,
+        meanConfidence: Double,
+        visibleJointIDs: [String],
+        coordinateFrame: String
+    ) {
+        self.bounds = bounds
+        self.visibleJointCount = visibleJointCount
+        self.meanConfidence = min(1, max(0, meanConfidence))
+        self.visibleJointIDs = visibleJointIDs.sorted()
+        self.coordinateFrame = coordinateFrame
+    }
+}
+
 public enum MuscleRegion: String, Codable, CaseIterable, Sendable {
     case core
     case leftShoulder = "left_shoulder"
@@ -90,6 +136,7 @@ public struct BodyMovementFrame: Codable, Sendable, Equatable {
     public let centerOfMass: MovementEstimate3D?
     public let supportPoints: [MotionVector3]
     public let muscleActivations: [MuscleActivationEstimate]
+    public let imageFraming: BodyImageFraming?
 
     public init(
         schemaVersion: String = BodyMovementFrame.schemaVersion,
@@ -103,7 +150,8 @@ public struct BodyMovementFrame: Codable, Sendable, Equatable {
         pelvisReference: MovementEstimate3D? = nil,
         centerOfMass: MovementEstimate3D? = nil,
         supportPoints: [MotionVector3] = [],
-        muscleActivations: [MuscleActivationEstimate] = []
+        muscleActivations: [MuscleActivationEstimate] = [],
+        imageFraming: BodyImageFraming? = nil
     ) {
         self.schemaVersion = schemaVersion
         self.sessionID = sessionID
@@ -117,6 +165,7 @@ public struct BodyMovementFrame: Codable, Sendable, Equatable {
         self.centerOfMass = centerOfMass
         self.supportPoints = supportPoints
         self.muscleActivations = muscleActivations
+        self.imageFraming = imageFraming
     }
 
     public var jointMap: [String: BodyJoint3D] {
@@ -226,7 +275,8 @@ public enum BodyMovementFrameParser {
             },
             centerOfMass: parseCenterOfMass(payload),
             supportPoints: support,
-            muscleActivations: parseMuscleActivations(payload)
+            muscleActivations: parseMuscleActivations(payload),
+            imageFraming: parseImageFraming(payload)
         )
     }
 
@@ -289,6 +339,74 @@ public enum BodyMovementFrameParser {
         return aliases.compactMap { names in
             findJoint(aliases: names, in: joints)?.position
         }
+    }
+
+    private static func parseImageFraming(
+        _ payload: [String: JSONValue]
+    ) -> BodyImageFraming? {
+        guard case .array(let values) =
+                payload["body_bbox_image_normalized"],
+              values.count == 4
+        else {
+            return nil
+        }
+
+        var numbers: [Double] = []
+        numbers.reserveCapacity(4)
+        for value in values {
+            guard case .number(let number) = value,
+                  number.isFinite
+            else {
+                return nil
+            }
+            numbers.append(number)
+        }
+
+        let count: Int
+        if case .number(let value) =
+            payload["body_pose_2d_joint_count"] {
+            count = max(0, Int(value.rounded()))
+        } else {
+            count = 0
+        }
+
+        let confidence: Double
+        if case .number(let value) =
+            payload["body_pose_2d_mean_confidence"],
+           value.isFinite {
+            confidence = value
+        } else {
+            confidence = 0
+        }
+
+        let visibleJointIDs: [String]
+        if case .object(let joints) = payload["body_pose_2d_joints"] {
+            visibleJointIDs = joints.keys.sorted()
+        } else {
+            visibleJointIDs = []
+        }
+
+        let coordinateFrame: String
+        if case .string(let value) =
+            payload["body_pose_2d_coordinate_frame"] {
+            coordinateFrame = value
+        } else {
+            coordinateFrame =
+                "vision_normalized_image_bottom_left_origin"
+        }
+
+        return BodyImageFraming(
+            bounds: NormalizedImageBounds(
+                minX: numbers[0],
+                minY: numbers[1],
+                maxX: numbers[2],
+                maxY: numbers[3]
+            ),
+            visibleJointCount: count,
+            meanConfidence: confidence,
+            visibleJointIDs: visibleJointIDs,
+            coordinateFrame: coordinateFrame
+        )
     }
 
     private static func parseCenterOfMass(
