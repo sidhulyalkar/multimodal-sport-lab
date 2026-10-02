@@ -445,6 +445,7 @@ private struct BodyMovementScene3D: UIViewRepresentable {
         )
     }
 
+    @MainActor
     final class Coordinator {
         private let scene = SCNScene()
         private let surfaceRoot = SCNNode()
@@ -582,9 +583,10 @@ private struct BodyMovementScene3D: UIViewRepresentable {
             keyLight.shadowRadius = 5
             keyLight.shadowColor = UIColor.black.withAlphaComponent(0.18)
             key.light = keyLight
+            let quarterTurn = Float.pi / 4
             key.eulerAngles = SCNVector3(
-                -.pi / 4,
-                .pi / 4,
+                -quarterTurn,
+                quarterTurn,
                 0
             )
             scene.rootNode.addChildNode(key)
@@ -612,7 +614,7 @@ private struct BodyMovementScene3D: UIViewRepresentable {
 
             groundNode.geometry = plane
             groundNode.name = "ground"
-            groundNode.eulerAngles.x = -.pi / 2
+            groundNode.eulerAngles.x = -Float.pi / 2
             groundNode.position.y = -0.88
             scene.rootNode.addChildNode(groundNode)
         }
