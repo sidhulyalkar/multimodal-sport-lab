@@ -215,12 +215,14 @@ struct WatchContentView: View {
 
         if phase == "starting" || phase == "preparing" {
             remoteInstruction(
-                title: "Starting session",
+                title: "Arming sensors",
                 detail:
-                    "The iPhone is arming video while the Watch opens the workout and motion journal.",
+                    "Stay on the board. MotionOS is opening the Watch journal and iPhone video together.",
                 symbol: "hourglass",
                 color: .yellow
             )
+        } else if phase == "countdown" {
+            countdownPanel(status.countdownRemaining ?? 1)
         } else if phase == "finishing" || phase == "watchstoprequired" {
             remoteInstruction(
                 title: "Saving session",
@@ -270,26 +272,19 @@ struct WatchContentView: View {
             .buttonStyle(.borderedProminent)
             .tint(.cyan)
             .disabled(controller.indoRemoteCommandPending)
-        } else {
+        } else if !status.framingReady {
             HStack(spacing: 8) {
-                ZStack {
-                    Circle()
-                        .fill(remoteFramingColor(status).opacity(0.16))
-                        .frame(width: 34, height: 34)
-                    Image(systemName: remoteFramingSymbol(status))
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(remoteFramingColor(status))
-                }
+                Image(systemName: remoteFramingSymbol(status))
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(remoteFramingColor(status))
 
-                VStack(alignment: .leading, spacing: 1) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text(status.framingTitle)
                         .font(.caption.weight(.semibold))
-                        .fixedSize(horizontal: false, vertical: true)
                     Text("\(status.framingScore)% framing")
                         .font(.system(size: 9, design: .monospaced))
                         .foregroundStyle(.secondary)
                 }
-
                 Spacer(minLength: 0)
             }
 
@@ -297,29 +292,101 @@ struct WatchContentView: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-
-            if status.startReady {
-                Button {
-                    _ = controller.sendIndoRemoteCommand(.startSession)
-                } label: {
-                    Label(
-                        controller.indoRemoteCommandPending
-                            ? "Starting…"
-                            : "Start Indo Board",
-                        systemImage: "record.circle.fill"
-                    )
-                    .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(.green)
-                .disabled(controller.indoRemoteCommandPending)
-            } else if let blocker = status.startBlocker {
-                Label(blocker, systemImage: "arrow.turn.down.right")
-                    .font(.system(size: 9))
-                    .foregroundStyle(.yellow)
+        } else if status.stanceState.lowercased() != "stable" {
+            HStack(spacing: 7) {
+                Image(systemName: "figure.stand")
+                    .foregroundStyle(.cyan)
+                Text(status.stanceTitle)
+                    .font(.caption.weight(.semibold))
                     .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+                Text("\(status.stanceProgressPercent)%")
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundStyle(.secondary)
             }
+
+            ProgressView(
+                value: Double(status.stanceProgressPercent),
+                total: 100
+            )
+            .tint(.cyan)
+
+            Text(
+                status.startBlocker
+                    ?? "Hold a comfortable neutral stance for about two seconds."
+            )
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+        } else if status.startReady {
+            VStack(spacing: 5) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.title2)
+                    .foregroundStyle(.green)
+                Text("Ready to start?")
+                    .font(.headline)
+                Text("Camera locked · stance stable")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity)
+
+            Button {
+                _ = controller.sendIndoRemoteCommand(.startSession)
+            } label: {
+                Label(
+                    controller.indoRemoteCommandPending
+                        ? "Arming…"
+                        : "Start",
+                    systemImage: "play.fill"
+                )
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.green)
+            .disabled(controller.indoRemoteCommandPending)
+
+            Text(
+                "MotionOS captures a short pre-roll, then gives a 5-second haptic countdown before the protocol clock starts."
+            )
+            .font(.system(size: 9))
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+        } else if let blocker = status.startBlocker {
+            remoteInstruction(
+                title: "One thing left",
+                detail: blocker,
+                symbol: "exclamationmark.circle",
+                color: .yellow
+            )
         }
+    }
+
+    private func countdownPanel(
+        _ remaining: Int
+    ) -> some View {
+        VStack(spacing: 3) {
+            Text("GET READY")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(.secondary)
+
+            Text("\(max(1, remaining))")
+                .font(
+                    .system(
+                        size: 48,
+                        weight: .bold,
+                        design: .rounded
+                    )
+                )
+                .monospacedDigit()
+
+            Text("Settle into your natural stance")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 4)
     }
 
     private func remoteInstruction(
@@ -469,7 +536,11 @@ struct WatchContentView: View {
 
     private var captureDashboard: some View {
         VStack(spacing: 9) {
-            TimelineView(.periodic(from: .now, by: 1)) { context in
+            if let status = controller.indoRemoteStatus,
+               status.sessionPhase.lowercased() == "countdown" {
+                countdownPanel(status.countdownRemaining ?? 1)
+            } else {
+                TimelineView(.periodic(from: .now, by: 1)) { context in
                 VStack(spacing: 2) {
                     Text(
                         controller.startedAt.map {
@@ -495,6 +566,8 @@ struct WatchContentView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
+            }
+
             }
 
             if let cue = controller.guidedCueTitle {
