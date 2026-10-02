@@ -40,7 +40,7 @@ def _optional_text(record: dict[str, object], key: str) -> str | None:
     if value is None:
         return None
     if not isinstance(value, str):
-        raise ValueError(f"{key} must be a string when provided")
+        raise TypeError(f"{key} must be a string when provided")
     value = value.strip()
     return value or None
 
@@ -50,7 +50,7 @@ def _segment(record: dict[str, object]) -> dict[str, float] | None:
     if raw is None:
         return None
     if not isinstance(raw, dict):
-        raise ValueError("segment must be an object")
+        raise TypeError("segment must be an object")
     start = raw.get("start_seconds", 0.0)
     end = raw.get("end_seconds")
     if not isinstance(start, (int, float)) or start < 0:
@@ -76,7 +76,7 @@ def build_public_video_catalog(
 
     spec = json.loads(Path(spec_path).read_text(encoding="utf-8"))
     if not isinstance(spec, dict):
-        raise ValueError("public-video spec must be a JSON object")
+        raise TypeError("public-video spec must be a JSON object")
 
     raw_records = spec.get("records")
     if not isinstance(raw_records, list) or not raw_records:
@@ -87,7 +87,7 @@ def build_public_video_catalog(
 
     for index, raw in enumerate(raw_records):
         if not isinstance(raw, dict):
-            raise ValueError(f"records[{index}] must be an object")
+            raise TypeError(f"records[{index}] must be an object")
 
         platform = raw.get("platform")
         if platform not in _ALLOWED_PLATFORMS:
