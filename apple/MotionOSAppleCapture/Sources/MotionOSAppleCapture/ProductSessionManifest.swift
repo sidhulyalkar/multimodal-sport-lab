@@ -41,6 +41,7 @@ public struct ProductSessionManifest: Codable, Equatable, Sendable {
         public let confidence: Double
         public let evidenceLabel: String
         public let metrics: [String: String]
+        public let numericMetrics: [String: Double]?
 
         public init(
             headline: String,
@@ -49,7 +50,8 @@ public struct ProductSessionManifest: Codable, Equatable, Sendable {
             drill: String,
             confidence: Double,
             evidenceLabel: String,
-            metrics: [String: String]
+            metrics: [String: String],
+            numericMetrics: [String: Double]? = nil
         ) {
             self.headline = headline
             self.observation = observation
@@ -58,6 +60,7 @@ public struct ProductSessionManifest: Codable, Equatable, Sendable {
             self.confidence = min(1, max(0, confidence))
             self.evidenceLabel = evidenceLabel
             self.metrics = metrics
+            self.numericMetrics = numericMetrics
         }
     }
 
