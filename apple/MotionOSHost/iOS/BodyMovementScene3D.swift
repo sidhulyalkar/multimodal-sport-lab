@@ -85,7 +85,6 @@ struct BodyMovementSceneCard: View {
         }
     }
 
-    @ViewBuilder
     private func sceneBadge(
         at date: Date
     ) -> some View {
@@ -412,6 +411,7 @@ struct BodyMovementSceneCard: View {
     }()
 }
 
+@MainActor
 private struct BodyMovementScene3D: UIViewRepresentable {
     let frame: BodyMovementFrame
     let viewpoint: BodySceneViewpoint
