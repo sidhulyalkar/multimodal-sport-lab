@@ -172,7 +172,7 @@ public final class IndoBoardCoachEngine {
             ? nil
             : flexions.reduce(0, +) / Double(flexions.count)
 
-        let trunkOffset = {
+        let trunkOffset: Double? = {
             guard let pelvis,
                   let shoulders
             else {
@@ -182,7 +182,7 @@ public final class IndoBoardCoachEngine {
                 / framing.bounds.width
         }()
 
-        let stanceWidth = {
+        let stanceWidth: Double? = {
             guard let leftAnkle,
                   let rightAnkle
             else {
@@ -192,7 +192,7 @@ public final class IndoBoardCoachEngine {
                 / framing.bounds.width
         }()
 
-        let armExcursion = {
+        let armExcursion: Double? = {
             guard let shoulders else {
                 return nil
             }
