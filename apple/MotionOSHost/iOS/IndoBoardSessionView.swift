@@ -1084,6 +1084,48 @@ struct IndoBoardSessionView: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
+            if let experiment = coach.experimentResult {
+                HStack(alignment: .top, spacing: 9) {
+                    Image(
+                        systemName: experimentSymbol(
+                            experiment.outcome
+                        )
+                    )
+                    .foregroundStyle(
+                        experimentColor(
+                            experiment.outcome
+                        )
+                    )
+                    .frame(width: 22)
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(
+                            experimentTitle(
+                                experiment.outcome
+                            )
+                        )
+                        .font(.caption.weight(.bold))
+
+                        Text(experiment.summary)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(
+                                horizontal: false,
+                                vertical: true
+                            )
+                    }
+                }
+                .padding(10)
+                .background(
+                    experimentColor(experiment.outcome)
+                        .opacity(0.08),
+                    in: RoundedRectangle(
+                        cornerRadius: 12,
+                        style: .continuous
+                    )
+                )
+            }
+
             VStack(alignment: .leading, spacing: 5) {
                 Label("TRY", systemImage: "lightbulb.fill")
                     .font(.caption2.weight(.bold))
@@ -1136,6 +1178,51 @@ struct IndoBoardSessionView: View {
                 style: .continuous
             )
         )
+    }
+
+    private func experimentTitle(
+        _ outcome: IndoBoardCoachExperimentOutcome
+    ) -> String {
+        switch outcome {
+        case .improved:
+            return "This cue helped this attempt"
+        case .oppositeDirection:
+            return "This cue moved the target the wrong way"
+        case .noClearChange:
+            return "No clear cue effect yet"
+        case .insufficientEvidence:
+            return "Cue effect not scored"
+        }
+    }
+
+    private func experimentSymbol(
+        _ outcome: IndoBoardCoachExperimentOutcome
+    ) -> String {
+        switch outcome {
+        case .improved:
+            return "checkmark.circle.fill"
+        case .oppositeDirection:
+            return "arrow.uturn.backward.circle.fill"
+        case .noClearChange:
+            return "equal.circle.fill"
+        case .insufficientEvidence:
+            return "questionmark.circle.fill"
+        }
+    }
+
+    private func experimentColor(
+        _ outcome: IndoBoardCoachExperimentOutcome
+    ) -> Color {
+        switch outcome {
+        case .improved:
+            return .green
+        case .oppositeDirection:
+            return .orange
+        case .noClearChange:
+            return .secondary
+        case .insufficientEvidence:
+            return .secondary
+        }
     }
 
     private func completionRow(
