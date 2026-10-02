@@ -196,7 +196,7 @@ public struct BodyCalibrationAccumulator: Sendable, Equatable {
         )
     }
 
-    public func canFinalize: Bool {
+    public var canFinalize: Bool {
         guard acceptedFrames >= Self.minimumAcceptedFrames else {
             return false
         }
