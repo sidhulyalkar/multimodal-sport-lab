@@ -30,6 +30,8 @@ struct ProductRunRecord: Identifiable, Equatable, Sendable {
     let externalVideoURL: URL?
     let externalMetadataURL: URL?
     let feedbackURL: URL?
+    let bodyStateContextURL: URL?
+    let bodyStateContext: BodyStateContextSnapshot?
 
     var sourceCount: Int {
         var count = 1 // operator evidence
@@ -298,6 +300,21 @@ final class ProductRunLibrary: ObservableObject {
                 manager: manager
             )
 
+            let bodyStateContextURL = existingURL(
+                directory.appendingPathComponent(
+                    BodyStateContextStore.filename
+                ),
+                manager: manager
+            )
+            let bodyStateContext: BodyStateContextSnapshot?
+            if let bodyStateContextURL {
+                bodyStateContext = try? BodyStateContextStore.load(
+                    from: bodyStateContextURL
+                )
+            } else {
+                bodyStateContext = nil
+            }
+
             let completed = metadata["completed_block_ids"]
                 as? [String] ?? []
             let syncLabels = productManifest?.syncReceipts.map(\.label)
@@ -356,7 +373,9 @@ final class ProductRunLibrary: ObservableObject {
                         "product-feedback.json"
                     ),
                     manager: manager
-                )
+                ),
+                bodyStateContextURL: bodyStateContextURL,
+                bodyStateContext: bodyStateContext
             )
         }
         .sorted {
