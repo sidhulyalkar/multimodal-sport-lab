@@ -4,6 +4,26 @@
   "records": [
     {
       "platform": "other",
+      "source_id": "forum/newschoolers-79439",
+      "source_url": "https://www.newschoolers.com/forum/thread/79439/indo-board-",
+      "creator": null,
+      "title": "indo board?",
+      "rights_status": "platform_only",
+      "retention_policy": "derived_only",
+      "weak_labels": [
+        "indo-board",
+        "community",
+        "ski-snowboard-transfer",
+        "tricks",
+        "general-balance"
+      ],
+      "discovery": {
+        "method": "manual_web_research_seed",
+        "evidence_class": "community_practice"
+      }
+    },
+    {
+      "platform": "other",
       "source_id": "forum/surfing-waves-26396",
       "source_url": "https://surfing-waves.com/forum/viewtopic.php?f=9&t=26396",
       "creator": "SurfShape",
@@ -47,23 +67,45 @@
       }
     },
     {
-      "platform": "other",
-      "source_id": "forum/newschoolers-79439",
-      "source_url": "https://www.newschoolers.com/forum/thread/79439/indo-board-",
+      "platform": "reddit",
+      "source_id": "reddit/onewheel/10ztf5d",
+      "source_url": "https://www.reddit.com/r/onewheel/comments/10ztf5d",
       "creator": null,
-      "title": "indo board?",
+      "title": "balance board for one wheeling?",
       "rights_status": "platform_only",
       "retention_policy": "derived_only",
       "weak_labels": [
         "indo-board",
         "community",
-        "ski-snowboard-transfer",
-        "tricks",
-        "general-balance"
+        "ankle-mobility",
+        "foot-mobility",
+        "trick-transfer",
+        "transfer-limitations"
       ],
       "discovery": {
         "method": "manual_web_research_seed",
         "evidence_class": "community_practice"
+      }
+    },
+    {
+      "platform": "reddit",
+      "source_id": "reddit/snowboarding/12m4w44",
+      "source_url": "https://www.reddit.com/r/snowboarding/comments/12m4w44/",
+      "creator": null,
+      "title": "Off-season stability practice discussion",
+      "rights_status": "platform_only",
+      "retention_policy": "derived_only",
+      "weak_labels": [
+        "indo-board",
+        "community",
+        "deep-squat",
+        "snowboard-transfer",
+        "off-season"
+      ],
+      "discovery": {
+        "method": "manual_web_research_seed",
+        "evidence_class": "community_practice",
+        "researched_at": "2026-10-02"
       }
     },
     {
@@ -113,25 +155,24 @@
     },
     {
       "platform": "reddit",
-      "source_id": "reddit/surfing/mz0984",
-      "source_url": "https://www.reddit.com/r/surfing/comments/mz0984",
+      "source_id": "reddit/sup/1rlori6",
+      "source_url": "https://www.reddit.com/r/Sup/comments/1rlori6/balance_board/",
       "creator": null,
-      "title": "Indo boards?",
+      "title": "Balance board? SUP training discussion",
       "rights_status": "platform_only",
       "retention_policy": "derived_only",
       "weak_labels": [
         "indo-board",
         "community",
-        "squat",
-        "cross-step",
-        "hang-ten-hold",
-        "ski-stance",
-        "drop-knee",
-        "surf-transfer"
+        "general-balance",
+        "rough-water-transfer",
+        "workout",
+        "transfer-uncertainty"
       ],
       "discovery": {
         "method": "manual_web_research_seed",
-        "evidence_class": "community_practice"
+        "evidence_class": "community_practice",
+        "researched_at": "2026-10-02"
       }
     },
     {
@@ -156,19 +197,42 @@
     },
     {
       "platform": "reddit",
-      "source_id": "reddit/onewheel/10ztf5d",
-      "source_url": "https://www.reddit.com/r/onewheel/comments/10ztf5d",
+      "source_id": "reddit/surfing/1raxq42",
+      "source_url": "https://www.reddit.com/r/surfing/comments/1raxq42/balance_board_recommendations/",
       "creator": null,
-      "title": "balance board for one wheeling?",
+      "title": "Balance board recommendations discussion",
+      "rights_status": "platform_only",
+      "retention_policy": "derived_only",
+      "weak_labels": [
+        "balance-board",
+        "community",
+        "equipment-variation",
+        "diy-board",
+        "transfer-uncertainty"
+      ],
+      "discovery": {
+        "method": "manual_web_research_seed",
+        "evidence_class": "community_practice",
+        "researched_at": "2026-10-02"
+      }
+    },
+    {
+      "platform": "reddit",
+      "source_id": "reddit/surfing/mz0984",
+      "source_url": "https://www.reddit.com/r/surfing/comments/mz0984",
+      "creator": null,
+      "title": "Indo boards?",
       "rights_status": "platform_only",
       "retention_policy": "derived_only",
       "weak_labels": [
         "indo-board",
         "community",
-        "ankle-mobility",
-        "foot-mobility",
-        "trick-transfer",
-        "transfer-limitations"
+        "squat",
+        "cross-step",
+        "hang-ten-hold",
+        "ski-stance",
+        "drop-knee",
+        "surf-transfer"
       ],
       "discovery": {
         "method": "manual_web_research_seed",
