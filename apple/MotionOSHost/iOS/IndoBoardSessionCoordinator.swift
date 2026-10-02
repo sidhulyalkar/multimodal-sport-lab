@@ -1263,7 +1263,8 @@ final class IndoBoardSessionCoordinator: ObservableObject {
                         uniqueKeysWithValues: $0.metrics.map {
                             ($0.id, $0.value)
                         }
-                    )
+                    ),
+                    numericMetrics: $0.numericMetrics
                 )
             }
         )
