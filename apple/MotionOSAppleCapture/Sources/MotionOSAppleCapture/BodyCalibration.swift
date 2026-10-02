@@ -4,15 +4,18 @@ public struct BodyCalibrationProgress: Codable, Sendable, Equatable {
     public let framesSeen: Int
     public let acceptedFrames: Int
     public let parameterSampleCounts: [BodyParameterKind: Int]
+    public let unscaledVisionFrameCount: Int
 
     public init(
         framesSeen: Int,
         acceptedFrames: Int,
-        parameterSampleCounts: [BodyParameterKind: Int]
+        parameterSampleCounts: [BodyParameterKind: Int],
+        unscaledVisionFrameCount: Int = 0
     ) {
         self.framesSeen = framesSeen
         self.acceptedFrames = acceptedFrames
         self.parameterSampleCounts = parameterSampleCounts
+        self.unscaledVisionFrameCount = unscaledVisionFrameCount
     }
 
     public var acceptanceFraction: Double {
@@ -27,19 +30,22 @@ public struct BodyCalibrationResult: Codable, Sendable, Equatable {
     public let acceptedFrames: Int
     public let parameterSampleCounts: [BodyParameterKind: Int]
     public let parameterRobustSpreadMeters: [BodyParameterKind: Double]
+    public let scaleSourceCounts: [String: Int]
 
     public init(
         model: PersonalBodyModel,
         framesSeen: Int,
         acceptedFrames: Int,
         parameterSampleCounts: [BodyParameterKind: Int],
-        parameterRobustSpreadMeters: [BodyParameterKind: Double]
+        parameterRobustSpreadMeters: [BodyParameterKind: Double],
+        scaleSourceCounts: [String: Int] = [:]
     ) {
         self.model = model
         self.framesSeen = framesSeen
         self.acceptedFrames = acceptedFrames
         self.parameterSampleCounts = parameterSampleCounts
         self.parameterRobustSpreadMeters = parameterRobustSpreadMeters
+        self.scaleSourceCounts = scaleSourceCounts
     }
 }
 
@@ -50,14 +56,28 @@ public struct BodyCalibrationAccumulator: Sendable, Equatable {
     public private(set) var framesSeen = 0
     public private(set) var acceptedFrames = 0
     public private(set) var samples: [BodyParameterKind: [Double]] = [:]
+    public private(set) var unscaledVisionFrameCount = 0
+    public private(set) var scaleSourceCounts: [String: Int] = [:]
 
     public init() {}
 
     @discardableResult
     public mutating func observe(
-        _ frame: BodyMovementFrame
+        _ frame: BodyMovementFrame,
+        standingHeightMeters: Double? = nil
     ) -> Bool {
         framesSeen += 1
+
+        guard let scale = absoluteScale(
+            for: frame,
+            standingHeightMeters: standingHeightMeters
+        ) else {
+            if isVisionFrame(frame) {
+                unscaledVisionFrameCount += 1
+            }
+            return false
+        }
+        scaleSourceCounts[scale.source, default: 0] += 1
 
         let map = frame.jointMap
         var frameMeasurements: [BodyParameterKind: Double] = [:]
@@ -70,6 +90,11 @@ public struct BodyCalibrationAccumulator: Sendable, Equatable {
             // Only LiDAR/depth-backed "measured" height may become a personal
             // standing-height calibration observation.
             frameMeasurements[.standingHeight] = height
+        } else if let standingHeightMeters,
+                  standingHeightMeters.isFinite,
+                  (0.5...2.5).contains(standingHeightMeters) {
+            frameMeasurements[.standingHeight] =
+                standingHeightMeters
         }
 
         measure(
@@ -77,6 +102,7 @@ public struct BodyCalibrationAccumulator: Sendable, Equatable {
             between: ["leftShoulder", "left_shoulder"],
             and: ["rightShoulder", "right_shoulder"],
             map: map,
+            scale: scale.factor,
             into: &frameMeasurements
         )
         measure(
@@ -84,6 +110,7 @@ public struct BodyCalibrationAccumulator: Sendable, Equatable {
             between: ["leftHip", "left_hip"],
             and: ["rightHip", "right_hip"],
             map: map,
+            scale: scale.factor,
             into: &frameMeasurements
         )
 
@@ -114,7 +141,7 @@ public struct BodyCalibrationAccumulator: Sendable, Equatable {
             let length = distance(
                 shoulderCenter,
                 hipCenter
-            )
+            ) * scale.factor
             if plausible(length) {
                 frameMeasurements[.torsoLength] = length
             }
@@ -125,6 +152,7 @@ public struct BodyCalibrationAccumulator: Sendable, Equatable {
             between: ["leftShoulder", "left_shoulder"],
             and: ["leftElbow", "left_elbow"],
             map: map,
+            scale: scale.factor,
             into: &frameMeasurements
         )
         measure(
@@ -132,6 +160,7 @@ public struct BodyCalibrationAccumulator: Sendable, Equatable {
             between: ["rightShoulder", "right_shoulder"],
             and: ["rightElbow", "right_elbow"],
             map: map,
+            scale: scale.factor,
             into: &frameMeasurements
         )
         measure(
@@ -139,6 +168,7 @@ public struct BodyCalibrationAccumulator: Sendable, Equatable {
             between: ["leftElbow", "left_elbow"],
             and: ["leftWrist", "left_wrist"],
             map: map,
+            scale: scale.factor,
             into: &frameMeasurements
         )
         measure(
@@ -146,6 +176,7 @@ public struct BodyCalibrationAccumulator: Sendable, Equatable {
             between: ["rightElbow", "right_elbow"],
             and: ["rightWrist", "right_wrist"],
             map: map,
+            scale: scale.factor,
             into: &frameMeasurements
         )
         measure(
@@ -153,6 +184,7 @@ public struct BodyCalibrationAccumulator: Sendable, Equatable {
             between: ["leftHip", "left_hip"],
             and: ["leftKnee", "left_knee"],
             map: map,
+            scale: scale.factor,
             into: &frameMeasurements
         )
         measure(
@@ -160,6 +192,7 @@ public struct BodyCalibrationAccumulator: Sendable, Equatable {
             between: ["rightHip", "right_hip"],
             and: ["rightKnee", "right_knee"],
             map: map,
+            scale: scale.factor,
             into: &frameMeasurements
         )
         measure(
@@ -167,6 +200,7 @@ public struct BodyCalibrationAccumulator: Sendable, Equatable {
             between: ["leftKnee", "left_knee"],
             and: ["leftAnkle", "left_ankle", "leftFoot", "left_foot"],
             map: map,
+            scale: scale.factor,
             into: &frameMeasurements
         )
         measure(
@@ -174,6 +208,7 @@ public struct BodyCalibrationAccumulator: Sendable, Equatable {
             between: ["rightKnee", "right_knee"],
             and: ["rightAnkle", "right_ankle", "rightFoot", "right_foot"],
             map: map,
+            scale: scale.factor,
             into: &frameMeasurements
         )
 
@@ -196,7 +231,8 @@ public struct BodyCalibrationAccumulator: Sendable, Equatable {
         BodyCalibrationProgress(
             framesSeen: framesSeen,
             acceptedFrames: acceptedFrames,
-            parameterSampleCounts: samples.mapValues(\.count)
+            parameterSampleCounts: samples.mapValues(\.count),
+            unscaledVisionFrameCount: unscaledVisionFrameCount
         )
     }
 
@@ -222,6 +258,10 @@ public struct BodyCalibrationAccumulator: Sendable, Equatable {
         meshAssetRelativePath: String? = nil
     ) throws -> BodyCalibrationResult {
         guard canFinalize else {
+            if unscaledVisionFrameCount > 0
+                && samples.isEmpty {
+                throw CalibrationError.absoluteScaleUnavailable
+            }
             throw CalibrationError.insufficientCoverage
         }
 
@@ -261,8 +301,62 @@ public struct BodyCalibrationAccumulator: Sendable, Equatable {
             framesSeen: framesSeen,
             acceptedFrames: acceptedFrames,
             parameterSampleCounts: samples.mapValues(\.count),
-            parameterRobustSpreadMeters: spreads
+            parameterRobustSpreadMeters: spreads,
+            scaleSourceCounts: scaleSourceCounts
         )
+    }
+
+    private struct AbsoluteScale {
+        let factor: Double
+        let source: String
+    }
+
+    private func absoluteScale(
+        for frame: BodyMovementFrame,
+        standingHeightMeters: Double?
+    ) -> AbsoluteScale? {
+        guard isVisionFrame(frame) else {
+            return AbsoluteScale(
+                factor: 1,
+                source: "native_metric_coordinate_frame"
+            )
+        }
+
+        if frame.bodyHeightEstimation == "measured" {
+            return AbsoluteScale(
+                factor: 1,
+                source: "vision_depth_measured_height"
+            )
+        }
+
+        guard let standingHeightMeters,
+              standingHeightMeters.isFinite,
+              (0.5...2.5).contains(standingHeightMeters),
+              let visionHeight = frame.bodyHeightM,
+              visionHeight.isFinite,
+              (0.5...2.5).contains(visionHeight)
+        else {
+            // Monocular Vision may use a reference-height skeleton. Refuse to
+            // turn that reference scale into the user's anatomy without an
+            // explicit standing-height scale source.
+            return nil
+        }
+
+        return AbsoluteScale(
+            factor: standingHeightMeters / visionHeight,
+            source: "external_standing_height"
+        )
+    }
+
+    private func isVisionFrame(
+        _ frame: BodyMovementFrame
+    ) -> Bool {
+        frame.coordinateFrame
+            .lowercased()
+            .contains("vision")
+            || frame.source
+                .lowercased()
+                .contains("vision")
     }
 
     private static let requiredParameters: [BodyParameterKind] = [
@@ -284,6 +378,7 @@ public struct BodyCalibrationAccumulator: Sendable, Equatable {
         between firstAliases: [String],
         and secondAliases: [String],
         map: [String: BodyJoint3D],
+        scale: Double,
         into measurements: inout [BodyParameterKind: Double]
     ) {
         guard let first = findJoint(
@@ -301,7 +396,7 @@ public struct BodyCalibrationAccumulator: Sendable, Equatable {
         let value = distance(
             first.position,
             second.position
-        )
+        ) * scale
         if plausible(value) {
             measurements[kind] = value
         }
@@ -425,6 +520,7 @@ public struct BodyCalibrationAccumulator: Sendable, Equatable {
 
     public enum CalibrationError: LocalizedError, Equatable {
         case insufficientCoverage
+        case absoluteScaleUnavailable
 
         public var errorDescription: String? {
             switch self {
@@ -432,6 +528,12 @@ public struct BodyCalibrationAccumulator: Sendable, Equatable {
                 return (
                     "Body calibration needs more complete full-body Vision "
                         + "frames before MotionOS can create a stable model."
+                )
+            case .absoluteScaleUnavailable:
+                return (
+                    "Vision supplied reference-scale 3D geometry rather than "
+                        + "depth-measured body scale. Enter standing height or "
+                        + "connect a readable Apple Health height before retrying."
                 )
             }
         }
