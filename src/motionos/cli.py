@@ -43,6 +43,10 @@ from .experiments import (
     verify_experiment_manifest,
     verify_grouped_split,
 )
+from .indo_board_state import (
+    analyze_board_observations,
+    load_board_observations,
+)
 from .indo_knowledge import (
     build_session_learning_targets,
     classify_observable_skills,
@@ -490,6 +494,12 @@ def _parser() -> argparse.ArgumentParser:
         help="derive body-only INDO BOARD posture metrics from camera pose evidence",
     )
     indo_body_metrics.add_argument("session")
+
+    indo_board_state = sub.add_parser(
+        "indo-board-state",
+        help="derive deck/roller balance state and recovery metrics",
+    )
+    indo_board_state.add_argument("observations")
 
     indo_next = sub.add_parser(
         "indo-next-skills",
@@ -1097,6 +1107,12 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "indo-body-metrics":
         result = analyze_indo_camera_session(args.session)
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+
+    if args.command == "indo-board-state":
+        payload = load_board_observations(args.observations)
+        result = analyze_board_observations(payload)
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0
 
