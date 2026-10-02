@@ -10,13 +10,14 @@ public enum Pose3DExtractor {
         from pixelBuffer: CVPixelBuffer,
         orientation: CGImagePropertyOrientation = .up
     ) throws -> [String: JSONValue]? {
-        let request = VNDetectHumanBodyPose3DRequest()
+        let request3D = VNDetectHumanBodyPose3DRequest()
+        let request2D = VNDetectHumanBodyPoseRequest()
         let handler = VNImageRequestHandler(
             cvPixelBuffer: pixelBuffer,
             orientation: orientation
         )
-        try handler.perform([request])
-        guard let observation = request.results?.first else { return nil }
+        try handler.perform([request3D, request2D])
+        guard let observation = request3D.results?.first else { return nil }
 
         var joints: [String: JSONValue] = [:]
         var parentJoints: [String: JSONValue] = [:]
@@ -39,7 +40,7 @@ public enum Pose3DExtractor {
             }
         }
 
-        return [
+        var payload: [String: JSONValue] = [
             "joints_root_relative_m": .object(joints),
             "joint_parents": .object(parentJoints),
             "joint_count": .number(Double(joints.count)),
@@ -60,6 +61,46 @@ public enum Pose3DExtractor {
                 "VNDetectHumanBodyPose3DRequest"
             ),
         ]
+
+        if let imageObservation = request2D.results?.first {
+            let imagePoints = try imageObservation.recognizedPoints(.all)
+            let visible = imagePoints.filter { _, point in
+                point.confidence >= 0.25
+            }
+
+            if !visible.isEmpty {
+                let xs = visible.values.map { Double($0.location.x) }
+                let ys = visible.values.map { Double($0.location.y) }
+                let confidence = visible.values.reduce(0.0) {
+                    $0 + Double($1.confidence)
+                } / Double(visible.count)
+
+                var imageJoints: [String: JSONValue] = [:]
+                for (name, point) in visible {
+                    imageJoints[name.rawValue] = .array([
+                        .number(Double(point.location.x)),
+                        .number(Double(point.location.y)),
+                        .number(Double(point.confidence)),
+                    ])
+                }
+
+                payload["body_pose_2d_joints"] = .object(imageJoints)
+                payload["body_bbox_image_normalized"] = .array([
+                    .number(xs.min() ?? 0),
+                    .number(ys.min() ?? 0),
+                    .number(xs.max() ?? 1),
+                    .number(ys.max() ?? 1),
+                ])
+                payload["body_pose_2d_joint_count"] =
+                    .number(Double(visible.count))
+                payload["body_pose_2d_mean_confidence"] =
+                    .number(confidence)
+                payload["body_pose_2d_coordinate_frame"] =
+                    .string("vision_normalized_image_bottom_left_origin")
+            }
+        }
+
+        return payload
     }
 
     private static func matrixJSON(
