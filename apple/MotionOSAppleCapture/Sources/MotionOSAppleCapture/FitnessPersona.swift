@@ -478,3 +478,30 @@ public enum FitnessPersonaEngine {
         let contextKey: String
     }
 }
+
+
+public enum PersonaEvidenceStore {
+    public static func write(
+        _ evidence: PersonaSessionEvidence,
+        to url: URL
+    ) throws {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        try encoder.encode(evidence).write(
+            to: url,
+            options: .atomic
+        )
+    }
+
+    public static func load(
+        from url: URL
+    ) throws -> PersonaSessionEvidence {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try decoder.decode(
+            PersonaSessionEvidence.self,
+            from: Data(contentsOf: url)
+        )
+    }
+}

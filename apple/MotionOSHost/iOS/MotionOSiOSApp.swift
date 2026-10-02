@@ -18,6 +18,10 @@ struct MotionOSiOSApp: App {
         PersonalBodyModelCoordinator()
     @StateObject private var bodyCalibration =
         GuidedBodyCalibrationCoordinator()
+    @StateObject private var personaEvidence =
+        PersonaEvidenceLibrary()
+    @StateObject private var powerChallenge =
+        PowerChallengeCoordinator()
 
     var body: some Scene {
         WindowGroup {
@@ -34,9 +38,12 @@ struct MotionOSiOSApp: App {
                 .environmentObject(healthData)
                 .environmentObject(bodyModels)
                 .environmentObject(bodyCalibration)
+                .environmentObject(personaEvidence)
+                .environmentObject(powerChallenge)
                 .task {
                     coordinator.inbox.refreshCatalog()
                     runLibrary.refresh()
+                    personaEvidence.refresh()
                 }
                 .onReceive(
                     coordinator.inbox.$latestSessionID
@@ -46,6 +53,8 @@ struct MotionOSiOSApp: App {
                 .onReceive(runLibrary.$runs) { runs in
                     fitnessPersona.rebuild(
                         from: runs,
+                        supplementalEvidence:
+                            personaEvidence.evidence,
                         bodyModelVersion:
                             bodyModels.latestModel?.versionID
                     )
@@ -53,7 +62,17 @@ struct MotionOSiOSApp: App {
                 .onReceive(bodyModels.$latestModel) { model in
                     fitnessPersona.rebuild(
                         from: runLibrary.runs,
+                        supplementalEvidence:
+                            personaEvidence.evidence,
                         bodyModelVersion: model?.versionID
+                    )
+                }
+                .onReceive(personaEvidence.$evidence) { evidence in
+                    fitnessPersona.rebuild(
+                        from: runLibrary.runs,
+                        supplementalEvidence: evidence,
+                        bodyModelVersion:
+                            bodyModels.latestModel?.versionID
                     )
                 }
                 .onChange(

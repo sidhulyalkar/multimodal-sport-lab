@@ -25,9 +25,12 @@ final class FitnessPersonaCoordinator: ObservableObject {
 
     func rebuild(
         from runs: [ProductRunRecord],
+        supplementalEvidence: [PersonaSessionEvidence] = [],
         bodyModelVersion: String? = nil
     ) {
-        let evidence = runs.map(Self.sessionEvidence)
+        let evidence =
+            runs.map(Self.sessionEvidence)
+                + supplementalEvidence
         let next = FitnessPersonaEngine.build(
             evidence: evidence,
             bodyModelVersion: bodyModelVersion,
