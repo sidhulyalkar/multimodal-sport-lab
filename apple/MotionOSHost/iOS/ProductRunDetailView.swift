@@ -13,6 +13,7 @@ struct ProductRunDetailView: View {
     @State private var productNotes = ""
     @State private var coachUsefulness:
         ProductSessionCoachUsefulness?
+    @State private var coachTriedCue: Bool?
     @State private var savedFeedback:
         ProductSessionFeedback?
     @State private var feedbackError: String?
@@ -547,6 +548,63 @@ struct ProductRunDetailView: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
+            if let outcome = coach.experimentOutcome,
+               let summary = coach.experimentSummary {
+                let improved = outcome == "improved"
+                let opposite = outcome == "opposite_direction"
+
+                HStack(alignment: .top, spacing: 9) {
+                    Image(
+                        systemName: improved
+                            ? "checkmark.circle.fill"
+                            : (
+                                opposite
+                                    ? "arrow.uturn.backward.circle.fill"
+                                    : "equal.circle.fill"
+                            )
+                    )
+                    .foregroundStyle(
+                        improved
+                            ? .green
+                            : (opposite ? .orange : .secondary)
+                    )
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(
+                            improved
+                                ? "Cue response improved"
+                                : (
+                                    opposite
+                                        ? "Cue response moved the wrong way"
+                                        : "Cue effect was not clear"
+                                )
+                        )
+                        .font(.caption.weight(.bold))
+
+                        Text(summary)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(
+                                horizontal: false,
+                                vertical: true
+                            )
+                    }
+                }
+                .padding(10)
+                .background(
+                    (
+                        improved
+                            ? Color.green
+                            : (opposite ? Color.orange : Color.secondary)
+                    )
+                    .opacity(0.08),
+                    in: RoundedRectangle(
+                        cornerRadius: 12,
+                        style: .continuous
+                    )
+                )
+            }
+
             Divider()
 
             VStack(alignment: .leading, spacing: 4) {
@@ -678,7 +736,45 @@ struct ProductRunDetailView: View {
                 .textFieldStyle(.roundedBorder)
 
                 if run.productManifest?.coachSummary != nil {
-                    VStack(alignment: .leading, spacing: 7) {
+                    VStack(alignment: .leading, spacing: 9) {
+                        Text("DID YOU TRY THE WATCH CUE?")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(.secondary)
+
+                        HStack(spacing: 7) {
+                            Button {
+                                coachTriedCue = true
+                            } label: {
+                                Text("Yes")
+                                    .font(.caption.weight(.semibold))
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 7)
+                                    .background(
+                                        coachTriedCue == true
+                                            ? Color.green.opacity(0.16)
+                                            : Color.primary.opacity(0.04),
+                                        in: Capsule()
+                                    )
+                            }
+                            .buttonStyle(.plain)
+
+                            Button {
+                                coachTriedCue = false
+                            } label: {
+                                Text("No")
+                                    .font(.caption.weight(.semibold))
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 7)
+                                    .background(
+                                        coachTriedCue == false
+                                            ? Color.orange.opacity(0.14)
+                                            : Color.primary.opacity(0.04),
+                                        in: Capsule()
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                        }
+
                         Text("WAS THE COACHING USEFUL?")
                             .font(.caption2.weight(.bold))
                             .foregroundStyle(.secondary)
@@ -934,7 +1030,8 @@ struct ProductRunDetailView: View {
             perceivedEffort: perceivedEffort,
             movementNotes: movementNotes,
             productNotes: productNotes,
-            coachUsefulness: coachUsefulness
+            coachUsefulness: coachUsefulness,
+            coachTriedCue: coachTriedCue
         )
 
         do {
@@ -965,6 +1062,7 @@ struct ProductRunDetailView: View {
             movementNotes = value.movementNotes
             productNotes = value.productNotes
             coachUsefulness = value.coachUsefulness
+            coachTriedCue = value.coachTriedCue
         } catch {
             feedbackError = (
                 "Saved feedback could not be read: "
