@@ -1290,7 +1290,23 @@ final class IndoBoardSessionCoordinator: ObservableObject {
                             ($0.id, $0.value)
                         }
                     ),
-                    numericMetrics: $0.numericMetrics
+                    numericMetrics: $0.numericMetrics,
+                    interventionID: $0.intervention?.id,
+                    interventionCue: $0.intervention?.cue,
+                    interventionTargetMetric:
+                        $0.intervention?.targetMetric.rawValue,
+                    interventionDesiredDirection:
+                        $0.intervention?.desiredDirection.rawValue,
+                    experimentOutcome:
+                        $0.experimentResult?.outcome.rawValue,
+                    experimentBefore:
+                        $0.experimentResult?.before,
+                    experimentAfter:
+                        $0.experimentResult?.after,
+                    experimentRelativeChange:
+                        $0.experimentResult?.relativeChange,
+                    experimentSummary:
+                        $0.experimentResult?.summary
                 )
             }
         )
