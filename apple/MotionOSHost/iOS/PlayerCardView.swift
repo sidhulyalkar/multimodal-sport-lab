@@ -31,7 +31,7 @@ final class PlayerCardExportCoordinator: ObservableObject {
                 : normalizedName
         )
         .frame(width: 400, height: 500)
-        .environment(.colorScheme, .dark)
+        .environment(\.colorScheme, .dark)
 
         let renderer = ImageRenderer(
             content: poster
@@ -201,7 +201,7 @@ struct PlayerCardShareView: View {
     @StateObject private var exporter =
         PlayerCardExportCoordinator()
 
-    @Environment(.dismiss)
+    @Environment(\.dismiss)
     private var dismiss
 
     var body: some View {
