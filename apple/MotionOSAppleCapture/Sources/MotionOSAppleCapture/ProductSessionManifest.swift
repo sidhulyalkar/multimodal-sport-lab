@@ -30,7 +30,36 @@ public struct ProductSessionManifest: Codable, Equatable, Sendable {
     public let externalCameraSHA256: String?
     public let operatorEvidenceSealed: Bool
     public let cameraEvidenceSealed: Bool
+    public let coachSummary: CoachSummary?
     public let claimBoundary: String
+
+    public struct CoachSummary: Codable, Equatable, Sendable {
+        public let headline: String
+        public let observation: String
+        public let tip: String
+        public let drill: String
+        public let confidence: Double
+        public let evidenceLabel: String
+        public let metrics: [String: String]
+
+        public init(
+            headline: String,
+            observation: String,
+            tip: String,
+            drill: String,
+            confidence: Double,
+            evidenceLabel: String,
+            metrics: [String: String]
+        ) {
+            self.headline = headline
+            self.observation = observation
+            self.tip = tip
+            self.drill = drill
+            self.confidence = min(1, max(0, confidence))
+            self.evidenceLabel = evidenceLabel
+            self.metrics = metrics
+        }
+    }
 
     public struct SyncReceipt: Codable, Equatable, Sendable {
         public let cueID: String
@@ -71,7 +100,8 @@ public struct ProductSessionManifest: Codable, Equatable, Sendable {
         externalCameraImported: Bool,
         externalCameraSHA256: String?,
         operatorEvidenceSealed: Bool,
-        cameraEvidenceSealed: Bool
+        cameraEvidenceSealed: Bool,
+        coachSummary: CoachSummary? = nil
     ) {
         self.schemaVersion = Self.schemaVersion
         self.runID = runID
@@ -95,6 +125,7 @@ public struct ProductSessionManifest: Codable, Equatable, Sendable {
         self.externalCameraSHA256 = externalCameraSHA256
         self.operatorEvidenceSealed = operatorEvidenceSealed
         self.cameraEvidenceSealed = cameraEvidenceSealed
+        self.coachSummary = coachSummary
         self.claimBoundary = (
             "This manifest links product workflow artifacts and operator-confirmed "
                 + "capture intent. It does not itself prove cross-device clock "
