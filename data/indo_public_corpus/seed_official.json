@@ -1,0 +1,53 @@
+{
+  "schema_version": "motionos.indo-video-discovery.v1",
+  "purpose": "Seed the Indo Board corpus with authoritative official instructional material before broad API discovery.",
+  "records": [
+    {
+      "platform": "youtube",
+      "source_id": "youtube/eIcsTt2kZUk",
+      "source_url": "https://www.youtube.com/watch?v=eIcsTt2kZUk",
+      "creator": "INDOBOARD",
+      "title": "INDO BOARD | Getting Started on the INDO BOARD",
+      "published_at": "2013-11-01",
+      "rights_status": "unknown",
+      "retention_policy": "derived_only",
+      "weak_labels": [
+        "indo-board",
+        "official",
+        "beginner",
+        "fundamentals",
+        "stance",
+        "posture",
+        "roller-control",
+        "squat"
+      ],
+      "discovery": {
+        "method": "manual_authoritative_seed",
+        "reason": "Official INDOBOARD getting-started instruction"
+      }
+    },
+    {
+      "platform": "youtube",
+      "source_id": "youtube/jcl08-u-_Fg",
+      "source_url": "https://www.youtube.com/watch?v=jcl08-u-_Fg",
+      "creator": "INDOBOARD",
+      "title": "Indo Board Basics.. How to get on a balance board",
+      "published_at": "2010-02-26",
+      "rights_status": "unknown",
+      "retention_policy": "derived_only",
+      "weak_labels": [
+        "indo-board",
+        "official",
+        "beginner",
+        "fundamentals",
+        "mount",
+        "centering"
+      ],
+      "discovery": {
+        "method": "manual_authoritative_seed",
+        "reason": "Official INDOBOARD mounting and centering instruction"
+      }
+    }
+  ],
+  "claim_boundary": "Authoritative instructional source does not automatically make every demonstrated movement a universal biomechanical optimum."
+}
