@@ -147,6 +147,8 @@ public struct IndoBoardRemoteStatus: Equatable, Sendable {
     public let startBlocker: String?
     public let phoneBatteryFraction: Double?
     public let phoneStorageGB: Double?
+    public let boardTrackingReady: Bool
+    public let boardTrackingConfidencePercent: Int?
     public let coachHeadline: String?
     public let coachTip: String?
     public let coachDrill: String?
@@ -172,6 +174,8 @@ public struct IndoBoardRemoteStatus: Equatable, Sendable {
         startBlocker: String?,
         phoneBatteryFraction: Double?,
         phoneStorageGB: Double?,
+        boardTrackingReady: Bool = false,
+        boardTrackingConfidencePercent: Int? = nil,
         coachHeadline: String? = nil,
         coachTip: String? = nil,
         coachDrill: String? = nil,
@@ -197,6 +201,11 @@ public struct IndoBoardRemoteStatus: Equatable, Sendable {
         self.startBlocker = startBlocker
         self.phoneBatteryFraction = phoneBatteryFraction
         self.phoneStorageGB = phoneStorageGB
+        self.boardTrackingReady = boardTrackingReady
+        self.boardTrackingConfidencePercent =
+            boardTrackingConfidencePercent.map {
+                min(100, max(0, $0))
+            }
         self.coachHeadline = coachHeadline
         self.coachTip = coachTip
         self.coachDrill = coachDrill
@@ -253,6 +262,17 @@ public struct IndoBoardRemoteStatus: Equatable, Sendable {
             Self.double(message["phone_battery_fraction"])
         self.phoneStorageGB =
             Self.double(message["phone_storage_gb"])
+        self.boardTrackingReady =
+            message["board_tracking_ready"] as? Bool
+                ?? false
+        self.boardTrackingConfidencePercent =
+            Self.int(
+                message[
+                    "board_tracking_confidence_percent"
+                ]
+            ).map {
+                min(100, max(0, $0))
+            }
         self.coachHeadline =
             message["coach_headline"] as? String
         self.coachTip =
@@ -287,6 +307,8 @@ public struct IndoBoardRemoteStatus: Equatable, Sendable {
             "stance_title": stanceTitle,
             "session_phase": sessionPhase,
             "start_ready": startReady,
+            "board_tracking_ready":
+                boardTrackingReady,
             "sent_at_unix_s": sentAtUnixSeconds,
         ]
 
@@ -304,6 +326,11 @@ public struct IndoBoardRemoteStatus: Equatable, Sendable {
         }
         if let phoneStorageGB {
             payload["phone_storage_gb"] = phoneStorageGB
+        }
+        if let boardTrackingConfidencePercent {
+            payload[
+                "board_tracking_confidence_percent"
+            ] = boardTrackingConfidencePercent
         }
         if let coachHeadline, !coachHeadline.isEmpty {
             payload["coach_headline"] = coachHeadline
@@ -363,6 +390,9 @@ public struct IndoBoardRemoteStatus: Equatable, Sendable {
             && startBlocker == other.startBlocker
             && phoneBatteryFraction == other.phoneBatteryFraction
             && phoneStorageGB == other.phoneStorageGB
+            && boardTrackingReady == other.boardTrackingReady
+            && boardTrackingConfidencePercent
+                == other.boardTrackingConfidencePercent
             && coachHeadline == other.coachHeadline
             && coachTip == other.coachTip
             && coachDrill == other.coachDrill
