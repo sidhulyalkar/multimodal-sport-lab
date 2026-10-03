@@ -427,67 +427,6 @@ public final class IndoBoardCoachEngine {
             q: 0.75
         )
 
-        if let balanceMetrics,
-           balanceMetrics.sampleCount >= 60,
-           balanceMetrics.meanConfidence >= 0.55 {
-            if let recovery =
-                    balanceMetrics.p90RecoveryTimeMS,
-               balanceMetrics.recoveryCount >= 3,
-               recovery > 900 {
-                return IndoBoardCoachReport(
-                    headline: "Start the recovery earlier",
-                    observation:
-                        "Your longer deck-and-roller recoveries took over 0.9 seconds to return toward center.",
-                    tip:
-                        "Begin with a smaller correction before the roller travels as far from center.",
-                    drill:
-                        "5 slow excursions, returning toward center before the board reaches the outer zone",
-                    confidence:
-                        min(0.92, balanceMetrics.meanConfidence * 0.90),
-                    evidenceLabel:
-                        "Deck + roller image geometry · balance proxy",
-                    metrics: Array(metrics.prefix(6)),
-                    numericMetrics: numericMetrics
-                )
-            }
-
-            if balanceMetrics.centerTimeFraction < 0.55 {
-                return IndoBoardCoachReport(
-                    headline: "Own the center longer",
-                    observation:
-                        "The roller spent less than 55% of measured time in the central deck zone.",
-                    tip:
-                        "Use smaller early corrections and pause briefly when the roller returns near center.",
-                    drill:
-                        "5 slow left/right shifts with a one-second center hold",
-                    confidence:
-                        min(0.92, balanceMetrics.meanConfidence * 0.88),
-                    evidenceLabel:
-                        "Deck + roller image geometry · balance proxy",
-                    metrics: Array(metrics.prefix(6)),
-                    numericMetrics: numericMetrics
-                )
-            }
-
-            if balanceMetrics.edgeApproachCount >= 3 {
-                return IndoBoardCoachReport(
-                    headline: "Reduce repeated edge approaches",
-                    observation:
-                        "The roller entered the outer deck zone several times during this session.",
-                    tip:
-                        "Try catching the motion earlier with a smaller correction instead of waiting for a larger rescue.",
-                    drill:
-                        "Controlled shifts that stop short of the outer zone",
-                    confidence:
-                        min(0.90, balanceMetrics.meanConfidence * 0.84),
-                    evidenceLabel:
-                        "Deck + roller image geometry · balance proxy",
-                    metrics: Array(metrics.prefix(6)),
-                    numericMetrics: numericMetrics
-                )
-            }
-        }
-
         if let medianKnee,
            let trunkP90,
            medianKnee < 14,
@@ -773,6 +712,67 @@ public final class IndoBoardCoachEngine {
         if let squatDepth {
             numericMetrics["squat_flexion_p75_deg"] =
                 squatDepth
+        }
+
+        if let balanceMetrics,
+           balanceMetrics.sampleCount >= 60,
+           balanceMetrics.meanConfidence >= 0.55 {
+            if let recovery =
+                    balanceMetrics.p90RecoveryTimeMS,
+               balanceMetrics.recoveryCount >= 3,
+               recovery > 900 {
+                return IndoBoardCoachReport(
+                    headline: "Start the recovery earlier",
+                    observation:
+                        "Your longer deck-and-roller recoveries took over 0.9 seconds to return toward center.",
+                    tip:
+                        "Begin with a smaller correction before the roller travels as far from center.",
+                    drill:
+                        "5 slow excursions, returning toward center before the board reaches the outer zone",
+                    confidence:
+                        min(0.92, balanceMetrics.meanConfidence * 0.90),
+                    evidenceLabel:
+                        "Deck + roller image geometry · balance proxy",
+                    metrics: Array(metrics.prefix(6)),
+                    numericMetrics: numericMetrics
+                )
+            }
+
+            if balanceMetrics.centerTimeFraction < 0.55 {
+                return IndoBoardCoachReport(
+                    headline: "Own the center longer",
+                    observation:
+                        "The roller spent less than 55% of measured time in the central deck zone.",
+                    tip:
+                        "Use smaller early corrections and pause briefly when the roller returns near center.",
+                    drill:
+                        "5 slow left/right shifts with a one-second center hold",
+                    confidence:
+                        min(0.92, balanceMetrics.meanConfidence * 0.88),
+                    evidenceLabel:
+                        "Deck + roller image geometry · balance proxy",
+                    metrics: Array(metrics.prefix(6)),
+                    numericMetrics: numericMetrics
+                )
+            }
+
+            if balanceMetrics.edgeApproachCount >= 3 {
+                return IndoBoardCoachReport(
+                    headline: "Reduce repeated edge approaches",
+                    observation:
+                        "The roller entered the outer deck zone several times during this session.",
+                    tip:
+                        "Try catching the motion earlier with a smaller correction instead of waiting for a larger rescue.",
+                    drill:
+                        "Controlled shifts that stop short of the outer zone",
+                    confidence:
+                        min(0.90, balanceMetrics.meanConfidence * 0.84),
+                    evidenceLabel:
+                        "Deck + roller image geometry · balance proxy",
+                    metrics: Array(metrics.prefix(6)),
+                    numericMetrics: numericMetrics
+                )
+            }
         }
 
         if let medianKnee,
