@@ -84,6 +84,72 @@ final class IndoBoardEquipmentObservationSelectorTests:
         )
     }
 
+    func testQualifiedStatusWithoutReceiptStillFailsClosed() {
+        let incomplete =
+            IndoBoardEquipmentModelQualification(
+                modelID: "markerless-v1",
+                status: .qualifiedForBetaCoaching,
+                evaluationDatasetID: "indo-heldout-v1",
+                evaluationReportSHA256:
+                    String(repeating: "a", count: 64),
+                authorizationNote: nil
+            )
+        let selector = IndoBoardEquipmentObservationSelector(
+            qualifications: [incomplete]
+        )
+
+        let result = selector.select(
+            [
+                candidate(
+                    detectorID: "markerless",
+                    modelID: "markerless-v1",
+                    provenance: .modelEstimated,
+                    confidence: 0.99
+                ),
+            ],
+            intent: .coachingEvidence
+        )
+
+        XCTAssertNil(result.selected)
+        XCTAssertEqual(
+            result.reason,
+            .noAuthorizedObservation
+        )
+    }
+
+    func testMalformedEvaluationHashFailsClosed() {
+        let incomplete =
+            IndoBoardEquipmentModelQualification(
+                modelID: "markerless-v1",
+                status: .qualifiedForBetaTracking,
+                evaluationDatasetID: "indo-heldout-v1",
+                evaluationReportSHA256: "not-a-sha256",
+                authorizationNote:
+                    "Approved after review."
+            )
+        let selector = IndoBoardEquipmentObservationSelector(
+            qualifications: [incomplete]
+        )
+
+        let result = selector.select(
+            [
+                candidate(
+                    detectorID: "markerless",
+                    modelID: "markerless-v1",
+                    provenance: .modelEstimated,
+                    confidence: 0.99
+                ),
+            ],
+            intent: .displayTracking
+        )
+
+        XCTAssertNil(result.selected)
+        XCTAssertEqual(
+            result.reason,
+            .noAuthorizedObservation
+        )
+    }
+
     func testEvaluationOnlyModelFailsClosed() {
         let selector = IndoBoardEquipmentObservationSelector(
             qualifications: [
@@ -404,6 +470,11 @@ final class IndoBoardEquipmentObservationSelectorTests:
                 "indo-heldout-v1",
             evaluationReportSHA256:
                 String(repeating: "a", count: 64),
+            authorizationNote:
+                status == .qualifiedForBetaTracking
+                    || status == .qualifiedForBetaCoaching
+                    ? "Approved after held-out physical beta review."
+                    : nil,
             metrics: [
                 "roller_center_error_p90": 0.03,
             ]
