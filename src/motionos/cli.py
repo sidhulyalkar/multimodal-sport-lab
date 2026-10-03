@@ -1353,6 +1353,8 @@ def main(argv: list[str] | None = None) -> int:
                     "routing_event_count": payload["routing_event_count"],
                     "comparison_count": payload["comparison_count"],
                     "groups": payload["groups"],
+                    "detector_execution_groups":
+                        payload["detector_execution_groups"],
                     "output": args.output,
                 },
                 indent=2,
