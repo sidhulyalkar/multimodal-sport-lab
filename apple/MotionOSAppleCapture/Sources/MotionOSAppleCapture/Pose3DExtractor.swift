@@ -172,13 +172,25 @@ public enum Pose3DExtractor {
 
         var detectorFailures:
             [IndoBoardEquipmentDetectorFailure] = []
+        var detectorExecutions:
+            [IndoBoardEquipmentDetectorExecutionAudit] = []
 
         for detector in equipmentDetectors {
+            let started =
+                ProcessInfo.processInfo.systemUptime
+
             do {
-                if let observation = try detector.detect(
+                let observation = try detector.detect(
                     in: pixelBuffer,
                     orientation: orientation
-                ) {
+                )
+                let durationMS =
+                    (
+                        ProcessInfo.processInfo.systemUptime
+                            - started
+                    ) * 1_000
+
+                if let observation {
                     equipmentCandidates.append(
                         IndoBoardEquipmentDetectionCandidate(
                             observation: observation,
@@ -186,12 +198,44 @@ public enum Pose3DExtractor {
                                 detector.detectorID
                         )
                     )
+                    detectorExecutions.append(
+                        IndoBoardEquipmentDetectorExecutionAudit(
+                            detectorID:
+                                detector.detectorID,
+                            status: .observation,
+                            durationMS: durationMS
+                        )
+                    )
+                } else {
+                    detectorExecutions.append(
+                        IndoBoardEquipmentDetectorExecutionAudit(
+                            detectorID:
+                                detector.detectorID,
+                            status: .noObservation,
+                            durationMS: durationMS
+                        )
+                    )
                 }
             } catch {
+                let durationMS =
+                    (
+                        ProcessInfo.processInfo.systemUptime
+                            - started
+                    ) * 1_000
                 detectorFailures.append(
                     IndoBoardEquipmentDetectorFailure(
                         detectorID:
                             detector.detectorID,
+                        message:
+                            error.localizedDescription
+                    )
+                )
+                detectorExecutions.append(
+                    IndoBoardEquipmentDetectorExecutionAudit(
+                        detectorID:
+                            detector.detectorID,
+                        status: .error,
+                        durationMS: durationMS,
                         message:
                             error.localizedDescription
                     )
@@ -243,6 +287,16 @@ public enum Pose3DExtractor {
                     ] = .string(modelID)
                 }
             }
+        }
+
+        if !detectorExecutions.isEmpty {
+            payload[
+                "indo_board_equipment_detector_executions"
+            ] = .array(
+                detectorExecutions.map {
+                    $0.cameraPayload
+                }
+            )
         }
 
         if !detectorFailures.isEmpty {
