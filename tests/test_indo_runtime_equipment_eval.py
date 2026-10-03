@@ -162,9 +162,17 @@ def test_runtime_eval_reports_missing_prediction_coverage(
         )
         for index in range(4)
     ]
-    prediction = reference[:2]
-    for item in prediction:
-        item["review_status"] = "model_proposed"
+    prediction = [
+        _observation(
+            source_id="camera-1",
+            frame_index=index,
+            deck_left=[0.2, 0.7],
+            deck_right=[0.8, 0.7],
+            roller_center=[0.5, 0.7],
+            review_status="model_proposed",
+        )
+        for index in range(2)
+    ]
 
     reference_path = tmp_path / "reference.json"
     prediction_path = tmp_path / "prediction.json"
