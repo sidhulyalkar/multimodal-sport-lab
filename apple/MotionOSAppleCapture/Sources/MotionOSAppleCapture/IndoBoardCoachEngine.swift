@@ -376,15 +376,23 @@ public final class IndoBoardCoachEngine {
             blockSamples("free-balance-a")
         let boardBaseline = firstBalanceBlock
             .filter {
-                ($0.boardStateConfidence ?? 0) >= 0.55
+                ($0.boardStateConfidence ?? 0)
+                    >= IndoBoardEvidenceQualityThresholds
+                        .minimumStateConfidence
                     && $0.rollerAlongDeck != nil
             }
         let boardBaselineCoverage = boardCoverage(
             firstBalanceBlock,
-            minimumConfidence: 0.55
+            minimumConfidence:
+                IndoBoardEvidenceQualityThresholds
+                    .minimumStateConfidence
         )
-        if boardBaseline.count >= 30,
-           boardBaselineCoverage >= 0.60 {
+        if boardBaseline.count
+            >= IndoBoardEvidenceQualityThresholds
+                .minimumInterventionSamples,
+           boardBaselineCoverage
+            >= IndoBoardEvidenceQualityThresholds
+                .minimumBlockCoverage {
             let excursion = percentile(
                 boardBaseline.compactMap {
                     $0.rollerAlongDeck.map(abs)
@@ -642,15 +650,21 @@ public final class IndoBoardCoachEngine {
             balanceAccumulator.makeMetrics()
         let boardCoverageAll = boardCoverage(
             samples,
-            minimumConfidence: 0.55
+            minimumConfidence:
+                IndoBoardEvidenceQualityThresholds
+                    .minimumStateConfidence
         )
         let boardCoverageFirstBalance = boardCoverage(
             blockSamples("free-balance-a"),
-            minimumConfidence: 0.55
+            minimumConfidence:
+                IndoBoardEvidenceQualityThresholds
+                    .minimumStateConfidence
         )
         let boardCoverageSecondBalance = boardCoverage(
             blockSamples("free-balance-b"),
-            minimumConfidence: 0.55
+            minimumConfidence:
+                IndoBoardEvidenceQualityThresholds
+                    .minimumStateConfidence
         )
         numericMetrics["board_state_coverage_fraction"] =
             boardCoverageAll
@@ -754,9 +768,15 @@ public final class IndoBoardCoachEngine {
         }
 
         if let balanceMetrics,
-           balanceMetrics.sampleCount >= 60,
-           balanceMetrics.meanConfidence >= 0.55,
-           boardCoverageAll >= 0.50 {
+           balanceMetrics.sampleCount
+            >= IndoBoardEvidenceQualityThresholds
+                .minimumSessionSamples,
+           balanceMetrics.meanConfidence
+            >= IndoBoardEvidenceQualityThresholds
+                .minimumStateConfidence,
+           boardCoverageAll
+            >= IndoBoardEvidenceQualityThresholds
+                .minimumSessionCoverage {
             let boardEvidenceConfidence = min(
                 0.92,
                 balanceMetrics.meanConfidence
@@ -956,15 +976,23 @@ public final class IndoBoardCoachEngine {
             || intervention.targetMetric == .centerTimeFraction {
             let beforeCoverage = boardCoverage(
                 beforeSamples,
-                minimumConfidence: 0.55
+                minimumConfidence:
+                IndoBoardEvidenceQualityThresholds
+                    .minimumStateConfidence
             )
             let afterCoverage = boardCoverage(
                 afterSamples,
-                minimumConfidence: 0.55
+                minimumConfidence:
+                IndoBoardEvidenceQualityThresholds
+                    .minimumStateConfidence
             )
 
-            guard beforeCoverage >= 0.60,
-                  afterCoverage >= 0.60
+            guard beforeCoverage
+                >= IndoBoardEvidenceQualityThresholds
+                    .minimumBlockCoverage,
+                  afterCoverage
+                >= IndoBoardEvidenceQualityThresholds
+                    .minimumBlockCoverage
             else {
                 return IndoBoardCoachExperimentResult(
                     targetMetric:
@@ -1120,13 +1148,19 @@ public final class IndoBoardCoachEngine {
         _ values: [Sample]
     ) -> Double? {
         let qualified = values.filter {
-            ($0.boardStateConfidence ?? 0) >= 0.55
+            ($0.boardStateConfidence ?? 0)
+                    >= IndoBoardEvidenceQualityThresholds
+                        .minimumStateConfidence
                 && $0.rollerAlongDeck != nil
         }
-        guard qualified.count >= 20,
+        guard qualified.count
+            >= IndoBoardEvidenceQualityThresholds
+                .minimumComparisonSamples,
               boardCoverage(
                 values,
-                minimumConfidence: 0.55
+                minimumConfidence:
+                IndoBoardEvidenceQualityThresholds
+                    .minimumStateConfidence
               ) >= 0.60
         else {
             return nil
