@@ -10,6 +10,15 @@ public enum IndoBoardBalanceThresholds {
     public static let minimumStateConfidence: Double = 0.35
 }
 
+public enum IndoBoardEvidenceQualityThresholds {
+    public static let minimumStateConfidence: Double = 0.55
+    public static let minimumSessionCoverage: Double = 0.50
+    public static let minimumBlockCoverage: Double = 0.60
+    public static let minimumSessionSamples: Int = 60
+    public static let minimumInterventionSamples: Int = 30
+    public static let minimumComparisonSamples: Int = 20
+}
+
 public struct IndoBoardBalanceMetrics:
     Codable,
     Equatable,
