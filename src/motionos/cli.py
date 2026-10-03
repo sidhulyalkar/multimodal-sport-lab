@@ -43,7 +43,10 @@ from .experiments import (
     verify_experiment_manifest,
     verify_grouped_split,
 )
-from .indo_annotations import build_annotation_queue
+from .indo_annotations import (
+    build_annotation_queue,
+    export_equipment_observations,
+)
 from .indo_board_state import (
     analyze_board_observations,
     load_board_observations,
@@ -515,6 +518,18 @@ def _parser() -> argparse.ArgumentParser:
     indo_annotation_queue.add_argument("taxonomy")
     indo_annotation_queue.add_argument("output")
     indo_annotation_queue.add_argument("--max-sources", type=int)
+
+    indo_equipment_export = sub.add_parser(
+        "indo-export-equipment-labels",
+        help="export human-reviewed deck/roller labels into the runtime equipment contract",
+    )
+    indo_equipment_export.add_argument("annotations")
+    indo_equipment_export.add_argument("output")
+    indo_equipment_export.add_argument(
+        "--allow-model-proposals",
+        action="store_true",
+        help="include model-proposed labels instead of requiring human review",
+    )
 
     indo_report = sub.add_parser(
         "indo-session-report",
@@ -1155,6 +1170,28 @@ def main(argv: list[str] | None = None) -> int:
                     "schema_version": payload["schema_version"],
                     "task_count": payload["task_count"],
                     "split_counts": payload["split_counts"],
+                    "output": args.output,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    if args.command == "indo-export-equipment-labels":
+        payload = export_equipment_observations(
+            args.annotations,
+            args.output,
+            require_human_review=not args.allow_model_proposals,
+        )
+        print(
+            json.dumps(
+                {
+                    "schema_version": payload["schema_version"],
+                    "observation_count":
+                        payload["observation_count"],
+                    "skipped_unreviewed_count":
+                        payload["skipped_unreviewed_count"],
                     "output": args.output,
                 },
                 indent=2,
