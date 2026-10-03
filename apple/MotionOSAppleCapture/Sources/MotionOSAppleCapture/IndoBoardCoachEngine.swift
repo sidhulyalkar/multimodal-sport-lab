@@ -709,6 +709,17 @@ public final class IndoBoardCoachEngine {
                 ),
                 at: min(1, metrics.count)
             )
+            metrics.insert(
+                IndoBoardCoachMetric(
+                    id: "board-coverage",
+                    label: "Board tracking coverage",
+                    value: String(
+                        format: "%.0f%%",
+                        boardCoverageAll * 100
+                    )
+                ),
+                at: min(2, metrics.count)
+            )
         }
         if let medianKnee {
             numericMetrics["median_knee_flexion_deg"] =
@@ -746,6 +757,11 @@ public final class IndoBoardCoachEngine {
            balanceMetrics.sampleCount >= 60,
            balanceMetrics.meanConfidence >= 0.55,
            boardCoverageAll >= 0.50 {
+            let boardEvidenceConfidence = min(
+                0.92,
+                balanceMetrics.meanConfidence
+                    * sqrt(boardCoverageAll)
+            )
             if let recovery =
                     balanceMetrics.p90RecoveryTimeMS,
                balanceMetrics.recoveryCount >= 3,
@@ -759,7 +775,7 @@ public final class IndoBoardCoachEngine {
                     drill:
                         "5 slow excursions, returning toward center before the board reaches the outer zone",
                     confidence:
-                        min(0.92, balanceMetrics.meanConfidence * 0.90),
+                        boardEvidenceConfidence * 0.90,
                     evidenceLabel:
                         "Deck + roller image geometry · balance proxy",
                     metrics: Array(metrics.prefix(6)),
@@ -777,7 +793,7 @@ public final class IndoBoardCoachEngine {
                     drill:
                         "5 slow left/right shifts with a one-second center hold",
                     confidence:
-                        min(0.92, balanceMetrics.meanConfidence * 0.88),
+                        boardEvidenceConfidence * 0.88,
                     evidenceLabel:
                         "Deck + roller image geometry · balance proxy",
                     metrics: Array(metrics.prefix(6)),
@@ -795,7 +811,7 @@ public final class IndoBoardCoachEngine {
                     drill:
                         "Controlled shifts that stop short of the outer zone",
                     confidence:
-                        min(0.90, balanceMetrics.meanConfidence * 0.84),
+                        min(0.90, boardEvidenceConfidence * 0.84),
                     evidenceLabel:
                         "Deck + roller image geometry · balance proxy",
                     metrics: Array(metrics.prefix(6)),
