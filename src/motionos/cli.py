@@ -51,6 +51,9 @@ from .indo_board_state import (
     analyze_board_observations,
     load_board_observations,
 )
+from .indo_equipment_eval import (
+    evaluate_equipment_predictions,
+)
 from .indo_knowledge import (
     build_session_learning_targets,
     classify_observable_skills,
@@ -530,6 +533,14 @@ def _parser() -> argparse.ArgumentParser:
         action="store_true",
         help="include model-proposed labels instead of requiring human review",
     )
+
+    indo_equipment_eval = sub.add_parser(
+        "indo-evaluate-equipment-model",
+        help="evaluate deck/roller predictions against human-reviewed labels",
+    )
+    indo_equipment_eval.add_argument("reference")
+    indo_equipment_eval.add_argument("predictions")
+    indo_equipment_eval.add_argument("output")
 
     indo_report = sub.add_parser(
         "indo-session-report",
@@ -1192,6 +1203,29 @@ def main(argv: list[str] | None = None) -> int:
                         payload["observation_count"],
                     "skipped_unreviewed_count":
                         payload["skipped_unreviewed_count"],
+                    "output": args.output,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    if args.command == "indo-evaluate-equipment-model":
+        payload = evaluate_equipment_predictions(
+            args.reference,
+            args.predictions,
+            args.output,
+        )
+        print(
+            json.dumps(
+                {
+                    "schema_version": payload["schema_version"],
+                    "reference_count": payload["reference_count"],
+                    "matched_count": payload["matched_count"],
+                    "reference_coverage_fraction":
+                        payload["reference_coverage_fraction"],
+                    "metrics": payload["metrics"],
                     "output": args.output,
                 },
                 indent=2,
