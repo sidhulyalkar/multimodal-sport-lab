@@ -212,6 +212,31 @@ struct IndoBoardSessionView: View {
 
             Divider()
 
+            NavigationLink {
+                IndoBoardMarkerSetupView()
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "qrcode.viewfinder")
+                        .foregroundStyle(.cyan)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Beta board + roller tracking")
+                            .font(.subheadline.weight(.semibold))
+                        Text(
+                            "Optional 3-marker bootstrap for deck-centered balance metrics"
+                        )
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .buttonStyle(.plain)
+
+            Divider()
+
             Toggle(
                 isOn: externalCameraEnabled
             ) {
@@ -276,6 +301,8 @@ struct IndoBoardSessionView: View {
                 symbol: "camera.fill"
             )
 
+            boardTrackingRow
+
             readinessRow(
                 title: "Battery",
                 detail: phone.iPhoneBatteryLevel.map {
@@ -330,6 +357,53 @@ struct IndoBoardSessionView: View {
             }
         }
         .cardStyle()
+    }
+
+    private var boardTrackingRow: some View {
+        let state =
+            camera.latestPoseFrame?
+                .indoBoardBalanceState
+
+        return HStack(spacing: 9) {
+            Image(
+                systemName:
+                    state == nil
+                        ? "viewfinder"
+                        : "viewfinder.circle.fill"
+            )
+            .foregroundStyle(
+                state == nil ? .secondary : .green
+            )
+            .frame(width: 22)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Board tracking")
+                    .font(.subheadline.weight(.medium))
+                Text(
+                    state.map {
+                        String(
+                            format:
+                                "deck + roller visible · %.0f%% confidence",
+                            $0.confidence * 100
+                        )
+                    }
+                    ?? "optional · body-only beta still available"
+                )
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            if state != nil {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+            } else {
+                Text("OPTIONAL")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(.secondary)
+            }
+        }
     }
 
     @ViewBuilder
