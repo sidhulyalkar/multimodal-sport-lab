@@ -251,6 +251,134 @@ def new_frame_annotation(
     return payload
 
 
+def equipment_payload_from_frame_annotation(
+    annotation: dict[str, Any],
+) -> dict[str, Any]:
+    """Convert a reviewed annotation into the shared runtime equipment contract."""
+
+    validate_frame_annotation(annotation)
+    review = annotation["review"]
+    status = review["status"]
+    if status == "rejected":
+        raise ValueError(
+            "rejected annotations cannot become equipment evidence"
+        )
+
+    provenance = (
+        "manual_annotated"
+        if status in {"human_reviewed", "human_corrected"}
+        else "model_estimated"
+    )
+
+    deck = annotation["equipment"]["deck"]
+    roller = annotation["equipment"]["roller"]
+    roller_left = roller["left"]
+    roller_right = roller["right"]
+    center = [
+        (float(roller_left[0]) + float(roller_right[0])) / 2,
+        (float(roller_left[1]) + float(roller_right[1])) / 2,
+    ]
+
+    model_id = review.get("model_id")
+    return {
+        "indo_board_equipment": {
+            "sequence": annotation["frame_index"],
+            "device_time_ns": int(
+                round(float(annotation["time_s"]) * 1_000_000_000)
+            ),
+            "model_id": model_id,
+            "deck": {
+                "polygon": deck["polygon"],
+                "left_end": deck["left"],
+                "right_end": deck["right"],
+                "confidence": deck["confidence"],
+                "provenance": provenance,
+            },
+            "roller": {
+                "center": center,
+                "axis_start": roller_left,
+                "axis_end": roller_right,
+                "confidence": roller["confidence"],
+                "provenance": provenance,
+            },
+        },
+        "source_id": annotation["source_id"],
+        "frame_index": annotation["frame_index"],
+        "time_s": annotation["time_s"],
+        "review_status": status,
+        "claim_boundary": (
+            "This payload preserves reviewed image-space equipment geometry. "
+            "It is not a calibrated physical measurement."
+        ),
+    }
+
+
+def export_equipment_observations(
+    annotations_path: str | Path,
+    output_path: str | Path,
+    *,
+    require_human_review: bool = True,
+) -> dict[str, Any]:
+    """Export frame annotations into the Swift-compatible equipment contract."""
+
+    raw = json.loads(
+        Path(annotations_path).read_text(encoding="utf-8")
+    )
+    if isinstance(raw, dict):
+        annotations = raw.get("annotations")
+    else:
+        annotations = raw
+    if not isinstance(annotations, list):
+        raise TypeError(
+            "annotation export input must be a list or {annotations: [...]}"
+        )
+
+    observations: list[dict[str, Any]] = []
+    rejected_count = 0
+    skipped_unreviewed_count = 0
+
+    for annotation in annotations:
+        if not isinstance(annotation, dict):
+            continue
+        validate_frame_annotation(annotation)
+        status = annotation["review"]["status"]
+        if status == "rejected":
+            rejected_count += 1
+            continue
+        if require_human_review and status not in {
+            "human_reviewed",
+            "human_corrected",
+        }:
+            skipped_unreviewed_count += 1
+            continue
+        observations.append(
+            equipment_payload_from_frame_annotation(annotation)
+        )
+
+    observations.sort(
+        key=lambda item: (
+            str(item["source_id"]),
+            int(item["frame_index"]),
+        )
+    )
+
+    payload = {
+        "schema_version":
+            "motionos.indo-equipment-dataset.v1",
+        "observation_count": len(observations),
+        "rejected_count": rejected_count,
+        "skipped_unreviewed_count":
+            skipped_unreviewed_count,
+        "observations": observations,
+        "claim_boundary": (
+            "Human-reviewed image-space geometry is suitable for detector "
+            "training/evaluation. It is not metric biomechanics ground truth."
+        ),
+    }
+    _write_json(output_path, payload)
+    return payload
+
+
 def _assign_grouped_splits(
     tasks: list[dict[str, Any]],
 ) -> None:
