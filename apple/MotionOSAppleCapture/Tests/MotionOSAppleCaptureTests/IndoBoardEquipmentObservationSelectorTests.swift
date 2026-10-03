@@ -329,6 +329,69 @@ final class IndoBoardEquipmentObservationSelectorTests:
         )
     }
 
+    func testSnakeCaseResearchRegistryDecodesIntoRuntime() throws {
+        let json = """
+        {
+          "schema_version": "motionos.indo-equipment-model-qualification-registry.v1",
+          "qualifications": [
+            {
+              "schema_version": "motionos.indo-equipment-model-qualification.v1",
+              "model_id": "indo-equipment-v1",
+              "status": "qualified_for_beta_tracking",
+              "evaluation_dataset_id": "indo-heldout-2026-10",
+              "evaluation_report_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "authorization_note": "Approved after held-out review.",
+              "metrics": {
+                "reference_coverage_fraction": 0.96,
+                "roller_center_error_p90": 0.03
+              },
+              "claim_boundary": "runtime authorization boundary"
+            }
+          ],
+          "claim_boundary": "registry authorization boundary"
+        }
+        """
+
+        let registry = try JSONDecoder().decode(
+            IndoBoardEquipmentModelQualificationRegistry.self,
+            from: Data(json.utf8)
+        )
+
+        XCTAssertEqual(
+            registry.qualifications.first?.modelID,
+            "indo-equipment-v1"
+        )
+        XCTAssertEqual(
+            registry.qualifications.first?.status,
+            .qualifiedForBetaTracking
+        )
+        XCTAssertEqual(
+            registry.qualifications.first?.authorizationNote,
+            "Approved after held-out review."
+        )
+
+        let selector = IndoBoardEquipmentObservationSelector(
+            qualifications: registry.qualifications
+        )
+        let result = selector.select(
+            [
+                candidate(
+                    detectorID: "markerless",
+                    modelID: "indo-equipment-v1",
+                    provenance: .modelEstimated,
+                    confidence: 0.88
+                ),
+            ],
+            intent: .displayTracking
+        )
+
+        XCTAssertEqual(
+            result.reason,
+            .qualifiedMarkerlessModel
+        )
+        XCTAssertNotNil(result.selected)
+    }
+
     private func qualification(
         modelID: String,
         status:
