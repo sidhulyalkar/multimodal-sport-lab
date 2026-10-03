@@ -177,3 +177,50 @@ A small temporal model can later replace parts of the grammar only when it beats
 A model earns a place in the app only if it improves at least one user-facing measurement enough to change coaching reliability.
 
 "Better segmentation" by itself is not a product result.
+
+## Reviewed-label bridge
+
+The annotation queue now has a direct, fail-closed bridge into the runtime deck/roller contract.
+
+After a model proposes labels and a human reviews/corrects them:
+
+    motionos indo-export-equipment-labels \
+      reviewed-annotations.json \
+      generated/equipment-labels.json
+
+By default, model-proposed frames are skipped. Use --allow-model-proposals only for proposal/debug workflows, never to construct evaluation ground truth.
+
+The exported payload matches the shared Apple contract:
+
+- deck polygon
+- deck left/right endpoints
+- roller center
+- roller axis endpoints
+- confidence
+- provenance
+- frame sequence / timestamp
+
+This keeps research annotations and on-device geometry from drifting into two incompatible coordinate conventions.
+
+## Detector qualification
+
+Evaluate a detector against human-reviewed labels with:
+
+    motionos indo-evaluate-equipment-model \
+      reviewed-annotations.json \
+      model-predictions.json \
+      generated/equipment-evaluation.json
+
+The initial evaluation intentionally focuses on product-relevant image-space quantities:
+
+- deck endpoint error
+- roller endpoint error
+- roller center error
+- roller position-along-deck error
+- center-zone classification agreement
+- edge-zone classification agreement
+- reference coverage
+
+Do not promote a detector because its masks look impressive. Promote it only when these downstream quantities become reliable on creator/viewpoint-separated test data.
+
+The next evaluator layer should add temporal recovery-event timing and occlusion robustness after static geometry is stable.
