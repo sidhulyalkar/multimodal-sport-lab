@@ -372,7 +372,9 @@ struct IndoBoardSessionView: View {
                         : "viewfinder.circle.fill"
             )
             .foregroundStyle(
-                state == nil ? .secondary : .green
+                state == nil
+                    ? Color.secondary
+                    : Color.green
             )
             .frame(width: 22)
 
