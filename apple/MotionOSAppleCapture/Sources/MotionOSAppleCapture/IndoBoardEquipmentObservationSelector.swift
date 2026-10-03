@@ -70,7 +70,10 @@ public struct IndoBoardEquipmentModelQualification:
     public var id: String { modelID }
 
     fileprivate var hasCompleteAuthorizationReceipt: Bool {
-        guard let datasetID = evaluationDatasetID?
+        guard schemaVersion
+                == IndoBoardEquipmentModelQualification
+                    .schemaVersion,
+              let datasetID = evaluationDatasetID?
                     .trimmingCharacters(
                         in: .whitespacesAndNewlines
                     ),
