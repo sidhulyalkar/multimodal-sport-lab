@@ -50,7 +50,7 @@ final class CameraCaptureController: ObservableObject {
         IndoBoardPrimitiveObservation?
     @Published private(set) var errorMessage: String?
 
-    private let pipeline = CameraCapturePipeline()
+    private let pipeline: CameraCapturePipeline
     private let stanceGate = IndoBoardStanceGate()
     private let indoCoach = IndoBoardCoachEngine()
     private let indoPrimitiveDetector =
@@ -65,6 +65,20 @@ final class CameraCaptureController: ObservableObject {
 
     private static let livePoseStaleSeconds: TimeInterval = 0.80
     private static let liveBoardStaleSeconds: TimeInterval = 0.80
+
+    init(
+        equipmentDetectors:
+            [any IndoBoardEquipmentFrameDetector] = [],
+        equipmentQualificationRegistry:
+            IndoBoardEquipmentModelQualificationRegistry? = nil
+    ) {
+        self.pipeline = CameraCapturePipeline(
+            equipmentDetectors:
+                equipmentDetectors,
+            equipmentQualificationRegistry:
+                equipmentQualificationRegistry
+        )
+    }
 
     var authorizationStatus: AVAuthorizationStatus {
         AVCaptureDevice.authorizationStatus(for: .video)
