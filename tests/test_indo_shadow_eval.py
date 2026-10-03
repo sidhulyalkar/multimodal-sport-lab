@@ -19,6 +19,13 @@ def _pose_event(
         "device_time_ns": 1_000_000_000 + sequence * 100_000_000,
         "payload": {
             "source_frame_sequence": frame_index,
+            "indo_board_equipment_detector_executions": [
+                {
+                    "detector_id": "markerless",
+                    "status": "observation",
+                    "duration_ms": 12.0 + sequence,
+                }
+            ],
             "indo_board_equipment_routing": {
                 "schema_version":
                     "motionos.indo-equipment-routing-audit.v1",
@@ -91,6 +98,13 @@ def test_summarizes_shadow_comparisons_by_model(tmp_path):
         group["metrics"]["center_zone_agreement_fraction"]
         == 0.5
     )
+
+    detector = report["detector_execution_groups"][0]
+    assert detector["detector_id"] == "markerless"
+    assert detector["execution_count"] == 2
+    assert detector["observation_fraction"] == 1
+    assert detector["error_fraction"] == 0
+    assert detector["duration_ms_mean"] == 12.5
     assert output.is_file()
 
 
@@ -125,6 +139,7 @@ def test_ignores_pose_events_without_shadow_comparison(tmp_path):
     assert report["routing_event_count"] == 0
     assert report["comparison_count"] == 0
     assert report["groups"] == []
+    assert report["detector_execution_groups"] == []
 
 
 def test_invalid_jsonl_reports_line_number(tmp_path):
