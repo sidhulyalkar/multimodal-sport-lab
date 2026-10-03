@@ -84,8 +84,7 @@ struct MotionOSiOSApp: App {
         let coach = cameraController.indoCoachReport
 
         let boardState =
-            cameraController.latestPoseFrame?
-                .indoBoardBalanceState
+            cameraController.latestIndoBoardState
 
         return IndoBoardRemoteStatus(
             cameraPhase: cameraController.phase.rawValue,
