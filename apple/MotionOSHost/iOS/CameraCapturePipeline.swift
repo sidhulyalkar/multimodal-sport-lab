@@ -156,6 +156,10 @@ final class CameraCapturePipeline:
     private let outputQueue = DispatchQueue(
         label: "motionos.camera.output"
     )
+    private let equipmentDetectors:
+        [any IndoBoardEquipmentFrameDetector]
+    private let equipmentQualificationRegistry:
+        IndoBoardEquipmentModelQualificationRegistry?
 
     private var configuration: CameraCaptureConfiguration?
     private var configured = false
@@ -191,7 +195,15 @@ final class CameraCapturePipeline:
     private var previewFrameSequence: UInt64 = 0
     private var encoder = JSONEncoder()
 
-    override init() {
+    init(
+        equipmentDetectors:
+            [any IndoBoardEquipmentFrameDetector] = [],
+        equipmentQualificationRegistry:
+            IndoBoardEquipmentModelQualificationRegistry? = nil
+    ) {
+        self.equipmentDetectors = equipmentDetectors
+        self.equipmentQualificationRegistry =
+            equipmentQualificationRegistry
         encoder.outputFormatting = [.sortedKeys]
         super.init()
     }
@@ -543,7 +555,11 @@ final class CameraCapturePipeline:
 
             guard var payload = try Pose3DExtractor.extract(
                 from: pixelBuffer,
-                orientation: .up
+                orientation: .up,
+                equipmentDetectors:
+                    equipmentDetectors,
+                qualificationRegistry:
+                    equipmentQualificationRegistry
             ) else {
                 latestPoseFrame = nil
                 return
@@ -638,7 +654,11 @@ final class CameraCapturePipeline:
                     do {
                         if let pose = try Pose3DExtractor.extract(
                             from: pixelBuffer,
-                            orientation: .up
+                            orientation: .up,
+                            equipmentDetectors:
+                                equipmentDetectors,
+                            qualificationRegistry:
+                                equipmentQualificationRegistry
                         ) {
                             poseStatus = "detected"
                             poseDetectedCount += 1
