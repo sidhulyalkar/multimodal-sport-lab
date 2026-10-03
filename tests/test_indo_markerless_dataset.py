@@ -4,6 +4,7 @@ import pytest
 
 from motionos.indo_markerless_dataset import (
     build_markerless_dataset_index,
+    verify_markerless_dataset_index,
 )
 
 
@@ -109,6 +110,117 @@ def test_builds_hash_bound_markerless_dataset_index(tmp_path):
     assert sample["camera_view"] == "front-oblique"
     assert sample["video_path"] == video.name
     assert output.is_file()
+
+
+def test_verifier_rechecks_hashes_and_sample_identity(tmp_path):
+    video, labels = _write_source(tmp_path)
+    spec = tmp_path / "spec.json"
+    spec.write_text(
+        json.dumps(
+            {
+                "sources": [
+                    {
+                        "source_id": "run-a",
+                        "video": video.name,
+                        "teacher_labels": labels.name,
+                        "subject_id": "subject-1",
+                        "day_id": "day-1",
+                        "run_id": "run-1",
+                        "remount_id": "mount-1",
+                        "camera_view": "front-oblique",
+                        "board_id": "indo-1",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    output = tmp_path / "index.json"
+    build_markerless_dataset_index(spec, output)
+
+    result = verify_markerless_dataset_index(output)
+
+    assert result["passed"] is True
+    assert result["sample_count"] == 1
+    assert result["source_count"] == 1
+    assert len(result["index_sha256"]) == 64
+
+
+def test_verifier_rejects_source_video_mutation(tmp_path):
+    video, labels = _write_source(tmp_path)
+    spec = tmp_path / "spec.json"
+    spec.write_text(
+        json.dumps(
+            {
+                "sources": [
+                    {
+                        "source_id": "run-a",
+                        "video": video.name,
+                        "teacher_labels": labels.name,
+                        "subject_id": "subject-1",
+                        "day_id": "day-1",
+                        "run_id": "run-1",
+                        "remount_id": "mount-1",
+                        "camera_view": "front",
+                        "board_id": "indo-1",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    output = tmp_path / "index.json"
+    build_markerless_dataset_index(spec, output)
+
+    video.write_bytes(b"mutated-video")
+
+    with pytest.raises(
+        ValueError,
+        match="video hash mismatch",
+    ):
+        verify_markerless_dataset_index(output)
+
+
+def test_verifier_rejects_sample_group_mutation(tmp_path):
+    video, labels = _write_source(tmp_path)
+    spec = tmp_path / "spec.json"
+    spec.write_text(
+        json.dumps(
+            {
+                "sources": [
+                    {
+                        "source_id": "run-a",
+                        "video": video.name,
+                        "teacher_labels": labels.name,
+                        "subject_id": "subject-1",
+                        "day_id": "day-1",
+                        "run_id": "run-1",
+                        "remount_id": "mount-1",
+                        "camera_view": "front",
+                        "board_id": "indo-1",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    output = tmp_path / "index.json"
+    build_markerless_dataset_index(spec, output)
+
+    payload = json.loads(
+        output.read_text(encoding="utf-8")
+    )
+    payload["samples"][0]["day_id"] = "other-day"
+    output.write_text(
+        json.dumps(payload),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="mismatches source day_id",
+    ):
+        verify_markerless_dataset_index(output)
 
 
 def test_duplicate_sample_identity_fails_closed(tmp_path):
