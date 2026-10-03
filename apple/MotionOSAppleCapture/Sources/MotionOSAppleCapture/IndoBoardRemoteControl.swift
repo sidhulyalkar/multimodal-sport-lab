@@ -149,6 +149,7 @@ public struct IndoBoardRemoteStatus: Equatable, Sendable {
     public let phoneStorageGB: Double?
     public let boardTrackingReady: Bool
     public let boardTrackingConfidencePercent: Int?
+    public let boardTrackingCoveragePercent: Int?
     public let coachHeadline: String?
     public let coachTip: String?
     public let coachDrill: String?
@@ -176,6 +177,7 @@ public struct IndoBoardRemoteStatus: Equatable, Sendable {
         phoneStorageGB: Double?,
         boardTrackingReady: Bool = false,
         boardTrackingConfidencePercent: Int? = nil,
+        boardTrackingCoveragePercent: Int? = nil,
         coachHeadline: String? = nil,
         coachTip: String? = nil,
         coachDrill: String? = nil,
@@ -204,6 +206,10 @@ public struct IndoBoardRemoteStatus: Equatable, Sendable {
         self.boardTrackingReady = boardTrackingReady
         self.boardTrackingConfidencePercent =
             boardTrackingConfidencePercent.map {
+                min(100, max(0, $0))
+            }
+        self.boardTrackingCoveragePercent =
+            boardTrackingCoveragePercent.map {
                 min(100, max(0, $0))
             }
         self.coachHeadline = coachHeadline
@@ -273,6 +279,14 @@ public struct IndoBoardRemoteStatus: Equatable, Sendable {
             ).map {
                 min(100, max(0, $0))
             }
+        self.boardTrackingCoveragePercent =
+            Self.int(
+                message[
+                    "board_tracking_coverage_percent"
+                ]
+            ).map {
+                min(100, max(0, $0))
+            }
         self.coachHeadline =
             message["coach_headline"] as? String
         self.coachTip =
@@ -331,6 +345,11 @@ public struct IndoBoardRemoteStatus: Equatable, Sendable {
             payload[
                 "board_tracking_confidence_percent"
             ] = boardTrackingConfidencePercent
+        }
+        if let boardTrackingCoveragePercent {
+            payload[
+                "board_tracking_coverage_percent"
+            ] = boardTrackingCoveragePercent
         }
         if let coachHeadline, !coachHeadline.isEmpty {
             payload["coach_headline"] = coachHeadline
@@ -393,6 +412,8 @@ public struct IndoBoardRemoteStatus: Equatable, Sendable {
             && boardTrackingReady == other.boardTrackingReady
             && boardTrackingConfidencePercent
                 == other.boardTrackingConfidencePercent
+            && boardTrackingCoveragePercent
+                == other.boardTrackingCoveragePercent
             && coachHeadline == other.coachHeadline
             && coachTip == other.coachTip
             && coachDrill == other.coachDrill
