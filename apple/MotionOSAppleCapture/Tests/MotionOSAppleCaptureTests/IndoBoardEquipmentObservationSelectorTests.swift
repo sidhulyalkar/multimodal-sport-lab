@@ -223,6 +223,112 @@ final class IndoBoardEquipmentObservationSelectorTests:
         )
     }
 
+    func testSelectionReceiptPreservesEvidenceDecision() {
+        let selector = IndoBoardEquipmentObservationSelector(
+            qualifications: [
+                qualification(
+                    modelID: "markerless-v1",
+                    status: .qualifiedForBetaTracking
+                ),
+            ]
+        )
+
+        let selection = selector.select(
+            [
+                candidate(
+                    detectorID: "markerless",
+                    modelID: "markerless-v1",
+                    provenance: .modelEstimated,
+                    confidence: 0.87
+                ),
+            ],
+            intent: .displayTracking
+        )
+        let receipt = selection.receipt(
+            intent: .displayTracking
+        )
+
+        XCTAssertEqual(
+            receipt.selectedDetectorID,
+            "markerless"
+        )
+        XCTAssertEqual(
+            receipt.selectedModelID,
+            "markerless-v1"
+        )
+        XCTAssertEqual(
+            receipt.selectedProvenance,
+            .modelEstimated
+        )
+        XCTAssertEqual(
+            receipt.reason,
+            .qualifiedMarkerlessModel
+        )
+        XCTAssertEqual(
+            receipt.selectedConfidence ?? 0,
+            0.87,
+            accuracy: 0.001
+        )
+    }
+
+    func testDuplicateQualificationsKeepStrongestAuthorization() {
+        let selector = IndoBoardEquipmentObservationSelector(
+            qualifications: [
+                qualification(
+                    modelID: "markerless-v1",
+                    status: .evaluationOnly
+                ),
+                qualification(
+                    modelID: "markerless-v1",
+                    status: .qualifiedForBetaTracking
+                ),
+            ]
+        )
+
+        let result = selector.select(
+            [
+                candidate(
+                    detectorID: "markerless",
+                    modelID: "markerless-v1",
+                    provenance: .modelEstimated,
+                    confidence: 0.90
+                ),
+            ],
+            intent: .displayTracking
+        )
+
+        XCTAssertNotNil(result.selected)
+        XCTAssertEqual(
+            result.reason,
+            .qualifiedMarkerlessModel
+        )
+    }
+
+    func testQualificationRegistryRoundTrips() throws {
+        let registry =
+            IndoBoardEquipmentModelQualificationRegistry(
+                qualifications: [
+                    qualification(
+                        modelID: "markerless-v1",
+                        status:
+                            .qualifiedForBetaTracking
+                    ),
+                ]
+            )
+
+        let data = try JSONEncoder().encode(registry)
+        let decoded = try JSONDecoder().decode(
+            IndoBoardEquipmentModelQualificationRegistry.self,
+            from: data
+        )
+
+        XCTAssertEqual(decoded, registry)
+        XCTAssertEqual(
+            decoded.qualifications.first?.modelID,
+            "markerless-v1"
+        )
+    }
+
     private func qualification(
         modelID: String,
         status:
