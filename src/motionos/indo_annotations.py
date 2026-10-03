@@ -283,8 +283,8 @@ def equipment_payload_from_frame_annotation(
     return {
         "indo_board_equipment": {
             "sequence": annotation["frame_index"],
-            "device_time_ns": int(
-                round(float(annotation["time_s"]) * 1_000_000_000)
+            "device_time_ns": round(
+                float(annotation["time_s"]) * 1_000_000_000
             ),
             "model_id": model_id,
             "deck": {
