@@ -30,6 +30,8 @@ final class CameraCaptureController: ObservableObject {
         IndoBoardEquipmentObservation?
     @Published private(set) var latestIndoBoardStateReceivedAt:
         Date?
+    @Published private(set) var indoBoardTrackingHealth:
+        IndoBoardLiveTrackingHealth = .empty
     @Published private(set) var framingAssessment:
         CameraFramingAssessment = .waiting
     @Published private(set) var stanceAssessment:
@@ -47,6 +49,8 @@ final class CameraCaptureController: ObservableObject {
     private let indoCoach = IndoBoardCoachEngine()
     private let indoPrimitiveDetector =
         IndoBoardPrimitiveDetector()
+    private let indoBoardTrackingWindow =
+        IndoBoardLiveTrackingWindow()
     private var indoCoachStartedAt: Date?
     private var statsTask: Task<Void, Never>?
     private var poseTask: Task<Void, Never>?
@@ -79,6 +83,8 @@ final class CameraCaptureController: ObservableObject {
         latestIndoBoardState = nil
         latestIndoBoardEquipment = nil
         latestIndoBoardStateReceivedAt = nil
+        indoBoardTrackingHealth = .empty
+        indoBoardTrackingWindow.reset()
         lastProcessedPoseSessionID = nil
         lastProcessedPoseSequence = nil
         framingAssessment = .waiting
@@ -110,6 +116,8 @@ final class CameraCaptureController: ObservableObject {
         latestIndoBoardState = nil
         latestIndoBoardEquipment = nil
         latestIndoBoardStateReceivedAt = nil
+        indoBoardTrackingHealth = .empty
+        indoBoardTrackingWindow.reset()
         lastProcessedPoseSessionID = nil
         lastProcessedPoseSequence = nil
         framingAssessment = .waiting
@@ -229,8 +237,14 @@ final class CameraCaptureController: ObservableObject {
                     self.latestPoseFrame = nextPose
                     self.latestPoseReceivedAt = now
 
-                    if let boardState =
-                            nextPose.indoBoardBalanceState,
+                    let boardState =
+                        nextPose.indoBoardBalanceState
+                    self.indoBoardTrackingHealth =
+                        self.indoBoardTrackingWindow.ingest(
+                            boardState
+                        )
+
+                    if let boardState,
                        let equipment =
                             nextPose.indoBoardEquipment {
                         self.latestIndoBoardState =
@@ -251,6 +265,8 @@ final class CameraCaptureController: ObservableObject {
                     self.framingAssessment = .waiting
                     self.stanceAssessment = .waiting
                     self.stanceGate.reset()
+                    self.indoBoardTrackingWindow.reset()
+                    self.indoBoardTrackingHealth = .empty
                 }
 
                 if let receivedAt =
@@ -306,6 +322,8 @@ final class CameraCaptureController: ObservableObject {
         latestIndoBoardState = nil
         latestIndoBoardEquipment = nil
         latestIndoBoardStateReceivedAt = nil
+        indoBoardTrackingWindow.reset()
+        indoBoardTrackingHealth = .empty
         indoCoach.reset()
         indoPrimitiveDetector.reset()
     }
