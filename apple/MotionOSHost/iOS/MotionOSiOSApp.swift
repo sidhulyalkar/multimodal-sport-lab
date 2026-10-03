@@ -83,8 +83,8 @@ struct MotionOSiOSApp: App {
 
         let coach = cameraController.indoCoachReport
 
-        let boardState =
-            cameraController.latestIndoBoardState
+        let boardHealth =
+            cameraController.indoBoardTrackingHealth
 
         return IndoBoardRemoteStatus(
             cameraPhase: cameraController.phase.rawValue,
@@ -106,11 +106,25 @@ struct MotionOSiOSApp: App {
             startBlocker: indoRemoteStartBlocker(),
             phoneBatteryFraction: battery,
             phoneStorageGB: storageGB,
-            boardTrackingReady: boardState != nil,
+            boardTrackingReady: boardHealth.isStable,
             boardTrackingConfidencePercent:
-                boardState.map {
-                    Int(($0.confidence * 100).rounded())
-                },
+                boardHealth.trackedSampleCount > 0
+                    ? Int(
+                        (
+                            boardHealth.meanConfidence
+                                * 100
+                        ).rounded()
+                    )
+                    : nil,
+            boardTrackingCoveragePercent:
+                boardHealth.sampleCount > 0
+                    ? Int(
+                        (
+                            boardHealth.coverageFraction
+                                * 100
+                        ).rounded()
+                    )
+                    : nil,
             coachHeadline: coach?.headline,
             coachTip: coach?.tip,
             coachDrill: coach?.drill,
