@@ -57,6 +57,9 @@ from .indo_equipment_eval import (
 from .indo_fiducial_teacher import (
     extract_fiducial_teacher_labels,
 )
+from .indo_runtime_equipment_eval import (
+    evaluate_runtime_equipment_predictions,
+)
 from .indo_knowledge import (
     build_session_learning_targets,
     classify_observable_skills,
@@ -551,6 +554,14 @@ def _parser() -> argparse.ArgumentParser:
     )
     indo_fiducial_teacher.add_argument("camera_journal")
     indo_fiducial_teacher.add_argument("output")
+
+    indo_runtime_eval = sub.add_parser(
+        "indo-evaluate-runtime-equipment-model",
+        help="evaluate markerless runtime geometry against QR or reviewed runtime references",
+    )
+    indo_runtime_eval.add_argument("reference")
+    indo_runtime_eval.add_argument("predictions")
+    indo_runtime_eval.add_argument("output")
 
     indo_report = sub.add_parser(
         "indo-session-report",
@@ -1257,6 +1268,30 @@ def main(argv: list[str] | None = None) -> int:
                     "observation_count": payload["observation_count"],
                     "skipped_non_fiducial_count":
                         payload["skipped_non_fiducial_count"],
+                    "output": args.output,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    if args.command == "indo-evaluate-runtime-equipment-model":
+        payload = evaluate_runtime_equipment_predictions(
+            args.reference,
+            args.predictions,
+            args.output,
+        )
+        print(
+            json.dumps(
+                {
+                    "schema_version": payload["schema_version"],
+                    "reference_count": payload["reference_count"],
+                    "prediction_count": payload["prediction_count"],
+                    "matched_count": payload["matched_count"],
+                    "reference_coverage_fraction":
+                        payload["reference_coverage_fraction"],
+                    "metrics": payload["metrics"],
                     "output": args.output,
                 },
                 indent=2,
