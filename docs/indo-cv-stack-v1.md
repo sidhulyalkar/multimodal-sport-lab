@@ -224,3 +224,25 @@ The initial evaluation intentionally focuses on product-relevant image-space qua
 Do not promote a detector because its masks look impressive. Promote it only when these downstream quantities become reliable on creator/viewpoint-separated test data.
 
 The next evaluator layer should add temporal recovery-event timing and occlusion robustness after static geometry is stable.
+
+## First-party QR teacher labels
+
+Marker-backed MotionOS sessions can now become markerless-detector training data without hand-copying geometry.
+
+After a physical INDO BOARD run:
+
+    motionos indo-extract-fiducial-teacher-labels \
+      camera-journal.jsonl \
+      generated/fiducial-teacher-labels.json
+
+The extractor keeps only camera pose events whose deck and roller provenance are fiducial_measured. It preserves the source video frame index and camera monotonic timestamp, so the labels can be joined back to the original movie exactly.
+
+This creates a deliberate data flywheel:
+
+1. QR markers bootstrap reliable deck/roller geometry.
+2. Marker-backed sessions create dense keypoint teacher labels.
+3. Human-reviewed public examples broaden viewpoint and equipment diversity.
+4. A markerless detector is trained and evaluated on creator/viewpoint-separated data.
+5. Only after qualification does the app replace QR evidence with model-estimated equipment geometry.
+
+QR teacher labels remain image-space supervision. They do not convert a session into calibrated biomechanics ground truth.
