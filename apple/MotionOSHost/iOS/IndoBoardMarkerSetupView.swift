@@ -37,7 +37,7 @@ struct IndoBoardMarkerSetupView: View {
             LazyVStack(spacing: 16) {
                 intro
 
-                ForEach(markers, id: .id) { marker in
+                ForEach(markers, id: \.id) { marker in
                     markerCard(marker)
                 }
 
