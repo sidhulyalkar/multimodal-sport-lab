@@ -28,6 +28,10 @@ final class CameraCaptureController: ObservableObject {
         IndoBoardBalanceState?
     @Published private(set) var latestIndoBoardEquipment:
         IndoBoardEquipmentObservation?
+    @Published private(set) var latestIndoBoardCoachingState:
+        IndoBoardBalanceState?
+    @Published private(set) var latestIndoBoardCoachingEquipment:
+        IndoBoardEquipmentObservation?
     @Published private(set) var latestVisibleIndoBoardFiducials:
         [IndoBoardFiducialMarkerID] = []
     @Published private(set) var latestIndoBoardStateReceivedAt:
@@ -84,6 +88,8 @@ final class CameraCaptureController: ObservableObject {
         latestPoseReceivedAt = nil
         latestIndoBoardState = nil
         latestIndoBoardEquipment = nil
+        latestIndoBoardCoachingState = nil
+        latestIndoBoardCoachingEquipment = nil
         latestVisibleIndoBoardFiducials = []
         latestIndoBoardStateReceivedAt = nil
         indoBoardTrackingHealth = .empty
@@ -118,6 +124,8 @@ final class CameraCaptureController: ObservableObject {
         latestPoseReceivedAt = nil
         latestIndoBoardState = nil
         latestIndoBoardEquipment = nil
+        latestIndoBoardCoachingState = nil
+        latestIndoBoardCoachingEquipment = nil
         latestVisibleIndoBoardFiducials = []
         latestIndoBoardStateReceivedAt = nil
         indoBoardTrackingHealth = .empty
@@ -244,22 +252,32 @@ final class CameraCaptureController: ObservableObject {
                         nextPose.indoBoardVisibleFiducials
                             ?? []
 
-                    let boardState =
-                        nextPose.indoBoardBalanceState
+                    let trackingState =
+                        nextPose.indoBoardTrackingBalanceState
                     self.indoBoardTrackingHealth =
                         self.indoBoardTrackingWindow.ingest(
-                            boardState
+                            trackingState
                         )
 
-                    if let boardState,
+                    if let trackingState,
                        let equipment =
-                            nextPose.indoBoardEquipment {
+                            nextPose.indoBoardTrackingEquipment {
                         self.latestIndoBoardState =
-                            boardState
+                            trackingState
                         self.latestIndoBoardEquipment =
                             equipment
                         self.latestIndoBoardStateReceivedAt =
                             now
+                    }
+
+                    if let coachingState =
+                            nextPose.indoBoardBalanceState,
+                       let coachingEquipment =
+                            nextPose.indoBoardEquipment {
+                        self.latestIndoBoardCoachingState =
+                            coachingState
+                        self.latestIndoBoardCoachingEquipment =
+                            coachingEquipment
                     }
                 }
 
@@ -283,6 +301,8 @@ final class CameraCaptureController: ObservableObject {
                         > Self.liveBoardStaleSeconds {
                     self.latestIndoBoardState = nil
                     self.latestIndoBoardEquipment = nil
+                    self.latestIndoBoardCoachingState = nil
+                    self.latestIndoBoardCoachingEquipment = nil
                     self.latestIndoBoardStateReceivedAt = nil
                 }
 
@@ -329,6 +349,8 @@ final class CameraCaptureController: ObservableObject {
         latestIndoPrimitive = nil
         latestIndoBoardState = nil
         latestIndoBoardEquipment = nil
+        latestIndoBoardCoachingState = nil
+        latestIndoBoardCoachingEquipment = nil
         latestVisibleIndoBoardFiducials = []
         latestIndoBoardStateReceivedAt = nil
         indoBoardTrackingWindow.reset()
