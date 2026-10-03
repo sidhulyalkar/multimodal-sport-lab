@@ -157,7 +157,12 @@ public struct BodyMovementFrame: Codable, Sendable, Equatable {
     public let muscleActivations: [MuscleActivationEstimate]
     public let imageFraming: BodyImageFraming?
     public let imageJoints: [BodyJoint2D]?
+    /// Equipment evidence authorized to influence coaching.
     public let indoBoardEquipment:
+        IndoBoardEquipmentObservation?
+    /// Equipment evidence authorized for live/display tracking. This may be
+    /// broader than coaching authorization for shadow-tested markerless models.
+    public let indoBoardTrackingEquipment:
         IndoBoardEquipmentObservation?
     public let indoBoardVisibleFiducials:
         [IndoBoardFiducialMarkerID]?
@@ -179,6 +184,8 @@ public struct BodyMovementFrame: Codable, Sendable, Equatable {
         imageJoints: [BodyJoint2D]? = nil,
         indoBoardEquipment:
             IndoBoardEquipmentObservation? = nil,
+        indoBoardTrackingEquipment:
+            IndoBoardEquipmentObservation? = nil,
         indoBoardVisibleFiducials:
             [IndoBoardFiducialMarkerID]? = nil
     ) {
@@ -197,6 +204,9 @@ public struct BodyMovementFrame: Codable, Sendable, Equatable {
         self.imageFraming = imageFraming
         self.imageJoints = imageJoints
         self.indoBoardEquipment = indoBoardEquipment
+        self.indoBoardTrackingEquipment =
+            indoBoardTrackingEquipment
+                ?? indoBoardEquipment
         self.indoBoardVisibleFiducials =
             indoBoardVisibleFiducials
     }
@@ -220,6 +230,16 @@ public struct BodyMovementFrame: Codable, Sendable, Equatable {
         }
         return IndoBoardBalanceStateEstimator.estimate(
             from: indoBoardEquipment
+        )
+    }
+
+    public var indoBoardTrackingBalanceState:
+        IndoBoardBalanceState? {
+        guard let indoBoardTrackingEquipment else {
+            return nil
+        }
+        return IndoBoardBalanceStateEstimator.estimate(
+            from: indoBoardTrackingEquipment
         )
     }
 
@@ -332,6 +352,20 @@ public enum BodyMovementFrameParser {
             indoBoardEquipment:
                 parseIndoBoardEquipment(
                     payload,
+                    key: "indo_board_equipment",
+                    fallbackSequence: sequence,
+                    fallbackDeviceTimeNS: deviceTimeNS
+                ),
+            indoBoardTrackingEquipment:
+                parseIndoBoardEquipment(
+                    payload,
+                    key: "indo_board_tracking_equipment",
+                    fallbackSequence: sequence,
+                    fallbackDeviceTimeNS: deviceTimeNS
+                )
+                ?? parseIndoBoardEquipment(
+                    payload,
+                    key: "indo_board_equipment",
                     fallbackSequence: sequence,
                     fallbackDeviceTimeNS: deviceTimeNS
                 ),
@@ -437,11 +471,12 @@ public enum BodyMovementFrameParser {
 
     private static func parseIndoBoardEquipment(
         _ payload: [String: JSONValue],
+        key: String,
         fallbackSequence: UInt64,
         fallbackDeviceTimeNS: UInt64
     ) -> IndoBoardEquipmentObservation? {
         guard case .object(let object) =
-                payload["indo_board_equipment"]
+                payload[key]
         else {
             return nil
         }
