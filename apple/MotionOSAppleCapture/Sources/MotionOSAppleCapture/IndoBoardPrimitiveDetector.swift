@@ -27,6 +27,10 @@ public struct IndoBoardPrimitiveObservation:
     public let kneeFlexionDeg: Double?
     public let ankleHeightDifferenceBodyRatio: Double?
     public let armExcursionBodyRatio: Double?
+    public let rollerAlongDeck: Double?
+    public let boardStateConfidence: Double?
+    public let boardStateProvenance:
+        IndoBoardEquipmentProvenance?
     public let evidenceLabel: String
 
     public init(
@@ -39,6 +43,10 @@ public struct IndoBoardPrimitiveObservation:
         kneeFlexionDeg: Double?,
         ankleHeightDifferenceBodyRatio: Double?,
         armExcursionBodyRatio: Double?,
+        rollerAlongDeck: Double? = nil,
+        boardStateConfidence: Double? = nil,
+        boardStateProvenance:
+            IndoBoardEquipmentProvenance? = nil,
         evidenceLabel: String
     ) {
         self.kind = kind
@@ -51,6 +59,10 @@ public struct IndoBoardPrimitiveObservation:
         self.ankleHeightDifferenceBodyRatio =
             ankleHeightDifferenceBodyRatio
         self.armExcursionBodyRatio = armExcursionBodyRatio
+        self.rollerAlongDeck = rollerAlongDeck
+        self.boardStateConfidence = boardStateConfidence
+        self.boardStateProvenance =
+            boardStateProvenance
         self.evidenceLabel = evidenceLabel
     }
 }
@@ -345,9 +357,21 @@ public final class IndoBoardPrimitiveDetector {
         ankleHeightDifference: Double? = nil,
         armExcursion: Double? = nil
     ) -> IndoBoardPrimitiveObservation {
-        IndoBoardPrimitiveObservation(
+        let boardState = frame.indoBoardBalanceState
+        let boardQualified =
+            (boardState?.confidence ?? 0) >= 0.35
+
+        return IndoBoardPrimitiveObservation(
             kind: kind,
-            confidence: confidence,
+            confidence: boardQualified
+                ? min(
+                    0.98,
+                    max(
+                        confidence,
+                        boardState?.confidence ?? confidence
+                    )
+                )
+                : confidence,
             sequence: frame.sequence,
             deviceTimeNS: frame.deviceTimeNS,
             protocolBlockID: blockID,
@@ -356,8 +380,22 @@ public final class IndoBoardPrimitiveDetector {
             ankleHeightDifferenceBodyRatio:
                 ankleHeightDifference,
             armExcursionBodyRatio: armExcursion,
+            rollerAlongDeck:
+                boardQualified
+                    ? boardState?.rollerAlongDeck
+                    : nil,
+            boardStateConfidence:
+                boardQualified
+                    ? boardState?.confidence
+                    : nil,
+            boardStateProvenance:
+                boardQualified
+                    ? boardState?.provenance
+                    : nil,
             evidenceLabel:
-                "camera_body_pose_proxy_board_state_pending"
+                boardQualified
+                    ? "camera_body_pose_plus_deck_roller_geometry"
+                    : "camera_body_pose_proxy_board_state_pending"
         )
     }
 
