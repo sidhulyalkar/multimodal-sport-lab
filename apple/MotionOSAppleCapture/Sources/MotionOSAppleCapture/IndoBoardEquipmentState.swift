@@ -181,7 +181,6 @@ public enum IndoBoardBalanceStateEstimator {
             return nil
         }
 
-        let axisLength = sqrt(axisLengthSquared)
         let rollerVectorX = roller.center.x - left.x
         let rollerVectorY = roller.center.y - left.y
 
