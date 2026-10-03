@@ -28,6 +28,7 @@ def summarize_shadow_equipment_evaluation(
     pose_event_count = 0
     routing_event_count = 0
     rows: list[dict[str, Any]] = []
+    executions: list[dict[str, Any]] = []
 
     with journal.open("r", encoding="utf-8") as handle:
         for line_number, line in enumerate(handle, start=1):
@@ -51,6 +52,17 @@ def summarize_shadow_equipment_evaluation(
             payload = envelope.get("payload")
             if not isinstance(payload, dict):
                 continue
+            raw_executions = payload.get(
+                "indo_board_equipment_detector_executions"
+            )
+            if isinstance(raw_executions, list):
+                for execution in raw_executions:
+                    parsed_execution = _parse_execution(
+                        execution
+                    )
+                    if parsed_execution is not None:
+                        executions.append(parsed_execution)
+
             routing = payload.get(
                 "indo_board_equipment_routing"
             )
@@ -107,6 +119,8 @@ def summarize_shadow_equipment_evaluation(
         "routing_event_count": routing_event_count,
         "comparison_count": len(rows),
         "groups": groups,
+        "detector_execution_groups":
+            _aggregate_executions(executions),
         "claim_boundary": (
             "This report summarizes normalized image-space shadow agreement "
             "recorded while a trusted reference source was visible. It does "
@@ -117,6 +131,79 @@ def summarize_shadow_equipment_evaluation(
     if output_path is not None:
         _write_json(output_path, report)
     return report
+
+
+def _parse_execution(
+    raw: object,
+) -> dict[str, Any] | None:
+    if not isinstance(raw, dict):
+        return None
+
+    detector_id = raw.get("detector_id")
+    status = raw.get("status")
+    duration_ms = raw.get("duration_ms")
+
+    if not isinstance(detector_id, str) or not detector_id:
+        return None
+    if status not in {
+        "observation",
+        "no_observation",
+        "error",
+    }:
+        return None
+    if not isinstance(duration_ms, (int, float)):
+        return None
+
+    duration = float(duration_ms)
+    if not math.isfinite(duration) or duration < 0:
+        return None
+
+    return {
+        "detector_id": detector_id,
+        "status": status,
+        "duration_ms": duration,
+    }
+
+
+def _aggregate_executions(
+    rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in rows:
+        grouped[str(row["detector_id"])].append(row)
+
+    result = []
+    for detector_id, detector_rows in sorted(grouped.items()):
+        durations = [
+            float(row["duration_ms"])
+            for row in detector_rows
+        ]
+        count = len(detector_rows)
+        observation_count = sum(
+            row["status"] == "observation"
+            for row in detector_rows
+        )
+        error_count = sum(
+            row["status"] == "error"
+            for row in detector_rows
+        )
+
+        result.append(
+            {
+                "detector_id": detector_id,
+                "execution_count": count,
+                "observation_fraction":
+                    observation_count / count,
+                "error_fraction":
+                    error_count / count,
+                "duration_ms_mean":
+                    statistics.fmean(durations),
+                "duration_ms_p90":
+                    _percentile(durations, 0.90),
+            }
+        )
+
+    return result
 
 
 def _parse_comparison(
