@@ -15,6 +15,47 @@ public protocol IndoBoardEquipmentFrameDetector {
     ) throws -> IndoBoardEquipmentObservation?
 }
 
+public struct IndoBoardEquipmentDetectorExecutionAudit:
+    Sendable,
+    Equatable {
+    public enum Status: String, Sendable, Equatable {
+        case observation
+        case noObservation = "no_observation"
+        case error
+    }
+
+    public let detectorID: String
+    public let status: Status
+    public let durationMS: Double
+    public let message: String?
+
+    public init(
+        detectorID: String,
+        status: Status,
+        durationMS: Double,
+        message: String? = nil
+    ) {
+        self.detectorID = detectorID
+        self.status = status
+        self.durationMS = max(0, durationMS)
+        self.message = message
+    }
+
+    public var cameraPayload: JSONValue {
+        var object: [String: JSONValue] = [
+            "detector_id": .string(detectorID),
+            "status": .string(status.rawValue),
+            "duration_ms": .number(durationMS),
+        ]
+
+        if let message, !message.isEmpty {
+            object["message"] = .string(message)
+        }
+
+        return .object(object)
+    }
+}
+
 public struct IndoBoardEquipmentDetectorFailure:
     Sendable,
     Equatable {
