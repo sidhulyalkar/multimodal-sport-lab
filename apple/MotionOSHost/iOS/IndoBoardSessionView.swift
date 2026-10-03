@@ -1299,8 +1299,8 @@ struct IndoBoardSessionView: View {
     private func boardTrackingQuality(
         _ coach: IndoBoardCoachReport
     ) -> BoardTrackingQuality? {
-        guard let values = coach.numericMetrics,
-              let samples = values["board_sample_count"],
+        let values = coach.numericMetrics
+        guard let samples = values["board_sample_count"],
               let coverage =
                 values["board_state_coverage_fraction"],
               let confidence =
