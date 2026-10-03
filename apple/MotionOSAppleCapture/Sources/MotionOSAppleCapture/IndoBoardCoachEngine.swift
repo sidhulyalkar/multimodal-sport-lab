@@ -387,7 +387,8 @@ public final class IndoBoardCoachEngine {
             let centerTime =
                 Double(
                     boardBaseline.filter {
-                        abs($0.rollerAlongDeck ?? 1) <= 0.25
+                        abs($0.rollerAlongDeck ?? 1)
+                            <= IndoBoardBalanceThresholds.centerZone
                     }.count
                 )
                 / Double(boardBaseline.count)
@@ -1055,7 +1056,8 @@ public final class IndoBoardCoachEngine {
         }
 
         let centered = qualified.filter {
-            abs($0.rollerAlongDeck ?? 1) <= 0.25
+            abs($0.rollerAlongDeck ?? 1)
+                            <= IndoBoardBalanceThresholds.centerZone
         }.count
         return Double(centered)
             / Double(qualified.count)
