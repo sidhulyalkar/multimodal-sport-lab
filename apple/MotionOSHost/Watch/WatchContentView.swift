@@ -419,6 +419,35 @@ struct WatchContentView: View {
                 Text("Camera locked · stance stable")
                     .font(.system(size: 9))
                     .foregroundStyle(.secondary)
+
+                Label(
+                    status.boardTrackingReady
+                        ? "Board + roller tracked"
+                        : "Body-only beta mode",
+                    systemImage:
+                        status.boardTrackingReady
+                            ? "viewfinder.circle.fill"
+                            : "figure.stand"
+                )
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(
+                    status.boardTrackingReady
+                        ? .green
+                        : .secondary
+                )
+
+                if status.boardTrackingReady,
+                   let confidence =
+                        status.boardTrackingConfidencePercent {
+                    Text("\(confidence)% equipment confidence")
+                        .font(
+                            .system(
+                                size: 8,
+                                design: .monospaced
+                            )
+                        )
+                        .foregroundStyle(.tertiary)
+                }
             }
             .frame(maxWidth: .infinity)
 
