@@ -26,6 +26,8 @@ final class CameraCaptureController: ObservableObject {
     @Published private(set) var latestPoseReceivedAt: Date?
     @Published private(set) var latestIndoBoardState:
         IndoBoardBalanceState?
+    @Published private(set) var latestIndoBoardEquipment:
+        IndoBoardEquipmentObservation?
     @Published private(set) var latestIndoBoardStateReceivedAt:
         Date?
     @Published private(set) var framingAssessment:
@@ -75,6 +77,7 @@ final class CameraCaptureController: ObservableObject {
         latestPoseFrame = nil
         latestPoseReceivedAt = nil
         latestIndoBoardState = nil
+        latestIndoBoardEquipment = nil
         latestIndoBoardStateReceivedAt = nil
         lastProcessedPoseSessionID = nil
         lastProcessedPoseSequence = nil
@@ -105,6 +108,7 @@ final class CameraCaptureController: ObservableObject {
         latestPoseFrame = nil
         latestPoseReceivedAt = nil
         latestIndoBoardState = nil
+        latestIndoBoardEquipment = nil
         latestIndoBoardStateReceivedAt = nil
         lastProcessedPoseSessionID = nil
         lastProcessedPoseSequence = nil
@@ -226,9 +230,13 @@ final class CameraCaptureController: ObservableObject {
                     self.latestPoseReceivedAt = now
 
                     if let boardState =
-                            nextPose.indoBoardBalanceState {
+                            nextPose.indoBoardBalanceState,
+                       let equipment =
+                            nextPose.indoBoardEquipment {
                         self.latestIndoBoardState =
                             boardState
+                        self.latestIndoBoardEquipment =
+                            equipment
                         self.latestIndoBoardStateReceivedAt =
                             now
                     }
@@ -250,6 +258,7 @@ final class CameraCaptureController: ObservableObject {
                    now.timeIntervalSince(receivedAt)
                         > Self.liveBoardStaleSeconds {
                     self.latestIndoBoardState = nil
+                    self.latestIndoBoardEquipment = nil
                     self.latestIndoBoardStateReceivedAt = nil
                 }
 
@@ -295,6 +304,7 @@ final class CameraCaptureController: ObservableObject {
         indoCoachIntervention = nil
         latestIndoPrimitive = nil
         latestIndoBoardState = nil
+        latestIndoBoardEquipment = nil
         latestIndoBoardStateReceivedAt = nil
         indoCoach.reset()
         indoPrimitiveDetector.reset()
