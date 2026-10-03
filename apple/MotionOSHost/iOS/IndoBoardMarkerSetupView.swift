@@ -232,8 +232,8 @@ struct IndoBoardMarkerSetupView: View {
             let name = marker.rawValue
                 .lowercased()
                 .replacingOccurrences(
-                    of: "motionos_indo_",
-                    with: ""
+                    of: ":",
+                    with: "_"
                 )
                 + ".png"
             let url = directory
