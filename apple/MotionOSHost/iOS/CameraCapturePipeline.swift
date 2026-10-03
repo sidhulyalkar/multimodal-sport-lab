@@ -798,6 +798,45 @@ final class CameraCapturePipeline:
         }
     }
 
+    private func equipmentEvidenceMetadata()
+        -> [String: Any] {
+        let qualifications =
+            equipmentQualificationRegistry?
+                .qualifications
+                .map { qualification in
+                    [
+                        "model_id":
+                            qualification.modelID,
+                        "status":
+                            qualification.status.rawValue,
+                        "evaluation_dataset_id":
+                            qualification.evaluationDatasetID
+                                as Any,
+                        "evaluation_report_sha256":
+                            qualification.evaluationReportSHA256
+                                as Any,
+                    ] as [String: Any]
+                }
+                ?? []
+
+        return [
+            "fiducial_detector_id": "vision_qr",
+            "markerless_detector_ids":
+                equipmentDetectors.map(\.detectorID),
+            "qualification_registry_schema":
+                equipmentQualificationRegistry?
+                    .schemaVersion
+                    as Any,
+            "qualifications": qualifications,
+            "routing_policy":
+                "manual_reference_then_fiducial_then_explicitly_qualified_model",
+            "tracking_and_coaching_authorization_separate":
+                true,
+            "shadow_comparison":
+                "normalized_image_space_against_visible_reference",
+        ]
+    }
+
     private func makeLiveStats() -> CameraLiveCaptureStats {
         CameraLiveCaptureStats(
             deliveredFrames: deliveredFrameCount,
@@ -917,6 +956,8 @@ final class CameraCapturePipeline:
                         "cameraOriginMatrix preserved per pose",
                     "interpolation": "none",
                 ],
+                "indo_board_equipment":
+                    equipmentEvidenceMetadata(),
                 "counts": [
                     "delivered_frames": Int(deliveredFrameCount),
                     "written_frames": Int(writtenFrameCount),
