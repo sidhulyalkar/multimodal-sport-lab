@@ -5,11 +5,11 @@ public enum IndoBoardFiducialMarkerID:
     Codable,
     CaseIterable,
     Sendable {
-    case deckLeft = "MOTIONOS_INDO_DECK_LEFT_V1"
-    case deckRight = "MOTIONOS_INDO_DECK_RIGHT_V1"
-    case rollerLeft = "MOTIONOS_INDO_ROLLER_LEFT_V1"
-    case rollerRight = "MOTIONOS_INDO_ROLLER_RIGHT_V1"
-    case rollerCenter = "MOTIONOS_INDO_ROLLER_CENTER_V1"
+    case deckLeft = "MOS:I:DL1"
+    case deckRight = "MOS:I:DR1"
+    case rollerLeft = "MOS:I:RL1"
+    case rollerRight = "MOS:I:RR1"
+    case rollerCenter = "MOS:I:RC1"
 }
 
 public struct IndoBoardFiducialDetection:
