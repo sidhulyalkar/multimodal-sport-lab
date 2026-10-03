@@ -80,8 +80,12 @@ public struct IndoBoardEquipmentModelQualification:
                         in: .whitespacesAndNewlines
                     ),
               reportHash.count == 64,
-              reportHash.allSatisfy({
-                  $0.isHexDigit
+              reportHash.unicodeScalars.allSatisfy({
+                  CharacterSet(
+                      charactersIn:
+                          "0123456789abcdefABCDEF"
+                  )
+                  .contains($0)
               }),
               let note = authorizationNote?
                     .trimmingCharacters(
