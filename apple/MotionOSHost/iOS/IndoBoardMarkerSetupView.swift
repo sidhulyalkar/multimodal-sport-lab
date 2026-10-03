@@ -154,7 +154,7 @@ struct IndoBoardMarkerSetupView: View {
             if !artifacts.isEmpty {
                 ShareLink(items: artifacts) {
                     Label(
-                        "Share / Print Marker PNGs",
+                        "Share / Print Marker Kit",
                         systemImage: "square.and.arrow.up"
                     )
                     .frame(maxWidth: .infinity)
@@ -162,7 +162,7 @@ struct IndoBoardMarkerSetupView: View {
                 .buttonStyle(.borderedProminent)
 
                 Text(
-                    "Print near original size, cut the three codes, and attach them once. "
+                    "The kit includes a 100%-scale printable PDF plus individual PNGs. Cut the three codes and attach them once. "
                         + "The Watch will show “Board + roller tracked” when all required markers are visible."
                 )
                 .font(.caption)
@@ -185,7 +185,7 @@ struct IndoBoardMarkerSetupView: View {
     private func generateArtifacts() {
         do {
             artifacts = try Self.writeArtifacts(
-                markers.map(\.id)
+                markers
             )
             errorMessage = nil
         } catch {
@@ -196,7 +196,13 @@ struct IndoBoardMarkerSetupView: View {
     }
 
     private static func writeArtifacts(
-        _ markers: [IndoBoardFiducialMarkerID]
+        _ markers: [
+            (
+                id: IndoBoardFiducialMarkerID,
+                title: String,
+                placement: String
+            )
+        ]
     ) throws -> [URL] {
         let manager = FileManager.default
         let documents = try manager.url(
@@ -219,9 +225,11 @@ struct IndoBoardMarkerSetupView: View {
             withIntermediateDirectories: true
         )
 
-        return try markers.map { marker in
+        var outputs: [URL] = []
+
+        for marker in markers {
             guard let image = qrImage(
-                payload: marker.rawValue,
+                payload: marker.id.rawValue,
                 size: 900
             ),
             let data = image.pngData()
@@ -229,7 +237,7 @@ struct IndoBoardMarkerSetupView: View {
                 throw CocoaError(.fileWriteUnknown)
             }
 
-            let name = marker.rawValue
+            let name = marker.id.rawValue
                 .lowercased()
                 .replacingOccurrences(
                     of: ":",
@@ -242,8 +250,233 @@ struct IndoBoardMarkerSetupView: View {
                 to: url,
                 options: .atomic
             )
-            return url
+            outputs.append(url)
         }
+
+        let printableURL = directory
+            .appendingPathComponent(
+                "motionos-indo-board-markers-v1.pdf"
+            )
+        try writePrintablePDF(
+            markers,
+            to: printableURL
+        )
+        outputs.insert(printableURL, at: 0)
+
+        return outputs
+    }
+
+    private static func writePrintablePDF(
+        _ markers: [
+            (
+                id: IndoBoardFiducialMarkerID,
+                title: String,
+                placement: String
+            )
+        ],
+        to url: URL
+    ) throws {
+        // US Letter at 72 pt/in. Each QR is exactly 2 in square when
+        // printed at 100%, but QR physical size is not used as calibration.
+        let page = CGRect(
+            x: 0,
+            y: 0,
+            width: 612,
+            height: 792
+        )
+        let renderer = UIGraphicsPDFRenderer(
+            bounds: page
+        )
+
+        let data = renderer.pdfData { context in
+            context.beginPage()
+
+            let titleAttributes: [
+                NSAttributedString.Key: Any
+            ] = [
+                .font: UIFont.systemFont(
+                    ofSize: 20,
+                    weight: .bold
+                ),
+                .foregroundColor: UIColor.label,
+            ]
+            let subtitleAttributes: [
+                NSAttributedString.Key: Any
+            ] = [
+                .font: UIFont.systemFont(
+                    ofSize: 10,
+                    weight: .regular
+                ),
+                .foregroundColor: UIColor.secondaryLabel,
+            ]
+            let markerTitleAttributes: [
+                NSAttributedString.Key: Any
+            ] = [
+                .font: UIFont.systemFont(
+                    ofSize: 14,
+                    weight: .semibold
+                ),
+                .foregroundColor: UIColor.label,
+            ]
+            let bodyAttributes: [
+                NSAttributedString.Key: Any
+            ] = [
+                .font: UIFont.systemFont(
+                    ofSize: 9.5,
+                    weight: .regular
+                ),
+                .foregroundColor: UIColor.secondaryLabel,
+            ]
+            let codeAttributes: [
+                NSAttributedString.Key: Any
+            ] = [
+                .font: UIFont.monospacedSystemFont(
+                    ofSize: 8,
+                    weight: .medium
+                ),
+                .foregroundColor: UIColor.secondaryLabel,
+            ]
+
+            NSString(
+                string: "MotionOS · INDO BOARD beta markers"
+            )
+            .draw(
+                in: CGRect(
+                    x: 36,
+                    y: 30,
+                    width: 540,
+                    height: 26
+                ),
+                withAttributes: titleAttributes
+            )
+
+            NSString(
+                string:
+                    "Print at 100% scale. Three visible markers enable deck-relative beta tracking. Marker size is not a physical calibration reference."
+            )
+            .draw(
+                in: CGRect(
+                    x: 36,
+                    y: 58,
+                    width: 540,
+                    height: 28
+                ),
+                withAttributes: subtitleAttributes
+            )
+
+            let qrSize: CGFloat = 144
+            let rowHeight: CGFloat = 210
+            let startY: CGFloat = 102
+
+            for (index, marker) in markers.enumerated() {
+                let y =
+                    startY + CGFloat(index) * rowHeight
+                let qrRect = CGRect(
+                    x: 40,
+                    y: y,
+                    width: qrSize,
+                    height: qrSize
+                )
+
+                UIColor.white.setFill()
+                context.cgContext.fill(qrRect)
+
+                qrImage(
+                    payload: marker.id.rawValue,
+                    size: 900
+                )?.draw(in: qrRect)
+
+                context.cgContext.setStrokeColor(
+                    UIColor.systemGray4.cgColor
+                )
+                context.cgContext.setLineWidth(0.75)
+                context.cgContext.stroke(qrRect)
+
+                NSString(string: marker.title)
+                    .draw(
+                        in: CGRect(
+                            x: 206,
+                            y: y + 10,
+                            width: 350,
+                            height: 24
+                        ),
+                        withAttributes:
+                            markerTitleAttributes
+                    )
+
+                NSString(string: marker.placement)
+                    .draw(
+                        in: CGRect(
+                            x: 206,
+                            y: y + 40,
+                            width: 350,
+                            height: 46
+                        ),
+                        withAttributes: bodyAttributes
+                    )
+
+                NSString(string: marker.id.rawValue)
+                    .draw(
+                        in: CGRect(
+                            x: 206,
+                            y: y + 95,
+                            width: 350,
+                            height: 20
+                        ),
+                        withAttributes: codeAttributes
+                    )
+
+                NSString(
+                    string:
+                        "2.0 in QR at 100% print scale · keep the full white/black code visible to the iPhone camera."
+                )
+                .draw(
+                    in: CGRect(
+                        x: 206,
+                        y: y + 122,
+                        width: 350,
+                        height: 36
+                    ),
+                    withAttributes: bodyAttributes
+                )
+
+                context.cgContext.setStrokeColor(
+                    UIColor.systemGray5.cgColor
+                )
+                context.cgContext.move(
+                    to: CGPoint(
+                        x: 36,
+                        y: y + 176
+                    )
+                )
+                context.cgContext.addLine(
+                    to: CGPoint(
+                        x: 576,
+                        y: y + 176
+                    )
+                )
+                context.cgContext.strokePath()
+            }
+
+            NSString(
+                string:
+                    "Safety: do not place markers where they change footing, interfere with deck stops or roller contact, or create a snag hazard. If tracking is intermittent, improve lighting/visibility or move the iPhone before increasing marker size."
+            )
+            .draw(
+                in: CGRect(
+                    x: 36,
+                    y: 738,
+                    width: 540,
+                    height: 42
+                ),
+                withAttributes: subtitleAttributes
+            )
+        }
+
+        try data.write(
+            to: url,
+            options: .atomic
+        )
     }
 
     private static func qrImage(
