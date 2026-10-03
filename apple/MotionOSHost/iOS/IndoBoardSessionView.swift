@@ -361,8 +361,7 @@ struct IndoBoardSessionView: View {
 
     private var boardTrackingRow: some View {
         let state =
-            camera.latestPoseFrame?
-                .indoBoardBalanceState
+            camera.latestIndoBoardState
 
         return HStack(spacing: 9) {
             Image(
