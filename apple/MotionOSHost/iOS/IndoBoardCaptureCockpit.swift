@@ -254,12 +254,100 @@ struct IndoBoardLiveSignalCard: View {
                     .foregroundStyle(.secondary)
                 }
 
-                Text(
-                    "Body-pose proxy only · deck and roller state pending"
-                )
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
+                if let state =
+                        camera.latestPoseFrame?
+                            .indoBoardBalanceState {
+                    VStack(alignment: .leading, spacing: 7) {
+                        HStack(spacing: 8) {
+                            boardMetric(
+                                "ROLLER",
+                                rollerPositionLabel(state)
+                            )
+                            boardMetric(
+                                "CENTER",
+                                "\(Int((state.centerProximity * 100).rounded()))%"
+                            )
+                            boardMetric(
+                                "EVIDENCE",
+                                "\(Int((state.confidence * 100).rounded()))%"
+                            )
+                        }
+
+                        Label(
+                            boardEvidenceLabel(state.provenance),
+                            systemImage: "viewfinder.circle.fill"
+                        )
+                        .font(.caption2)
+                        .foregroundStyle(.green)
+                    }
+                } else {
+                    Label(
+                        "Body-pose proxy · board tracking not available",
+                        systemImage: "figure.stand"
+                    )
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                }
             }
+        }
+    }
+
+    private func boardMetric(
+        _ label: String,
+        _ value: String
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.system(size: 8, weight: .bold))
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(
+                    .system(
+                        .caption,
+                        design: .monospaced,
+                        weight: .semibold
+                    )
+                )
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 9)
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            Color.green.opacity(0.07),
+            in: RoundedRectangle(
+                cornerRadius: 9,
+                style: .continuous
+            )
+        )
+    }
+
+    private func rollerPositionLabel(
+        _ state: IndoBoardBalanceState
+    ) -> String {
+        let value = state.rollerAlongDeck
+        if abs(value) <= IndoBoardBalanceThresholds.centerZone {
+            return "CENTER"
+        }
+        return String(
+            format: "%@ %.2f",
+            value < 0 ? "L" : "R",
+            abs(value)
+        )
+    }
+
+    private func boardEvidenceLabel(
+        _ provenance: IndoBoardEquipmentProvenance
+    ) -> String {
+        switch provenance {
+        case .fiducialMeasured:
+            return "Body pose + QR deck/roller geometry"
+        case .manualAnnotated:
+            return "Body pose + reviewed deck/roller geometry"
+        case .modelEstimated:
+            return "Body pose + model-estimated deck/roller geometry"
+        case .geometricProxy:
+            return "Body pose + deck/roller geometric proxy"
         }
     }
 
