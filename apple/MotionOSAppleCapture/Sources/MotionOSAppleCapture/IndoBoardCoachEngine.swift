@@ -958,8 +958,12 @@ public final class IndoBoardCoachEngine {
         let beforeSamples = blockSamples("free-balance-a")
         let afterSamples = blockSamples("free-balance-b")
 
-        guard beforeSamples.count >= 20,
-              afterSamples.count >= 20
+        guard beforeSamples.count
+                >= IndoBoardEvidenceQualityThresholds
+                    .minimumComparisonSamples,
+              afterSamples.count
+                >= IndoBoardEvidenceQualityThresholds
+                    .minimumComparisonSamples
         else {
             return IndoBoardCoachExperimentResult(
                 targetMetric: intervention.targetMetric,
@@ -1041,7 +1045,8 @@ public final class IndoBoardCoachEngine {
             before = percentile(
                 beforeSamples.compactMap {
                     guard ($0.boardStateConfidence ?? 0)
-                            >= 0.55
+                            >= IndoBoardEvidenceQualityThresholds
+                                .minimumStateConfidence
                     else {
                         return nil
                     }
@@ -1052,7 +1057,8 @@ public final class IndoBoardCoachEngine {
             after = percentile(
                 afterSamples.compactMap {
                     guard ($0.boardStateConfidence ?? 0)
-                            >= 0.55
+                            >= IndoBoardEvidenceQualityThresholds
+                                .minimumStateConfidence
                     else {
                         return nil
                     }
@@ -1161,7 +1167,8 @@ public final class IndoBoardCoachEngine {
                 minimumConfidence:
                 IndoBoardEvidenceQualityThresholds
                     .minimumStateConfidence
-              ) >= 0.60
+              ) >= IndoBoardEvidenceQualityThresholds
+                .minimumBlockCoverage
         else {
             return nil
         }
