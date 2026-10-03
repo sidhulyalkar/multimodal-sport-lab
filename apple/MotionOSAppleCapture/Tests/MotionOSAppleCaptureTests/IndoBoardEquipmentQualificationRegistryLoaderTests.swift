@@ -103,9 +103,10 @@ final class IndoBoardEquipmentQualificationRegistryLoaderTests:
             try IndoBoardEquipmentQualificationRegistryLoader
                 .load(from: Data("{".utf8))
         ) { error in
-            guard case .unreadable =
+            guard let registryError =
                     error as?
-                        IndoBoardEquipmentQualificationRegistryError
+                        IndoBoardEquipmentQualificationRegistryError,
+                  case .unreadable = registryError
             else {
                 XCTFail(
                     "Expected unreadable registry error"
