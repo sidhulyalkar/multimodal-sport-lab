@@ -800,33 +800,38 @@ final class CameraCapturePipeline:
 
     private func equipmentEvidenceMetadata()
         -> [String: Any] {
-        let qualifications =
+        let qualifications: [[String: Any]] =
             equipmentQualificationRegistry?
                 .qualifications
                 .map { qualification in
-                    [
+                    var value: [String: Any] = [
                         "model_id":
                             qualification.modelID,
                         "status":
                             qualification.status.rawValue,
-                        "evaluation_dataset_id":
-                            qualification.evaluationDatasetID
-                                as Any,
-                        "evaluation_report_sha256":
-                            qualification.evaluationReportSHA256
-                                as Any,
-                    ] as [String: Any]
+                    ]
+
+                    if let datasetID =
+                            qualification.evaluationDatasetID {
+                        value["evaluation_dataset_id"] =
+                            datasetID
+                    }
+                    if let reportHash =
+                            qualification.evaluationReportSHA256 {
+                        value["evaluation_report_sha256"] =
+                            reportHash
+                    }
+
+                    return value
                 }
                 ?? []
 
-        return [
+        var metadata: [String: Any] = [
             "fiducial_detector_id": "vision_qr",
             "markerless_detector_ids":
-                equipmentDetectors.map(\.detectorID),
-            "qualification_registry_schema":
-                equipmentQualificationRegistry?
-                    .schemaVersion
-                    as Any,
+                equipmentDetectors.map {
+                    $0.detectorID
+                },
             "qualifications": qualifications,
             "routing_policy":
                 "manual_reference_then_fiducial_then_explicitly_qualified_model",
@@ -835,6 +840,17 @@ final class CameraCapturePipeline:
             "shadow_comparison":
                 "normalized_image_space_against_visible_reference",
         ]
+
+        if let registry =
+                equipmentQualificationRegistry {
+            metadata["qualification_registry_schema"] =
+                registry.schemaVersion
+        } else {
+            metadata["qualification_registry_schema"] =
+                "none"
+        }
+
+        return metadata
     }
 
     private func makeLiveStats() -> CameraLiveCaptureStats {
