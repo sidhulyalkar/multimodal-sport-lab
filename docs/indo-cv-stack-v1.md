@@ -322,10 +322,19 @@ Only fiducial_teacher, human_reviewed, and human_corrected observations with com
 
 Use the existing grouped-split tool for leakage-safe partitions. A useful first physical split is:
 
+Before splitting or training, re-verify the index against the exact source files:
+
+    motionos indo-verify-markerless-dataset-index \
+      generated/indo-markerless-index.json
+
+Then use the existing grouped-split tool:
+
     motionos build-grouped-split \
       generated/indo-markerless-index.json \
       generated/indo-markerless-split.json \
       --group-by subject_id,day_id,run_id,camera_view \
       --seed indo-markerless-v1
+
+The verifier recomputes source-video and teacher-label SHA-256 hashes, checks deterministic sample IDs, confirms complete equipment geometry, and ensures each sample still matches its source acquisition group.
 
 Do not split by individual frames. Adjacent frames from one physical run are highly correlated and must remain in the same partition.
