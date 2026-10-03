@@ -339,7 +339,7 @@ final class IndoBoardEquipmentObservationSelectorTests:
             status: status,
             evaluationDatasetID:
                 "indo-heldout-v1",
-            evaluationReferenceSHA256:
+            evaluationReportSHA256:
                 String(repeating: "a", count: 64),
             metrics: [
                 "roller_center_error_p90": 0.03,
