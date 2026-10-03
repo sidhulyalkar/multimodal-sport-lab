@@ -429,28 +429,10 @@ final class PhoneJournalInbox: ObservableObject {
             )
         }
 
-        let updated = ProductSessionManifest(
-            runID: existing.runID,
-            captureMode: existing.captureMode,
-            targetDurationSeconds: existing.targetDurationSeconds,
-            createdAtUTC: existing.createdAtUTC,
-            outcome: existing.outcome,
-            watchSessionID:
-                existing.watchSessionID ?? watchSessionID,
-            watchJournalSHA256: journalSHA256,
-            watchJournalByteCount: journalByteCount,
-            cameraSessionID: existing.cameraSessionID,
-            operatorJournalSHA256: existing.operatorJournalSHA256,
-            operatorMetadataSHA256: existing.operatorMetadataSHA256,
-            cameraVideoSHA256: existing.cameraVideoSHA256,
-            cameraJournalSHA256: existing.cameraJournalSHA256,
-            cameraMetadataSHA256: existing.cameraMetadataSHA256,
-            syncReceipts: existing.syncReceipts,
-            externalCameraExpected: existing.externalCameraExpected,
-            externalCameraImported: existing.externalCameraImported,
-            externalCameraSHA256: existing.externalCameraSHA256,
-            operatorEvidenceSealed: existing.operatorEvidenceSealed,
-            cameraEvidenceSealed: existing.cameraEvidenceSealed
+        let updated = existing.bindingWatchEvidence(
+            watchSessionID: watchSessionID,
+            journalSHA256: journalSHA256,
+            journalByteCount: journalByteCount
         )
 
         _ = try ProductSessionManifestStore.write(
