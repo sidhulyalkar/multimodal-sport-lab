@@ -155,13 +155,26 @@ public struct IndoBoardEquipmentObservationSelector:
         qualifications:
             [IndoBoardEquipmentModelQualification] = []
     ) {
-        self.qualificationByModelID =
-            Dictionary(
-                uniqueKeysWithValues:
-                    qualifications.map {
-                        ($0.modelID, $0)
-                    }
-            )
+        var strongest:
+            [String: IndoBoardEquipmentModelQualification] = [:]
+
+        for qualification in qualifications {
+            guard !qualification.modelID.isEmpty else {
+                continue
+            }
+
+            if let existing =
+                    strongest[qualification.modelID],
+               existing.status.rank
+                    >= qualification.status.rank {
+                continue
+            }
+
+            strongest[qualification.modelID] =
+                qualification
+        }
+
+        self.qualificationByModelID = strongest
     }
 
     public func select(
@@ -258,7 +271,7 @@ public struct IndoBoardEquipmentObservationSelector:
             if first.confidence
                 == second.confidence {
                 return first.detectorID
-                    > second.detectorID
+                    < second.detectorID
             }
             return first.confidence
                 < second.confidence
