@@ -22,6 +22,7 @@ public enum IndoBoardEquipmentProvenance:
     Equatable,
     Sendable {
     case manualAnnotated = "manual_annotated"
+    case fiducialMeasured = "fiducial_measured"
     case modelEstimated = "model_estimated"
     case geometricProxy = "geometric_proxy"
 }
@@ -111,6 +112,64 @@ public struct IndoBoardEquipmentObservation:
                 + "physical positions unless a separate calibration contract "
                 + "has been satisfied."
         )
+    }
+
+    /// Payload fragment designed to be merged into the camera pose event.
+    /// Sequence/timestamp deliberately stay on the parent frame so the
+    /// transport never duplicates nanosecond time through JSON doubles.
+    public var cameraPayload: JSONValue {
+        var object: [String: JSONValue] = [:]
+
+        if let modelID {
+            object["model_id"] = .string(modelID)
+        }
+
+        if let deck {
+            var deckObject: [String: JSONValue] = [
+                "left_end": pointJSON(deck.leftEnd),
+                "right_end": pointJSON(deck.rightEnd),
+                "confidence": .number(deck.confidence),
+                "provenance": .string(
+                    deck.provenance.rawValue
+                ),
+            ]
+            if !deck.polygon.isEmpty {
+                deckObject["polygon"] = .array(
+                    deck.polygon.map(pointJSON)
+                )
+            }
+            object["deck"] = .object(deckObject)
+        }
+
+        if let roller {
+            var rollerObject: [String: JSONValue] = [
+                "center": pointJSON(roller.center),
+                "confidence": .number(roller.confidence),
+                "provenance": .string(
+                    roller.provenance.rawValue
+                ),
+            ]
+            if let axisStart = roller.axisStart {
+                rollerObject["axis_start"] =
+                    pointJSON(axisStart)
+            }
+            if let axisEnd = roller.axisEnd {
+                rollerObject["axis_end"] =
+                    pointJSON(axisEnd)
+            }
+            object["roller"] = .object(rollerObject)
+        }
+
+        return .object(object)
+    }
+
+    private func pointJSON(
+        _ point: NormalizedImagePoint2D
+    ) -> JSONValue {
+        .array([
+            .number(point.x),
+            .number(point.y),
+        ])
     }
 }
 
@@ -212,6 +271,9 @@ public enum IndoBoardBalanceStateEstimator {
         if deck.provenance == .manualAnnotated
             && roller.provenance == .manualAnnotated {
             provenance = .manualAnnotated
+        } else if deck.provenance == .fiducialMeasured
+            && roller.provenance == .fiducialMeasured {
+            provenance = .fiducialMeasured
         } else if deck.provenance == .modelEstimated
             || roller.provenance == .modelEstimated {
             provenance = .modelEstimated
