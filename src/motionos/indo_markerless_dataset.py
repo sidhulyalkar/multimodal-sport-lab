@@ -273,6 +273,250 @@ def build_markerless_dataset_index(
     return index
 
 
+def verify_markerless_dataset_index(
+    index_path: str | Path,
+) -> dict[str, Any]:
+    index_file = Path(index_path).resolve()
+    raw = json.loads(
+        index_file.read_text(encoding="utf-8")
+    )
+    if not isinstance(raw, dict):
+        raise TypeError(
+            "markerless dataset index must contain a JSON object"
+        )
+    if raw.get("schema_version") != (
+        INDO_MARKERLESS_DATASET_SCHEMA_VERSION
+    ):
+        raise ValueError(
+            "unsupported markerless dataset index schema"
+        )
+
+    sources_raw = raw.get("sources")
+    samples_raw = raw.get("samples")
+    if not isinstance(sources_raw, list) or not sources_raw:
+        raise ValueError(
+            "markerless dataset index requires sources"
+        )
+    if not isinstance(samples_raw, list) or not samples_raw:
+        raise ValueError(
+            "markerless dataset index requires samples"
+        )
+
+    source_by_id: dict[str, dict[str, Any]] = {}
+    for index, source in enumerate(sources_raw):
+        if not isinstance(source, dict):
+            raise TypeError(
+                f"markerless source {index} must be an object"
+            )
+
+        source_id = source.get("source_id")
+        if not isinstance(source_id, str) or not source_id:
+            raise ValueError(
+                f"markerless source {index} requires source_id"
+            )
+        if source_id in source_by_id:
+            raise ValueError(
+                f"duplicate markerless source_id: {source_id}"
+            )
+
+        video = _resolve(
+            _index_path(
+                source,
+                "video_path",
+                label=f"source {index}",
+            ),
+            base=index_file.parent,
+        )
+        labels = _resolve(
+            _index_path(
+                source,
+                "teacher_labels_path",
+                label=f"source {index}",
+            ),
+            base=index_file.parent,
+        )
+        if not video.is_file():
+            raise FileNotFoundError(
+                f"markerless source video does not exist: {video}"
+            )
+        if not labels.is_file():
+            raise FileNotFoundError(
+                f"markerless teacher labels do not exist: {labels}"
+            )
+
+        expected_video_hash = _index_hash(
+            source,
+            "video_sha256",
+            label=f"source {index}",
+        )
+        expected_label_hash = _index_hash(
+            source,
+            "teacher_labels_sha256",
+            label=f"source {index}",
+        )
+        if sha256_file(video) != expected_video_hash:
+            raise ValueError(
+                f"markerless source video hash mismatch: {source_id}"
+            )
+        if sha256_file(labels) != expected_label_hash:
+            raise ValueError(
+                "markerless teacher-label hash mismatch: "
+                + source_id
+            )
+
+        source_by_id[source_id] = source
+
+    seen_samples: set[str] = set()
+    samples_per_source: dict[str, int] = {
+        source_id: 0
+        for source_id in source_by_id
+    }
+
+    acquisition_fields = (
+        "subject_id",
+        "day_id",
+        "run_id",
+        "remount_id",
+        "camera_view",
+        "board_id",
+    )
+
+    for index, sample in enumerate(samples_raw):
+        if not isinstance(sample, dict):
+            raise TypeError(
+                f"markerless sample {index} must be an object"
+            )
+
+        sample_id = sample.get("sample_id")
+        source_id = sample.get("source_id")
+        frame_index = sample.get("frame_index")
+        if not isinstance(sample_id, str) or not sample_id:
+            raise ValueError(
+                f"markerless sample {index} requires sample_id"
+            )
+        if sample_id in seen_samples:
+            raise ValueError(
+                f"duplicate markerless sample_id: {sample_id}"
+            )
+        seen_samples.add(sample_id)
+
+        if not isinstance(source_id, str) or source_id not in source_by_id:
+            raise ValueError(
+                f"markerless sample {index} references unknown source"
+            )
+        if not isinstance(frame_index, int) or frame_index < 0:
+            raise ValueError(
+                f"markerless sample {index} has invalid frame_index"
+            )
+
+        expected_sample_id = _sample_id(
+            source_id=source_id,
+            frame_index=frame_index,
+        )
+        if sample_id != expected_sample_id:
+            raise ValueError(
+                f"markerless sample identity mismatch: {sample_id}"
+            )
+        if sample.get("review_status") not in (
+            _ALLOWED_REFERENCE_STATUSES
+        ):
+            raise ValueError(
+                f"markerless sample {sample_id} has untrusted review_status"
+            )
+        if not _complete_equipment(
+            sample.get("indo_board_equipment")
+        ):
+            raise ValueError(
+                f"markerless sample {sample_id} has incomplete equipment"
+            )
+
+        source = source_by_id[source_id]
+        for field in acquisition_fields:
+            if sample.get(field) != source.get(field):
+                raise ValueError(
+                    f"markerless sample {sample_id} mismatches source {field}"
+                )
+
+        if sample.get("video_path") != source.get("video_path"):
+            raise ValueError(
+                f"markerless sample {sample_id} video path mismatch"
+            )
+        if (
+            sample.get("teacher_labels_path")
+            != source.get("teacher_labels_path")
+        ):
+            raise ValueError(
+                f"markerless sample {sample_id} teacher-label path mismatch"
+            )
+
+        samples_per_source[source_id] += 1
+
+    for source_id, source in source_by_id.items():
+        declared = source.get(
+            "accepted_sample_count"
+        )
+        if declared != samples_per_source[source_id]:
+            raise ValueError(
+                "markerless source accepted_sample_count mismatch: "
+                + source_id
+            )
+
+    declared_sample_count = raw.get("sample_count")
+    declared_source_count = raw.get("source_count")
+    if declared_sample_count != len(samples_raw):
+        raise ValueError(
+            "markerless dataset sample_count mismatch"
+        )
+    if declared_source_count != len(sources_raw):
+        raise ValueError(
+            "markerless dataset source_count mismatch"
+        )
+
+    return {
+        "schema_version":
+            INDO_MARKERLESS_DATASET_SCHEMA_VERSION,
+        "passed": True,
+        "sample_count": len(samples_raw),
+        "source_count": len(sources_raw),
+        "index_sha256": sha256_file(index_file),
+    }
+
+
+def _index_path(
+    value: dict[str, Any],
+    key: str,
+    *,
+    label: str,
+) -> str:
+    raw = value.get(key)
+    if not isinstance(raw, str) or not raw.strip():
+        raise ValueError(
+            f"{label}.{key} must be non-empty"
+        )
+    return raw.strip()
+
+
+def _index_hash(
+    value: dict[str, Any],
+    key: str,
+    *,
+    label: str,
+) -> str:
+    raw = _index_path(
+        value,
+        key,
+        label=label,
+    ).lower()
+    if len(raw) != 64 or any(
+        character not in "0123456789abcdef"
+        for character in raw
+    ):
+        raise ValueError(
+            f"{label}.{key} must be a SHA-256 hex digest"
+        )
+    return raw
+
+
 def _complete_equipment(
     value: object,
 ) -> bool:
