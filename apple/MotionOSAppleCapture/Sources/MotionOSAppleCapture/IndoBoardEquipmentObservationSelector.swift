@@ -80,6 +80,35 @@ public struct IndoBoardEquipmentModelQualification:
     }
 }
 
+public struct IndoBoardEquipmentModelQualificationRegistry:
+    Codable,
+    Sendable,
+    Equatable {
+    public static let schemaVersion =
+        "motionos.indo-equipment-model-qualification-registry.v1"
+
+    public let schemaVersion: String
+    public let qualifications:
+        [IndoBoardEquipmentModelQualification]
+    public let claimBoundary: String
+
+    public init(
+        schemaVersion: String =
+            IndoBoardEquipmentModelQualificationRegistry
+                .schemaVersion,
+        qualifications:
+            [IndoBoardEquipmentModelQualification]
+    ) {
+        self.schemaVersion = schemaVersion
+        self.qualifications = qualifications
+        self.claimBoundary = (
+            "This registry is an explicit runtime authorization boundary. "
+                + "Absence from the registry must fail closed rather than "
+                + "silently authorizing a markerless model."
+        )
+    }
+}
+
 public struct IndoBoardEquipmentDetectionCandidate:
     Sendable,
     Equatable {
@@ -124,6 +153,51 @@ public enum IndoBoardEquipmentSelectionReason:
         "no_authorized_observation"
 }
 
+public struct IndoBoardEquipmentSelectionReceipt:
+    Codable,
+    Sendable,
+    Equatable {
+    public static let schemaVersion =
+        "motionos.indo-equipment-selection-receipt.v1"
+
+    public let schemaVersion: String
+    public let intent: IndoBoardEquipmentUseIntent
+    public let reason:
+        IndoBoardEquipmentSelectionReason
+    public let selectedDetectorID: String?
+    public let selectedModelID: String?
+    public let selectedProvenance:
+        IndoBoardEquipmentProvenance?
+    public let selectedConfidence: Double?
+    public let rejectedDetectorIDs: [String]
+
+    public init(
+        schemaVersion: String =
+            IndoBoardEquipmentSelectionReceipt.schemaVersion,
+        intent: IndoBoardEquipmentUseIntent,
+        reason: IndoBoardEquipmentSelectionReason,
+        selectedDetectorID: String?,
+        selectedModelID: String?,
+        selectedProvenance:
+            IndoBoardEquipmentProvenance?,
+        selectedConfidence: Double?,
+        rejectedDetectorIDs: [String]
+    ) {
+        self.schemaVersion = schemaVersion
+        self.intent = intent
+        self.reason = reason
+        self.selectedDetectorID = selectedDetectorID
+        self.selectedModelID = selectedModelID
+        self.selectedProvenance = selectedProvenance
+        self.selectedConfidence =
+            selectedConfidence.map {
+                min(1, max(0, $0))
+            }
+        self.rejectedDetectorIDs =
+            rejectedDetectorIDs.sorted()
+    }
+}
+
 public struct IndoBoardEquipmentSelection:
     Sendable,
     Equatable {
@@ -143,6 +217,25 @@ public struct IndoBoardEquipmentSelection:
         self.reason = reason
         self.rejectedDetectorIDs =
             rejectedDetectorIDs.sorted()
+    }
+
+    public func receipt(
+        intent: IndoBoardEquipmentUseIntent
+    ) -> IndoBoardEquipmentSelectionReceipt {
+        IndoBoardEquipmentSelectionReceipt(
+            intent: intent,
+            reason: reason,
+            selectedDetectorID:
+                selected?.detectorID,
+            selectedModelID:
+                selected?.observation.modelID,
+            selectedProvenance:
+                selected?.balanceState?.provenance,
+            selectedConfidence:
+                selected?.confidence,
+            rejectedDetectorIDs:
+                rejectedDetectorIDs
+        )
     }
 }
 
