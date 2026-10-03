@@ -159,6 +159,8 @@ public struct BodyMovementFrame: Codable, Sendable, Equatable {
     public let imageJoints: [BodyJoint2D]?
     public let indoBoardEquipment:
         IndoBoardEquipmentObservation?
+    public let indoBoardVisibleFiducials:
+        [IndoBoardFiducialMarkerID]?
 
     public init(
         schemaVersion: String = BodyMovementFrame.schemaVersion,
@@ -176,7 +178,9 @@ public struct BodyMovementFrame: Codable, Sendable, Equatable {
         imageFraming: BodyImageFraming? = nil,
         imageJoints: [BodyJoint2D]? = nil,
         indoBoardEquipment:
-            IndoBoardEquipmentObservation? = nil
+            IndoBoardEquipmentObservation? = nil,
+        indoBoardVisibleFiducials:
+            [IndoBoardFiducialMarkerID]? = nil
     ) {
         self.schemaVersion = schemaVersion
         self.sessionID = sessionID
@@ -193,6 +197,8 @@ public struct BodyMovementFrame: Codable, Sendable, Equatable {
         self.imageFraming = imageFraming
         self.imageJoints = imageJoints
         self.indoBoardEquipment = indoBoardEquipment
+        self.indoBoardVisibleFiducials =
+            indoBoardVisibleFiducials
     }
 
     public var jointMap: [String: BodyJoint3D] {
@@ -328,6 +334,10 @@ public enum BodyMovementFrameParser {
                     payload,
                     fallbackSequence: sequence,
                     fallbackDeviceTimeNS: deviceTimeNS
+                ),
+            indoBoardVisibleFiducials:
+                parseIndoBoardVisibleFiducials(
+                    payload
                 )
         )
     }
@@ -391,6 +401,38 @@ public enum BodyMovementFrameParser {
         return aliases.compactMap { names in
             findJoint(aliases: names, in: joints)?.position
         }
+    }
+
+    private static func parseIndoBoardVisibleFiducials(
+        _ payload: [String: JSONValue]
+    ) -> [IndoBoardFiducialMarkerID]? {
+        guard case .array(let values) =
+                payload[
+                    "indo_board_fiducials_visible"
+                ]
+        else {
+            return nil
+        }
+
+        let markers = values.compactMap { value
+            -> IndoBoardFiducialMarkerID? in
+            guard case .string(let raw) = value
+            else {
+                return nil
+            }
+            return IndoBoardFiducialMarkerID(
+                rawValue: raw
+            )
+        }
+
+        guard !markers.isEmpty else {
+            return nil
+        }
+
+        return Array(Set(markers))
+            .sorted {
+                $0.rawValue < $1.rawValue
+            }
     }
 
     private static func parseIndoBoardEquipment(
