@@ -8,7 +8,11 @@ import simd
 public enum Pose3DExtractor {
     public static func extract(
         from pixelBuffer: CVPixelBuffer,
-        orientation: CGImagePropertyOrientation = .up
+        orientation: CGImagePropertyOrientation = .up,
+        equipmentDetectors:
+            [any IndoBoardEquipmentFrameDetector] = [],
+        qualificationRegistry:
+            IndoBoardEquipmentModelQualificationRegistry? = nil
     ) throws -> [String: JSONValue]? {
         let request3D = VNDetectHumanBodyPose3DRequest()
         let request2D = VNDetectHumanBodyPoseRequest()
@@ -150,18 +154,105 @@ public enum Pose3DExtractor {
             )
         }
 
+        var equipmentCandidates:
+            [IndoBoardEquipmentDetectionCandidate] = []
+
         if let equipment =
                 IndoBoardFiducialEquipmentBuilder
                     .makeObservation(
                         detections: fiducials
                     ) {
-            payload["indo_board_equipment"] =
-                equipment.cameraPayload
-            payload["indo_board_equipment_source"] =
-                .string(
-                    IndoBoardFiducialEquipmentBuilder
-                        .modelID
+            equipmentCandidates.append(
+                IndoBoardEquipmentDetectionCandidate(
+                    observation: equipment,
+                    detectorID: "vision_qr"
                 )
+            )
+        }
+
+        var detectorFailures:
+            [IndoBoardEquipmentDetectorFailure] = []
+
+        for detector in equipmentDetectors {
+            do {
+                if let observation = try detector.detect(
+                    in: pixelBuffer,
+                    orientation: orientation
+                ) {
+                    equipmentCandidates.append(
+                        IndoBoardEquipmentDetectionCandidate(
+                            observation: observation,
+                            detectorID:
+                                detector.detectorID
+                        )
+                    )
+                }
+            } catch {
+                detectorFailures.append(
+                    IndoBoardEquipmentDetectorFailure(
+                        detectorID:
+                            detector.detectorID,
+                        message:
+                            error.localizedDescription
+                    )
+                )
+            }
+        }
+
+        if !equipmentCandidates.isEmpty
+            || !equipmentDetectors.isEmpty {
+            let routing =
+                IndoBoardEquipmentEvidenceRouter(
+                    registry:
+                        qualificationRegistry
+                )
+                .route(equipmentCandidates)
+
+            payload["indo_board_equipment_routing"] =
+                routing.audit.cameraPayload
+
+            if let selected =
+                    routing.tracking.selected {
+                payload[
+                    "indo_board_tracking_equipment"
+                ] = selected.observation.cameraPayload
+                payload[
+                    "indo_board_tracking_detector_id"
+                ] = .string(selected.detectorID)
+
+                if let modelID =
+                        selected.observation.modelID {
+                    payload[
+                        "indo_board_tracking_equipment_source"
+                    ] = .string(modelID)
+                }
+            }
+
+            if let selected =
+                    routing.coaching.selected {
+                payload["indo_board_equipment"] =
+                    selected.observation.cameraPayload
+                payload[
+                    "indo_board_equipment_detector_id"
+                ] = .string(selected.detectorID)
+
+                if let modelID =
+                        selected.observation.modelID {
+                    payload[
+                        "indo_board_equipment_source"
+                    ] = .string(modelID)
+                }
+            }
+        }
+
+        if !detectorFailures.isEmpty {
+            payload[
+                "indo_board_equipment_detector_failures"
+            ] = .array(
+                detectorFailures.map {
+                    $0.cameraPayload
+                }
+            )
         }
 
         return payload
