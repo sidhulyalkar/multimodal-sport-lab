@@ -10,7 +10,23 @@ public final class WatchConnectivityTransport: NSObject, WCSessionDelegate {
     )?
     public var onUserInfoReceived: (([String: Any]) -> Void)?
     public var onMessageReceived: (([String: Any]) -> Void)?
+    public var onApplicationContextReceived: (([String: Any]) -> Void)?
     public var onStateChanged: (() -> Void)?
+    public private(set) var lastActivationErrorDescription: String?
+    public private(set) var lastActivationAt: Date?
+
+    public var activationStateLabel: String {
+        switch session.activationState {
+        case .notActivated:
+            return "not activated"
+        case .inactive:
+            return "inactive"
+        case .activated:
+            return "activated"
+        @unknown default:
+            return "unknown"
+        }
+    }
 
     public override init() {
         session = .default
@@ -21,13 +37,45 @@ public final class WatchConnectivityTransport: NSObject, WCSessionDelegate {
         }
     }
 
+    public func activateIfNeeded() {
+        guard WCSession.isSupported() else { return }
+        session.delegate = self
+        if session.activationState != .activated {
+            session.activate()
+        }
+    }
+
     @discardableResult
     public func transferJournal(
         _ url: URL,
         metadata: [String: Any]? = nil
     ) -> WCSessionFileTransfer? {
         guard session.activationState == .activated else { return nil }
+
+        // WatchConnectivity already owns queued background transfers. Reuse an
+        // existing transfer for the same MotionOS session instead of creating
+        // duplicate payloads when the UI is reopened or a retry is requested.
+        if let sessionID = metadata?["session_id"] as? String,
+           let existing = session.outstandingFileTransfers.first(where: {
+               $0.file.metadata?["session_id"] as? String == sessionID
+           }) {
+            return existing
+        }
+
         return session.transferFile(url, metadata: metadata)
+    }
+
+    @discardableResult
+    public func cancelJournalTransfers(
+        sessionID: String
+    ) -> Int {
+        let matches = session.outstandingFileTransfers.filter {
+            $0.file.metadata?["session_id"] as? String == sessionID
+        }
+        for transfer in matches {
+            transfer.cancel()
+        }
+        return matches.count
     }
 
     @discardableResult
@@ -36,6 +84,19 @@ public final class WatchConnectivityTransport: NSObject, WCSessionDelegate {
     ) -> WCSessionUserInfoTransfer? {
         guard session.activationState == .activated else { return nil }
         return session.transferUserInfo(userInfo)
+    }
+
+    @discardableResult
+    public func updateApplicationContext(
+        _ context: [String: Any]
+    ) -> Bool {
+        guard session.activationState == .activated else { return false }
+        do {
+            try session.updateApplicationContext(context)
+            return true
+        } catch {
+            return false
+        }
     }
 
     @discardableResult
@@ -61,12 +122,23 @@ public final class WatchConnectivityTransport: NSObject, WCSessionDelegate {
         activationDidCompleteWith activationState: WCSessionActivationState,
         error: Error?
     ) {
+        lastActivationAt = Date()
+        lastActivationErrorDescription = error?.localizedDescription
         onStateChanged?()
     }
 
     public func sessionReachabilityDidChange(_ session: WCSession) {
         onStateChanged?()
     }
+
+    #if os(iOS)
+    public func sessionWatchStateDidChange(_ session: WCSession) {
+        // Apple calls this when pairing, Watch-app installation, complication,
+        // or active-Watch directory state changes. Propagate it so the
+        // readiness UI does not retain a stale installation result.
+        onStateChanged?()
+    }
+    #endif
 
     public func session(_ session: WCSession, didReceive file: WCSessionFile) {
         do {
@@ -116,11 +188,39 @@ public final class WatchConnectivityTransport: NSObject, WCSessionDelegate {
         onMessageReceived?(message)
     }
 
+    public func session(
+        _ session: WCSession,
+        didReceiveApplicationContext applicationContext: [String: Any]
+    ) {
+        onApplicationContextReceived?(applicationContext)
+    }
+
     #if os(iOS)
-    public func sessionDidBecomeInactive(_ session: WCSession) {}
+    public func sessionDidBecomeInactive(_ session: WCSession) {
+        onStateChanged?()
+    }
+
     public func sessionDidDeactivate(_ session: WCSession) {
+        // Surface the deactivation before activating the newly selected Watch,
+        // so consumers can discard state belonging to the previous companion.
+        onStateChanged?()
         session.activate()
     }
     #endif
+}
+
+extension WatchConnectivityTransport: LiveTelemetryChannel {
+    public var canDeliverLiveTelemetry: Bool {
+        session.activationState == .activated && session.isReachable
+    }
+
+    /// Immediate `sendMessage` only. Never `transferUserInfo` or application
+    /// context, which would queue a stale preview for later delivery.
+    @discardableResult
+    public func sendLiveTelemetry(_ message: [String: Any]) -> Bool {
+        guard canDeliverLiveTelemetry else { return false }
+        session.sendMessage(message, replyHandler: nil, errorHandler: nil)
+        return true
+    }
 }
 #endif

@@ -36,13 +36,33 @@ struct CameraCaptureCard: View {
                     .aspectRatio(16.0 / 9.0, contentMode: .fit)
                     .background(.black)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 10)
+                            .strokeBorder(
+                                camera.phase == .ready
+                                    ? framingColor(
+                                        camera.framingAssessment
+                                    ).opacity(0.8)
+                                    : Color.white.opacity(0.18),
+                                style: StrokeStyle(
+                                    lineWidth: 2,
+                                    dash: [8, 7]
+                                )
+                            )
+                            .padding(22)
+                            .allowsHitTesting(false)
+                    }
 
-                Text(
-                    "Framing preview only. Keep the athlete, feet, board, "
-                        + "and calibration target inside the measurable region."
-                )
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+                if camera.phase == .ready {
+                    framingCoach(camera.framingAssessment)
+                } else {
+                    Text(
+                        "Recording. Stay inside the guide with your feet, "
+                            + "board, head, and recovery movements visible."
+                    )
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                }
             }
 
             controls
@@ -96,7 +116,9 @@ struct CameraCaptureCard: View {
                 Task { await camera.startRecording() }
             } label: {
                 Label(
-                    "Start Video + Pose Evidence",
+                    camera.framingAssessment.state == .ready
+                        ? "Start Indo Board Capture"
+                        : "Record Anyway",
                     systemImage: "record.circle"
                 )
                 .frame(maxWidth: .infinity)
@@ -145,6 +167,69 @@ struct CameraCaptureCard: View {
         }
     }
 
+    private func framingCoach(
+        _ assessment: CameraFramingAssessment
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 8) {
+                Image(systemName: framingSymbol(assessment))
+                    .foregroundStyle(framingColor(assessment))
+
+                Text(assessment.title)
+                    .font(.subheadline.weight(.semibold))
+
+                Spacer()
+
+                Text("\(assessment.score)%")
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(assessment.instruction)
+                .font(.caption)
+                .foregroundStyle(
+                    assessment.state == .ready
+                        ? .primary
+                        : .secondary
+                )
+
+            Text(assessment.detail)
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+        }
+        .padding(10)
+        .background(
+            framingColor(assessment).opacity(0.08),
+            in: RoundedRectangle(cornerRadius: 10)
+        )
+    }
+
+    private func framingColor(
+        _ assessment: CameraFramingAssessment
+    ) -> Color {
+        switch assessment.state {
+        case .ready:
+            .green
+        case .adjust:
+            .yellow
+        case .searching:
+            .secondary
+        }
+    }
+
+    private func framingSymbol(
+        _ assessment: CameraFramingAssessment
+    ) -> String {
+        switch assessment.state {
+        case .ready:
+            "checkmark.circle.fill"
+        case .adjust:
+            "viewfinder.circle"
+        case .searching:
+            "person.crop.rectangle"
+        }
+    }
+
     private func liveHealth(
         _ stats: CameraLiveCaptureStats
     ) -> some View {
@@ -173,18 +258,18 @@ struct CameraCaptureCard: View {
                 )
                 healthMetric(
                     "written",
-                    "(stats.writtenFrames)/(stats.deliveredFrames)"
+                    "\(stats.writtenFrames)/\(stats.deliveredFrames)"
                 )
                 healthMetric(
                     "drops",
-                    "(stats.droppedFrames)"
+                    "\(stats.droppedFrames)"
                 )
             }
 
             HStack {
                 healthMetric(
                     "backpressure",
-                    "(stats.writerBackpressureFrames)"
+                    "\(stats.writerBackpressureFrames)"
                 )
                 healthMetric(
                     "pose",
@@ -194,7 +279,7 @@ struct CameraCaptureCard: View {
                 )
                 healthMetric(
                     "pose errs",
-                    "(stats.poseErrorFrames)"
+                    "\(stats.poseErrorFrames)"
                 )
             }
 
@@ -262,7 +347,25 @@ struct CameraCaptureCard: View {
                 .font(.subheadline.weight(.semibold))
             Text(
                 "\(configuration.formatWidth)×\(configuration.formatHeight) · "
-                    + "rear · intrinsics "
+                    + String(
+                        format: "%.0f fps %@",
+                        configuration.configuredFrameRate,
+                        configuration.frameRateLocked
+                            ? "locked"
+                            : "unlocked"
+                    )
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+
+            Text(
+                "stabilization "
+                    + (
+                        configuration.stabilizationLockedOff
+                            ? "off"
+                            : configuration.preferredVideoStabilizationMode
+                    )
+                    + " · intrinsics "
                     + (
                         configuration.intrinsicDeliveryEnabled
                             ? "enabled"

@@ -5,19 +5,30 @@ import MotionOSAppleCapture
 import UIKit
 import WatchConnectivity
 
-struct WatchLiveCaptureHealth: Equatable, Sendable {
-    let sessionID: String
+struct SessionSyncAcknowledgment: Equatable, Sendable {
+    let runID: String
+    let cueID: String
+    let label: String
+    let watchSessionID: String
+    let watchDeviceTimeNS: UInt64
+    let receivedAt: Date
+}
+
+struct WatchPresence: Equatable, Sendable {
     let receivedAt: Date
     let sourceSentAt: Date?
-    let imuSampleCount: UInt64
-    let heartRateEventCount: UInt64
-    let observedIMUHz: Double?
-    let recentMedianIMUHz: Double?
-    let maxIMUGapMS: Double
-    let nonMonotonicIMUCount: UInt64
-    let heartRateBPM: Double?
+    let bundleID: String
+    let appVersion: String
+    let appBuild: String
+    let watchSystemVersion: String
+    let captureState: String
+    let captureOrigin: String
+    let sessionID: String?
+    let healthAuthorization: String
+    let phonePresenceConfirmed: Bool
     let watchBatteryLevel: Double?
 }
+
 
 @MainActor
 final class PhoneSessionCoordinator: NSObject, ObservableObject {
@@ -36,10 +47,25 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
     @Published private(set) var state: State = .idle
     @Published private(set) var watchPaired = false
     @Published private(set) var watchAppInstalled = false
+    @Published private(set) var systemWatchAppInstalled = false
     @Published private(set) var watchReachable = false
-    @Published private(set) var watchCaptureHealth: WatchLiveCaptureHealth?
+    @Published private(set) var watchConnectivityActivationState = "starting"
+    @Published private(set) var watchConnectivityActivationError: String?
+    @Published private(set) var watchPresence: WatchPresence?
+    /// Lossy live preview of the active Watch recording. The sealed Watch
+    /// journal received through `inbox` is the evidence.
+    @Published private(set) var liveTelemetry = LiveTelemetryBuffer()
+    @Published private(set) var lastSessionSyncAcknowledgment:
+        SessionSyncAcknowledgment?
+    @Published private(set) var latestIndoRemoteCommand:
+        IndoBoardRemoteCommand?
     @Published private(set) var iPhoneBatteryLevel: Double?
     @Published private(set) var iPhoneAvailableStorageBytes: Int64?
+    @Published private(set) var systemsLabCurrentReport:
+        SystemsLabQualificationReport?
+    @Published private(set) var systemsLabLatestCompletedReport:
+        SystemsLabQualificationReport?
+    @Published private(set) var systemsLabReportURLs: [String: URL] = [:]
     @Published private(set) var errorMessage: String?
 
     let inbox = PhoneJournalInbox()
@@ -47,11 +73,18 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
     private let healthStore = HKHealthStore()
     private let transport = WatchConnectivityTransport()
     private var mirroredSession: HKWorkoutSession?
+    private var systemsLabTracker = SystemsLabQualificationTracker()
+    private var batteryObservers: [NSObjectProtocol] = []
+    private var lastWatchPresenceRequestAt = Date.distantPast
+    private let watchPresenceRequestMinimumInterval: TimeInterval = 5
+    private var recentIndoRemoteRequestIDs: [String] = []
+    private var lastPublishedIndoRemoteStatus: IndoBoardRemoteStatus?
 
     override init() {
         super.init()
 
         UIDevice.current.isBatteryMonitoringEnabled = true
+        installHostReadinessObservers()
 
         healthStore.workoutSessionMirroringStartHandler = { [weak self] session in
             guard let self else { return }
@@ -72,12 +105,41 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
             // WCSession's received file URL is temporary, so verify/copy it
             // while handling the callback rather than retaining the source URL.
             Task { @MainActor in
+                defer {
+                    try? FileManager.default.removeItem(at: url)
+                }
                 if let receipt = self.inbox.ingest(
                     fileURL: url,
                     metadata: metadata
                 ) {
+                    if let report =
+                        self.systemsLabTracker.markJournalReceived(
+                            sessionID: receipt.sessionID,
+                            receivedAt: Date(),
+                            byteCount: receipt.byteCount,
+                            sha256: receipt.journalSHA256
+                        ) {
+                        self.persistSystemsLabReport(report)
+                    }
+                    self.refreshSystemsLabReports()
                     self.acknowledgeJournal(receipt)
                 }
+            }
+        }
+
+        transport.onApplicationContextReceived = { [weak self] context in
+            guard let self else { return }
+            Task { @MainActor in
+                self.ingestWatchPresence(context)
+                self.refreshWatchState()
+            }
+        }
+
+        transport.onUserInfoReceived = { [weak self] userInfo in
+            guard let self else { return }
+            Task { @MainActor in
+                self.ingestWatchPresence(userInfo)
+                self.refreshWatchState()
             }
         }
 
@@ -93,10 +155,69 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
 
     func refreshWatchState() {
         let session = transport.session
-        watchPaired = session.isPaired
-        watchAppInstalled = session.isWatchAppInstalled
-        watchReachable = session.isReachable
+        watchConnectivityActivationState = transport.activationStateLabel
+        watchConnectivityActivationError =
+            transport.lastActivationErrorDescription
+        let activated = session.activationState == .activated
+
+        if !activated {
+            // A deactivation can mean the user switched active Watches.
+            // Never carry a prior Watch's handshake into the new session.
+            watchPresence = nil
+            liveTelemetry.clear()
+        } else {
+            ingestWatchPresence(session.receivedApplicationContext)
+            publishPhonePresence()
+        }
+
+        // WCSession's install bit can lag a development install. A current
+        // MotionOS presence packet or live reachability is stronger evidence
+        // that the counterpart app exists on the active paired Watch.
+        watchPaired = activated && session.isPaired
+        watchReachable = activated && session.isReachable
+        systemWatchAppInstalled = activated && session.isWatchAppInstalled
+        watchAppInstalled = activated
+            && (
+                systemWatchAppInstalled
+                    || hasRecentWatchPresence()
+                    || session.isReachable
+            )
+
+        requestWatchPresenceIfNeeded()
         refreshHostReadiness()
+    }
+
+    func runWatchLinkCheck() {
+        // A manual check should actually retry WCSession activation, then
+        // force a fresh presence request if the counterpart is reachable.
+        lastWatchPresenceRequestAt = .distantPast
+        transport.activateIfNeeded()
+        refreshWatchState()
+    }
+
+    private func installHostReadinessObservers() {
+        for name in [
+            UIDevice.batteryLevelDidChangeNotification,
+            UIDevice.batteryStateDidChangeNotification,
+            UIApplication.didBecomeActiveNotification,
+        ] {
+            let observer = NotificationCenter.default.addObserver(
+                forName: name,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.refreshHostReadiness()
+                    self?.refreshWatchState()
+                }
+            }
+            batteryObservers.append(observer)
+        }
+
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(500))
+            self?.refreshHostReadiness()
+        }
     }
 
     func refreshHostReadiness() {
@@ -134,34 +255,290 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
         )
     }
 
-    func watchCaptureHealthAge(
+    @discardableResult
+    func sendSessionProtocolCue(
+        runID: String,
+        watchSessionID: String,
+        stepID: String,
+        title: String,
+        instruction: String
+    ) -> Bool {
+        transport.sendMessage(
+            [
+                "motionos_message": "session_protocol_cue_v1",
+                "run_id": runID,
+                "watch_session_id": watchSessionID,
+                "step_id": stepID,
+                "step_title": title,
+                "instruction": instruction,
+            ]
+        )
+    }
+
+    @discardableResult
+    func sendWatchStopRequest(
+        runID: String,
+        watchSessionID: String
+    ) -> Bool {
+        transport.sendMessage(
+            [
+                "motionos_message": "session_stop_request_v1",
+                "run_id": runID,
+                "watch_session_id": watchSessionID,
+            ]
+        )
+    }
+
+    @discardableResult
+    func sendSessionSyncCue(
+        runID: String,
+        watchSessionID: String,
+        cueID: String,
+        label: String
+    ) -> Bool {
+        transport.sendMessage(
+            [
+                "motionos_message": "session_sync_cue_v1",
+                "run_id": runID,
+                "watch_session_id": watchSessionID,
+                "cue_id": cueID,
+                "label": label,
+            ]
+        )
+    }
+
+    func watchPresenceAge(
         at date: Date = Date()
     ) -> TimeInterval? {
-        guard let watchCaptureHealth else { return nil }
-        return max(
-            0,
-            date.timeIntervalSince(watchCaptureHealth.receivedAt)
+        guard let watchPresence else { return nil }
+        let timestamp = watchPresence.sourceSentAt ?? watchPresence.receivedAt
+        return max(0, date.timeIntervalSince(timestamp))
+    }
+
+    func hasRecentWatchPresence(
+        at date: Date = Date(),
+        maxAge: TimeInterval = 600
+    ) -> Bool {
+        guard let age = watchPresenceAge(at: date) else { return false }
+        return age <= maxAge
+    }
+
+    /// The single source of truth for Apple Watch status and the Live
+    /// Observatory. Views must not infer Watch or live state themselves.
+    func observation(
+        at date: Date = Date()
+    ) -> WatchObservation {
+        WatchObservationResolver.resolve(
+            WatchObservationInput(
+                now: date,
+                connectivityActivated:
+                    transport.session.activationState == .activated,
+                paired: watchPaired,
+                systemAppInstalled: systemWatchAppInstalled,
+                reachable: watchReachable,
+                presenceRecent: hasRecentWatchPresence(at: date),
+                presence: watchPresence.map {
+                    WatchObservationInput.Presence(
+                        capturePhase: WatchCapturePhase(
+                            presenceCaptureState: $0.captureState
+                        ),
+                        sessionID: $0.sessionID,
+                        receivedAt: $0.receivedAt
+                    )
+                },
+                mirroredWorkout: mirroredWorkoutPhase,
+                latestFrame: liveTelemetry.latest
+            )
         )
+    }
+
+    var watchStatus: WatchLinkStatus {
+        observation().link
+    }
+
+    var watchConnectionReady: Bool {
+        watchStatus.isReady
+    }
+
+    var watchTwoWayLinkVerified: Bool {
+        hasRecentWatchPresence()
+            && (watchPresence?.phonePresenceConfirmed == true)
+    }
+
+    private var mirroredWorkoutPhase: MirroredWorkoutPhase {
+        switch state {
+        case .launchingWatch, .waitingForMirror:
+            .launching
+        case .running:
+            .recording
+        case .paused:
+            .paused
+        default:
+            .none
+        }
+    }
+
+    private func requestWatchPresenceIfNeeded(
+        at date: Date = Date()
+    ) {
+        guard watchReachable,
+              date.timeIntervalSince(lastWatchPresenceRequestAt)
+                >= watchPresenceRequestMinimumInterval
+        else {
+            return
+        }
+
+        let sent = transport.sendMessage(
+            [
+                "motionos_message": "watch_presence_request_v1",
+                "sent_at_unix_s": date.timeIntervalSince1970,
+            ]
+        )
+        if sent {
+            lastWatchPresenceRequestAt = date
+        }
     }
 
     private func ingestWatchMessage(
         _ message: [String: Any]
     ) {
-        guard message["motionos_message"] as? String
-                == "watch_capture_health_v1",
-              let sessionID = message["session_id"] as? String,
-              let imuSamples = Self.uint64(
-                message["imu_sample_count"]
-              ),
-              let hrEvents = Self.uint64(
-                message["hr_event_count"]
-              ),
-              let maxGap = Self.double(
-                message["max_imu_gap_ms"]
-              ),
-              let nonMonotonic = Self.uint64(
-                message["non_monotonic_imu_count"]
-              )
+        if let command = IndoBoardRemoteCommand(message: message) {
+            guard !recentIndoRemoteRequestIDs.contains(command.requestID)
+            else {
+                return
+            }
+            recentIndoRemoteRequestIDs.append(command.requestID)
+            if recentIndoRemoteRequestIDs.count > 32 {
+                recentIndoRemoteRequestIDs.removeFirst(
+                    recentIndoRemoteRequestIDs.count - 32
+                )
+            }
+            latestIndoRemoteCommand = command
+            return
+        }
+
+        let type = message["motionos_message"] as? String
+
+        if type == "phone_presence_request_v1" {
+            publishPhonePresence()
+            return
+        }
+
+        if type == "watch_presence_v1" {
+            ingestWatchPresence(message)
+            refreshWatchState()
+            return
+        }
+
+        if type == "session_sync_cue_ack_v1" {
+            guard let runID = message["run_id"] as? String,
+                  let cueID = message["cue_id"] as? String,
+                  let label = message["label"] as? String,
+                  let watchSessionID =
+                    message["watch_session_id"] as? String,
+                  let watchDeviceTimeNS = Self.uint64(
+                    message["watch_device_time_ns"]
+                  )
+            else {
+                return
+            }
+
+            lastSessionSyncAcknowledgment = SessionSyncAcknowledgment(
+                runID: runID,
+                cueID: cueID,
+                label: label,
+                watchSessionID: watchSessionID,
+                watchDeviceTimeNS: watchDeviceTimeNS,
+                receivedAt: Date()
+            )
+            return
+        }
+
+        guard LiveTelemetrySnapshot.isLiveTelemetry(message) else {
+            return
+        }
+        do {
+            let snapshot = try LiveTelemetrySnapshot(message: message)
+            let receivedAt = Date()
+            liveTelemetry.ingest(snapshot, receivedAt: receivedAt)
+            systemsLabTracker.ingest(
+                snapshot,
+                receivedAt: receivedAt,
+                phoneBatteryFraction: iPhoneBatteryLevel
+            )
+            refreshSystemsLabReports()
+        } catch {
+            liveTelemetry.recordInvalidPacket()
+        }
+    }
+
+    @discardableResult
+    func publishIndoRemoteStatus(
+        _ status: IndoBoardRemoteStatus,
+        force: Bool = false
+    ) -> Bool {
+        guard force
+                || lastPublishedIndoRemoteStatus.map({
+                    !$0.equivalentForDelivery(to: status)
+                }) != false
+        else {
+            return true
+        }
+
+        guard transport.sendMessage(status.message) else {
+            return false
+        }
+
+        lastPublishedIndoRemoteStatus = status
+        return true
+    }
+
+    @discardableResult
+    func acknowledgeIndoRemoteCommand(
+        _ command: IndoBoardRemoteCommand,
+        accepted: Bool,
+        message: String? = nil
+    ) -> Bool {
+        let acknowledgment = IndoBoardRemoteCommandAck(
+            requestID: command.requestID,
+            action: command.action,
+            accepted: accepted,
+            messageText: message
+        )
+        return transport.sendMessage(acknowledgment.message)
+    }
+
+    private func publishPhonePresence() {
+        guard transport.session.activationState == .activated else {
+            return
+        }
+
+        let version = Bundle.main.object(
+            forInfoDictionaryKey: "CFBundleShortVersionString"
+        ) as? String ?? "unknown"
+        let build = Bundle.main.object(
+            forInfoDictionaryKey: "CFBundleVersion"
+        ) as? String ?? "unknown"
+
+        let message: [String: Any] = [
+            "motionos_message": "phone_presence_v1",
+            "bundle_id": Bundle.main.bundleIdentifier ?? "unknown",
+            "app_version": version,
+            "app_build": build,
+            "workout_state": state.rawValue,
+            "sent_at_unix_s": Date().timeIntervalSince1970,
+        ]
+
+        _ = transport.updateApplicationContext(message)
+        _ = transport.sendMessage(message)
+    }
+
+    private func ingestWatchPresence(
+        _ message: [String: Any]
+    ) {
+        guard message["motionos_message"] as? String == "watch_presence_v1",
+              let bundleID = message["bundle_id"] as? String,
+              bundleID == "com.sidhulyalkar.motionos.watchkitapp"
         else {
             return
         }
@@ -170,27 +547,96 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
             Date(timeIntervalSince1970: $0)
         }
 
-        watchCaptureHealth = WatchLiveCaptureHealth(
-            sessionID: sessionID,
-            receivedAt: Date(),
+        // refreshWatchState() replays `receivedApplicationContext`. A replay
+        // of the same presence must not look newer than live telemetry.
+        if let existing = watchPresence,
+           sentAt != nil,
+           existing.sourceSentAt == sentAt,
+           existing.captureState == message["capture_state"] as? String,
+           existing.sessionID == message["session_id"] as? String {
+            return
+        }
+
+        let receivedAt = Date()
+        let captureState =
+            message["capture_state"] as? String ?? "unknown"
+        let sessionID = message["session_id"] as? String
+        let watchBattery =
+            Self.double(message["watch_battery_level_fraction"])
+
+        watchPresence = WatchPresence(
+            receivedAt: receivedAt,
             sourceSentAt: sentAt,
-            imuSampleCount: imuSamples,
-            heartRateEventCount: hrEvents,
-            observedIMUHz: Self.double(
-                message["observed_imu_hz"]
-            ),
-            recentMedianIMUHz: Self.double(
-                message["recent_median_imu_hz"]
-            ),
-            maxIMUGapMS: maxGap,
-            nonMonotonicIMUCount: nonMonotonic,
-            heartRateBPM: Self.double(
-                message["heart_rate_bpm"]
-            ),
-            watchBatteryLevel: Self.double(
-                message["watch_battery_level_fraction"]
-            )
+            bundleID: bundleID,
+            appVersion: message["app_version"] as? String ?? "unknown",
+            appBuild: message["app_build"] as? String ?? "unknown",
+            watchSystemVersion:
+                message["watch_system_version"] as? String ?? "unknown",
+            captureState: captureState,
+            captureOrigin: message["capture_origin"] as? String ?? "unknown",
+            sessionID: sessionID,
+            healthAuthorization:
+                message["health_authorization"] as? String ?? "unknown",
+            phonePresenceConfirmed:
+                message["phone_presence_confirmed"] as? Bool ?? false,
+            watchBatteryLevel: watchBattery
         )
+
+        systemsLabTracker.observePresence(
+            sessionID: sessionID,
+            captureState: captureState,
+            watchBatteryFraction: watchBattery,
+            phoneBatteryFraction: iPhoneBatteryLevel,
+            receivedAt: receivedAt
+        )
+
+        if let completed = systemsLabTracker.latestCompleted,
+           completed.journalReceivedAt != nil {
+            persistSystemsLabReport(completed)
+        }
+        refreshSystemsLabReports()
+    }
+
+    private func refreshSystemsLabReports() {
+        systemsLabCurrentReport = systemsLabTracker.current
+        systemsLabLatestCompletedReport =
+            systemsLabTracker.latestCompleted
+    }
+
+    private func persistSystemsLabReport(
+        _ report: SystemsLabQualificationReport
+    ) {
+        do {
+            let manager = FileManager.default
+            let documents = try manager.url(
+                for: .documentDirectory,
+                in: .userDomainMask,
+                appropriateFor: nil,
+                create: true
+            )
+            let directory = documents.appendingPathComponent(
+                "MotionOSSystemsLab",
+                isDirectory: true
+            )
+            try manager.createDirectory(
+                at: directory,
+                withIntermediateDirectories: true
+            )
+
+            let url = directory.appendingPathComponent(
+                "\(report.sessionID)-systems-lab.json"
+            )
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            encoder.dateEncodingStrategy = .iso8601
+            try encoder.encode(report).write(
+                to: url,
+                options: .atomic
+            )
+            systemsLabReportURLs[report.sessionID] = url
+        } catch {
+            // Qualification export is secondary to capture integrity.
+        }
     }
 
     private func acknowledgeJournal(
@@ -252,7 +698,9 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
         }
     }
 
-    func startP0() async {
+    func startP0(
+        locationType: HKWorkoutSessionLocationType = .outdoor
+    ) async {
         errorMessage = nil
         refreshWatchState()
 
@@ -267,7 +715,7 @@ final class PhoneSessionCoordinator: NSObject, ObservableObject {
 
         let configuration = HKWorkoutConfiguration()
         configuration.activityType = .other
-        configuration.locationType = .outdoor
+        configuration.locationType = locationType
 
         state = .launchingWatch
         do {

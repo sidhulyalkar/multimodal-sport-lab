@@ -3,6 +3,57 @@ import CryptoKit
 import Foundation
 import MotionOSAppleCapture
 
+enum FieldProtocolKind: String, CaseIterable, Identifiable, Sendable {
+    case indoBoard = "Indo Board"
+    case longboard = "Longboard"
+
+    var id: String { rawValue }
+}
+
+struct FieldProtocolDefinition: Equatable, Sendable {
+    let kind: FieldProtocolKind
+    let protocolVersion: String
+    let title: String
+    let subtitle: String
+    let runIDPrefix: String
+    let blocks: [FieldProtocolBlock]
+
+    static let indoBoardM0 = FieldProtocolDefinition(
+        kind: .indoBoard,
+        protocolVersion: IndoBoardProductProtocol.protocolID,
+        title: "Indo Board · Complete Session",
+        subtitle: "Two-minute balance session with repeatable neutral, free-balance, and recovery blocks.",
+        runIDPrefix: "m0-indo-board",
+        blocks: IndoBoardProductProtocol.blocks.map {
+            FieldProtocolBlock(
+                id: $0.id,
+                label: $0.title,
+                instruction: $0.instruction
+            )
+        }
+    )
+
+    static let longboardM0 = FieldProtocolDefinition(
+        kind: .longboard,
+        protocolVersion: "motionos.longboard-calibration.v1",
+        title: "Longboard · Calibration",
+        subtitle: "Structured riding blocks for the existing M0 longboard protocol.",
+        runIDPrefix: "m0-longboard",
+        blocks: FieldProtocolBlock.longboardM0
+    )
+
+    static func definition(
+        for kind: FieldProtocolKind
+    ) -> FieldProtocolDefinition {
+        switch kind {
+        case .indoBoard:
+            .indoBoardM0
+        case .longboard:
+            .longboardM0
+        }
+    }
+}
+
 struct FieldProtocolBlock: Identifiable, Equatable, Sendable {
     let id: String
     let label: String
@@ -136,10 +187,10 @@ final class FieldRunCoordinator: ObservableObject {
 
     static let schemaVersion = "motionos.operator-events.v1"
     static let metadataSchemaVersion = "motionos.operator-metadata.v1"
-    static let protocolVersion = "motionos.longboard-calibration.v1"
     static let timingSemantics = "annotation_only_not_sync_authority"
 
     @Published private(set) var phase: Phase = .idle
+    @Published private(set) var protocolKind: FieldProtocolKind = .indoBoard
     @Published private(set) var runID: String?
     @Published private(set) var eventCount: UInt64 = 0
     @Published private(set) var startedAtUTC: String?
@@ -150,7 +201,13 @@ final class FieldRunCoordinator: ObservableObject {
     @Published private(set) var evidenceBundle: OperatorEvidenceBundle?
     @Published private(set) var errorMessage: String?
 
-    let protocolBlocks = FieldProtocolBlock.longboardM0
+    var protocolDefinition: FieldProtocolDefinition {
+        FieldProtocolDefinition.definition(for: protocolKind)
+    }
+
+    var protocolBlocks: [FieldProtocolBlock] {
+        protocolDefinition.blocks
+    }
 
     var closureWarnings: [String] {
         var warnings: [String] = []
@@ -190,13 +247,16 @@ final class FieldRunCoordinator: ObservableObject {
     private var sealedAtUTC: String?
     private var startReadiness: [String: String] = [:]
     private var sealReadiness: [String: String] = [:]
+    private var runOutcome = ProductSessionOutcome.completed
     private let encoder: JSONEncoder = {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         return encoder
     }()
 
-    func createRun() {
+    func createRun(
+        kind: FieldProtocolKind = .indoBoard
+    ) {
         guard phase == .idle || phase == .sealed || phase == .failed else {
             fail(CoordinatorError.invalidState(
                 "Seal or discard the active run before creating another."
@@ -206,7 +266,9 @@ final class FieldRunCoordinator: ObservableObject {
 
         do {
             resetMutableState()
-            let id = Self.makeRunID()
+            protocolKind = kind
+            let definition = protocolDefinition
+            let id = Self.makeRunID(prefix: definition.runIDPrefix)
             let urls = try Self.makeEvidenceURLs(runID: id)
 
             _ = FileManager.default.createFile(
@@ -225,9 +287,10 @@ final class FieldRunCoordinator: ObservableObject {
 
             try append(
                 kind: "run_created",
-                label: "first multimodal longboard calibration",
+                label: definition.title,
                 payload: [
-                    "protocol_version": Self.protocolVersion,
+                    "protocol_version": definition.protocolVersion,
+                    "protocol_kind": definition.kind.rawValue,
                 ]
             )
         } catch {
@@ -354,6 +417,38 @@ final class FieldRunCoordinator: ObservableObject {
         }
     }
 
+    func addCoachIntervention(
+        _ intervention: IndoBoardCoachIntervention
+    ) {
+        guard phase == .running else {
+            return
+        }
+
+        do {
+            try append(
+                kind: "coach_intervention_delivered",
+                label: intervention.id,
+                payload: [
+                    "title": intervention.title,
+                    "cue": intervention.cue,
+                    "drill": intervention.drill,
+                    "target_metric":
+                        intervention.targetMetric.rawValue,
+                    "desired_direction":
+                        intervention.desiredDirection.rawValue,
+                    "confidence": String(
+                        format: "%.4f",
+                        intervention.confidence
+                    ),
+                    "evidence_label":
+                        intervention.evidenceLabel,
+                ]
+            )
+        } catch {
+            fail(error)
+        }
+    }
+
     func addFailureNote(_ note: String) {
         guard phase == .running else {
             fail(CoordinatorError.invalidState(
@@ -394,6 +489,46 @@ final class FieldRunCoordinator: ObservableObject {
                 kind: "operator_note",
                 payload: ["message": note]
             )
+        } catch {
+            fail(error)
+        }
+    }
+
+    func abortRun(
+        reason: String,
+        readiness: [String: String]
+    ) {
+        guard phase == .armed || phase == .running else {
+            return
+        }
+
+        let cleaned = reason.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )
+        guard !cleaned.isEmpty else {
+            return
+        }
+
+        do {
+            runOutcome = .aborted
+            if let activeBlockID {
+                try append(
+                    kind: "protocol_block_interrupted",
+                    blockID: activeBlockID,
+                    label: protocolBlocks.first {
+                        $0.id == activeBlockID
+                    }?.label
+                )
+                self.activeBlockID = nil
+            }
+
+            try append(
+                kind: "run_aborted",
+                label: "capture attempt aborted",
+                payload: ["message": cleaned]
+            )
+            failureNoteCount += 1
+            seal(readiness: readiness)
         } catch {
             fail(error)
         }
@@ -442,7 +577,9 @@ final class FieldRunCoordinator: ObservableObject {
                 "schema_version": Self.metadataSchemaVersion,
                 "event_schema_version": Self.schemaVersion,
                 "run_id": runID,
-                "protocol_version": Self.protocolVersion,
+                "protocol_version": protocolDefinition.protocolVersion,
+                "protocol_kind": protocolKind.rawValue,
+                "run_outcome": runOutcome.rawValue,
                 "armed_at_utc": armedAtValue,
                 "started_at_utc": startedAtValue,
                 "sealed_at_utc": sealedAtValue,
@@ -548,6 +685,7 @@ final class FieldRunCoordinator: ObservableObject {
         sealedAtUTC = nil
         startReadiness = [:]
         sealReadiness = [:]
+        runOutcome = .completed
     }
 
     private func fail(_ error: Error) {
@@ -557,11 +695,13 @@ final class FieldRunCoordinator: ObservableObject {
         }
     }
 
-    private static func makeRunID() -> String {
+    private static func makeRunID(
+        prefix: String
+    ) -> String {
         let stamp = ISO8601DateFormatter()
             .string(from: Date())
             .replacingOccurrences(of: ":", with: "")
-        return "m0-longboard-\(stamp)-\(UUID().uuidString.prefix(8).lowercased())"
+        return "\(prefix)-\(stamp)-\(UUID().uuidString.prefix(8).lowercased())"
     }
 
     private static func utcNow() -> String {

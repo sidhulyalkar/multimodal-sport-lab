@@ -1,6 +1,7 @@
 import AVFoundation
 import Combine
 import Foundation
+import MotionOSAppleCapture
 import UIKit
 
 @MainActor
@@ -18,12 +19,66 @@ final class CameraCaptureController: ObservableObject {
 
     @Published private(set) var phase: Phase = .idle
     @Published private(set) var configuration: CameraCaptureConfiguration?
+    @Published private(set) var sessionID: String?
     @Published private(set) var evidenceBundle: CameraEvidenceBundle?
     @Published private(set) var liveStats: CameraLiveCaptureStats?
+    @Published private(set) var latestPoseFrame: BodyMovementFrame?
+    @Published private(set) var latestPoseReceivedAt: Date?
+    @Published private(set) var latestIndoBoardState:
+        IndoBoardBalanceState?
+    @Published private(set) var latestIndoBoardEquipment:
+        IndoBoardEquipmentObservation?
+    @Published private(set) var latestIndoBoardCoachingState:
+        IndoBoardBalanceState?
+    @Published private(set) var latestIndoBoardCoachingEquipment:
+        IndoBoardEquipmentObservation?
+    @Published private(set) var latestVisibleIndoBoardFiducials:
+        [IndoBoardFiducialMarkerID] = []
+    @Published private(set) var latestIndoBoardStateReceivedAt:
+        Date?
+    @Published private(set) var indoBoardTrackingHealth:
+        IndoBoardLiveTrackingHealth = .empty
+    @Published private(set) var framingAssessment:
+        CameraFramingAssessment = .waiting
+    @Published private(set) var stanceAssessment:
+        IndoBoardStanceAssessment = .waiting
+    @Published private(set) var indoCoachReport:
+        IndoBoardCoachReport?
+    @Published private(set) var indoCoachIntervention:
+        IndoBoardCoachIntervention?
+    @Published private(set) var latestIndoPrimitive:
+        IndoBoardPrimitiveObservation?
     @Published private(set) var errorMessage: String?
 
-    private let pipeline = CameraCapturePipeline()
+    private let pipeline: CameraCapturePipeline
+    private let stanceGate = IndoBoardStanceGate()
+    private let indoCoach = IndoBoardCoachEngine()
+    private let indoPrimitiveDetector =
+        IndoBoardPrimitiveDetector()
+    private let indoBoardTrackingWindow =
+        IndoBoardLiveTrackingWindow()
+    private var indoCoachStartedAt: Date?
     private var statsTask: Task<Void, Never>?
+    private var poseTask: Task<Void, Never>?
+    private var lastProcessedPoseSessionID: String?
+    private var lastProcessedPoseSequence: UInt64?
+
+    private static let livePoseStaleSeconds: TimeInterval = 0.80
+    private static let liveBoardStaleSeconds: TimeInterval = 0.80
+
+    init(
+        equipmentDetectors:
+            [any IndoBoardEquipmentFrameDetector] = [],
+        equipmentQualificationRegistry:
+            IndoBoardEquipmentModelQualificationRegistry? = nil
+    ) {
+        self.pipeline = CameraCapturePipeline(
+            equipmentDetectors:
+                equipmentDetectors,
+            equipmentQualificationRegistry:
+                equipmentQualificationRegistry
+        )
+    }
 
     var authorizationStatus: AVAuthorizationStatus {
         AVCaptureDevice.authorizationStatus(for: .video)
@@ -34,7 +89,32 @@ final class CameraCaptureController: ObservableObject {
     }
 
     func prepare() async {
+        stopLivePolling()
         errorMessage = nil
+
+        // Preview preparation starts a new capture opportunity. Never let a
+        // prior sealed camera bundle or session identifier leak into a later
+        // product run that fails before recording actually starts.
+        sessionID = nil
+        evidenceBundle = nil
+        liveStats = nil
+        latestPoseFrame = nil
+        latestPoseReceivedAt = nil
+        latestIndoBoardState = nil
+        latestIndoBoardEquipment = nil
+        latestIndoBoardCoachingState = nil
+        latestIndoBoardCoachingEquipment = nil
+        latestVisibleIndoBoardFiducials = []
+        latestIndoBoardStateReceivedAt = nil
+        indoBoardTrackingHealth = .empty
+        indoBoardTrackingWindow.reset()
+        lastProcessedPoseSessionID = nil
+        lastProcessedPoseSequence = nil
+        framingAssessment = .waiting
+        stanceAssessment = .waiting
+        stanceGate.reset()
+        resetIndoCoachingSession()
+
         do {
             let authorized = try await ensureAuthorization()
             guard authorized else {
@@ -44,6 +124,7 @@ final class CameraCaptureController: ObservableObject {
 
             configuration = try await pipeline.startPreview()
             phase = .ready
+            startLivePolling()
         } catch {
             fail(error)
         }
@@ -53,6 +134,22 @@ final class CameraCaptureController: ObservableObject {
         errorMessage = nil
         evidenceBundle = nil
         liveStats = nil
+        latestPoseFrame = nil
+        latestPoseReceivedAt = nil
+        latestIndoBoardState = nil
+        latestIndoBoardEquipment = nil
+        latestIndoBoardCoachingState = nil
+        latestIndoBoardCoachingEquipment = nil
+        latestVisibleIndoBoardFiducials = []
+        latestIndoBoardStateReceivedAt = nil
+        indoBoardTrackingHealth = .empty
+        indoBoardTrackingWindow.reset()
+        lastProcessedPoseSessionID = nil
+        lastProcessedPoseSequence = nil
+        framingAssessment = .waiting
+        stanceAssessment = .waiting
+        stanceGate.reset()
+        resetIndoCoachingSession()
 
         do {
             let authorized = try await ensureAuthorization()
@@ -62,14 +159,16 @@ final class CameraCaptureController: ObservableObject {
             }
 
             let sessionID = Self.makeSessionID()
+            self.sessionID = sessionID
             configuration = try await pipeline.startRecording(
                 sessionID: sessionID,
                 hostModel: UIDevice.current.model,
                 hostOSVersion: UIDevice.current.systemVersion
             )
             phase = .recording
-            startStatsPolling()
+            startLivePolling()
         } catch {
+            sessionID = nil
             fail(error)
         }
     }
@@ -78,8 +177,7 @@ final class CameraCaptureController: ObservableObject {
         guard phase == .recording else { return }
         phase = .finalizing
         errorMessage = nil
-        statsTask?.cancel()
-        statsTask = nil
+        stopLivePolling()
 
         do {
             liveStats = await pipeline.liveStats()
@@ -90,15 +188,204 @@ final class CameraCaptureController: ObservableObject {
         }
     }
 
-    private func startStatsPolling() {
-        statsTask?.cancel()
+    private func startLivePolling() {
+        stopLivePolling()
+
         statsTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 guard let self else { return }
-                self.liveStats = await self.pipeline.liveStats()
+                let stats = await self.pipeline.liveStats()
+                guard !Task.isCancelled else { return }
+                self.liveStats = stats
                 try? await Task.sleep(for: .milliseconds(500))
             }
         }
+
+        // Vision pose is already computed on the camera output queue.
+        // Polling is intentionally faster than the detector, so only process a
+        // pose when its session/sequence identity changes. Re-processing the
+        // same frame would inflate coaching samples and repeatedly reset the
+        // stance gate because device timestamps are identical.
+        poseTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                let nextPose = await self.pipeline.livePoseFrame()
+                guard !Task.isCancelled else { return }
+
+                let now = Date()
+                let isNewPose: Bool = {
+                    guard let nextPose else {
+                        return false
+                    }
+                    return nextPose.sessionID
+                            != self.lastProcessedPoseSessionID
+                        || nextPose.sequence
+                            != self.lastProcessedPoseSequence
+                }()
+
+                if isNewPose,
+                   let nextPose {
+                    self.lastProcessedPoseSessionID =
+                        nextPose.sessionID
+                    self.lastProcessedPoseSequence =
+                        nextPose.sequence
+
+                    let framing =
+                        CameraFramingAssessment.evaluate(nextPose)
+                    self.framingAssessment = framing
+                    self.stanceAssessment =
+                        self.stanceGate.update(
+                            frame: nextPose,
+                            framing: framing
+                        )
+
+                    if let startedAt =
+                            self.indoCoachStartedAt {
+                        let elapsed = max(
+                            0,
+                            now.timeIntervalSince(startedAt)
+                        )
+                        self.indoCoach.ingest(
+                            frame: nextPose,
+                            elapsedSeconds: elapsed
+                        )
+                        self.latestIndoPrimitive =
+                            self.indoPrimitiveDetector.ingest(
+                                frame: nextPose,
+                                protocolBlockID:
+                                    IndoBoardProductProtocol
+                                        .activeBlock(
+                                            at: elapsed
+                                        )?.id
+                            )
+                    }
+
+                    self.latestPoseFrame = nextPose
+                    self.latestPoseReceivedAt = now
+                    self.latestVisibleIndoBoardFiducials =
+                        nextPose.indoBoardVisibleFiducials
+                            ?? []
+
+                    let trackingState =
+                        nextPose.indoBoardTrackingBalanceState
+                    self.indoBoardTrackingHealth =
+                        self.indoBoardTrackingWindow.ingest(
+                            trackingState
+                        )
+
+                    if let trackingState,
+                       let equipment =
+                            nextPose.indoBoardTrackingEquipment {
+                        self.latestIndoBoardState =
+                            trackingState
+                        self.latestIndoBoardEquipment =
+                            equipment
+                        self.latestIndoBoardStateReceivedAt =
+                            now
+                    }
+
+                    if let coachingState =
+                            nextPose.indoBoardBalanceState,
+                       let coachingEquipment =
+                            nextPose.indoBoardEquipment {
+                        self.latestIndoBoardCoachingState =
+                            coachingState
+                        self.latestIndoBoardCoachingEquipment =
+                            coachingEquipment
+                    } else {
+                        // Coaching authorization is frame-local. Never keep a
+                        // prior QR/authorized-model state alive while a
+                        // tracking-only model continues to produce frames.
+                        self.latestIndoBoardCoachingState = nil
+                        self.latestIndoBoardCoachingEquipment = nil
+                    }
+                }
+
+                if let receivedAt =
+                        self.latestPoseReceivedAt,
+                   now.timeIntervalSince(receivedAt)
+                        > Self.livePoseStaleSeconds {
+                    self.latestPoseFrame = nil
+                    self.latestPoseReceivedAt = nil
+                    self.latestVisibleIndoBoardFiducials = []
+                    self.latestIndoBoardCoachingState = nil
+                    self.latestIndoBoardCoachingEquipment = nil
+                    self.framingAssessment = .waiting
+                    self.stanceAssessment = .waiting
+                    self.stanceGate.reset()
+                    self.indoBoardTrackingWindow.reset()
+                    self.indoBoardTrackingHealth = .empty
+                }
+
+                if let receivedAt =
+                        self.latestIndoBoardStateReceivedAt,
+                   now.timeIntervalSince(receivedAt)
+                        > Self.liveBoardStaleSeconds {
+                    self.latestIndoBoardState = nil
+                    self.latestIndoBoardEquipment = nil
+                    self.latestIndoBoardCoachingState = nil
+                    self.latestIndoBoardCoachingEquipment = nil
+                    self.latestIndoBoardStateReceivedAt = nil
+                }
+
+                try? await Task.sleep(for: .milliseconds(100))
+            }
+        }
+    }
+
+    func beginIndoCoachingSession() {
+        indoCoach.reset()
+        indoPrimitiveDetector.reset()
+        indoCoachReport = nil
+        indoCoachIntervention = nil
+        latestIndoPrimitive = nil
+        indoCoachStartedAt = Date()
+    }
+
+    @discardableResult
+    func prepareIndoCoachIntervention()
+        -> IndoBoardCoachIntervention? {
+        if let indoCoachIntervention {
+            return indoCoachIntervention
+        }
+
+        let intervention = indoCoach.makeIntervention()
+        indoCoachIntervention = intervention
+        return intervention
+    }
+
+    func finishIndoCoachingSession() {
+        guard indoCoachStartedAt != nil else {
+            return
+        }
+        indoCoachReport = indoCoach.makeReport(
+            intervention: indoCoachIntervention
+        )
+        indoCoachStartedAt = nil
+    }
+
+    func resetIndoCoachingSession() {
+        indoCoachStartedAt = nil
+        indoCoachReport = nil
+        indoCoachIntervention = nil
+        latestIndoPrimitive = nil
+        latestIndoBoardState = nil
+        latestIndoBoardEquipment = nil
+        latestIndoBoardCoachingState = nil
+        latestIndoBoardCoachingEquipment = nil
+        latestVisibleIndoBoardFiducials = []
+        latestIndoBoardStateReceivedAt = nil
+        indoBoardTrackingWindow.reset()
+        indoBoardTrackingHealth = .empty
+        indoCoach.reset()
+        indoPrimitiveDetector.reset()
+    }
+
+    private func stopLivePolling() {
+        statsTask?.cancel()
+        poseTask?.cancel()
+        statsTask = nil
+        poseTask = nil
     }
 
     private func ensureAuthorization() async throws -> Bool {
@@ -122,8 +409,7 @@ final class CameraCaptureController: ObservableObject {
     }
 
     private func fail(_ error: Error) {
-        statsTask?.cancel()
-        statsTask = nil
+        stopLivePolling()
         phase = .failed
         errorMessage = error.localizedDescription
     }

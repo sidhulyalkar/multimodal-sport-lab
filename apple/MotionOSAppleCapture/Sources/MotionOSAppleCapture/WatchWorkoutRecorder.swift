@@ -26,6 +26,10 @@ public final class WatchWorkoutRecorder: NSObject, HKWorkoutSessionDelegate, HKL
         self.healthStore = healthStore
     }
 
+    public var workoutAuthorizationStatus: HKAuthorizationStatus {
+        healthStore.authorizationStatus(for: HKObjectType.workoutType())
+    }
+
     public func requestAuthorization() async throws {
         guard let heartRate = HKObjectType.quantityType(forIdentifier: .heartRate) else { return }
         try await healthStore.requestAuthorization(
@@ -84,14 +88,16 @@ public final class WatchWorkoutRecorder: NSObject, HKWorkoutSessionDelegate, HKL
         }
     }
 
-    public func start(activity: HKWorkoutActivityType = .other) throws {
+    public func start(
+        activity: HKWorkoutActivityType = .other
+    ) async throws {
         let configuration = HKWorkoutConfiguration()
         configuration.activityType = activity
         configuration.locationType = .outdoor
-
-        Task {
-            try await start(configuration: configuration, mirrorToCompanion: false)
-        }
+        try await start(
+            configuration: configuration,
+            mirrorToCompanion: false
+        )
     }
 
     public func pause() {
@@ -108,7 +114,7 @@ public final class WatchWorkoutRecorder: NSObject, HKWorkoutSessionDelegate, HKL
         session?.end()
     }
 
-    public func workoutSession(
+    public nonisolated func workoutSession(
         _ workoutSession: HKWorkoutSession,
         didChangeTo toState: HKWorkoutSessionState,
         from fromState: HKWorkoutSessionState,
@@ -116,37 +122,33 @@ public final class WatchWorkoutRecorder: NSObject, HKWorkoutSessionDelegate, HKL
     ) {
         switch toState {
         case .running:
-            onStateChange?(.running)
+            Task { @MainActor [weak self] in
+                self?.onStateChange?(.running)
+            }
         case .paused:
-            onStateChange?(.paused)
+            Task { @MainActor [weak self] in
+                self?.onStateChange?(.paused)
+            }
         case .ended:
-            let builder = builder
-            builder?.endCollection(withEnd: date) { [weak self] _, _ in
-                builder?.finishWorkout { workout, error in
-                    guard let self else { return }
-                    if let error {
-                        self.onStateChange?(.failed(error.localizedDescription))
-                    } else {
-                        self.onStateChange?(.ended)
-                    }
-                    self.onWorkoutFinished?(workout)
-                    self.session = nil
-                    self.builder = nil
-                }
+            Task { @MainActor [weak self] in
+                await self?.finishWorkout(at: date)
             }
         default:
             break
         }
     }
 
-    public func workoutSession(
+    public nonisolated func workoutSession(
         _ workoutSession: HKWorkoutSession,
         didFailWithError error: Error
     ) {
-        onStateChange?(.failed(error.localizedDescription))
+        let message = error.localizedDescription
+        Task { @MainActor [weak self] in
+            self?.onStateChange?(.failed(message))
+        }
     }
 
-    public func workoutBuilder(
+    public nonisolated func workoutBuilder(
         _ workoutBuilder: HKLiveWorkoutBuilder,
         didCollectDataOf collectedTypes: Set<HKSampleType>
     ) {
@@ -159,12 +161,39 @@ public final class WatchWorkoutRecorder: NSObject, HKWorkoutSessionDelegate, HKL
         let bpm = value.doubleValue(
             for: HKUnit.count().unitDivided(by: .minute())
         )
-        onHeartRateBPM?(bpm, MonotonicClock.nowNS())
+        let timestamp = MonotonicClock.nowNS()
+        Task { @MainActor [weak self] in
+            self?.onHeartRateBPM?(bpm, timestamp)
+        }
     }
 
-    public func workoutBuilderDidCollectEvent(
+    public nonisolated func workoutBuilderDidCollectEvent(
         _ workoutBuilder: HKLiveWorkoutBuilder
     ) {}
+
+    private func finishWorkout(at date: Date) async {
+        guard let builder else {
+            onStateChange?(.failed("Workout builder missing at session end."))
+            onWorkoutFinished?(nil)
+            session = nil
+            return
+        }
+
+        defer {
+            session = nil
+            self.builder = nil
+        }
+
+        do {
+            try await builder.endCollection(at: date)
+            let workout = try await builder.finishWorkout()
+            onStateChange?(.ended)
+            onWorkoutFinished?(workout)
+        } catch {
+            onStateChange?(.failed(error.localizedDescription))
+            onWorkoutFinished?(nil)
+        }
+    }
 
     public enum RecorderError: Error {
         case alreadyRunning

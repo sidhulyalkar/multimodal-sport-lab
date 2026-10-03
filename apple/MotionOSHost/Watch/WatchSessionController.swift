@@ -22,6 +22,20 @@ final class WatchSessionController: ObservableObject {
         case failed
     }
 
+    enum CaptureOrigin: String {
+        case iPhone = "iPhone"
+        case localSensorCheck = "Watch test"
+    }
+
+    struct VisualTelemetryPoint: Identifiable, Equatable, Sendable {
+        let id = UUID()
+        let timestamp: Date
+        let userAccelerationG: Double
+        let rotationRateRadS: Double
+        let imuHz: Double?
+        let heartRateBPM: Double?
+    }
+
     @Published private(set) var state: CaptureState = .idle
     @Published private(set) var sessionID: String?
     @Published private(set) var heartRateBPM: Double?
@@ -38,18 +52,68 @@ final class WatchSessionController: ObservableObject {
     @Published private(set) var startedAt: Date?
     @Published private(set) var lastTransferredURL: URL?
     @Published private(set) var errorMessage: String?
+    @Published private(set) var phoneReachable = false
+    @Published private(set) var phonePresenceConfirmed = false
+    @Published private(set) var companionAppInstalled = false
+    @Published private(set) var connectivityActivated = false
+    @Published private(set) var healthAuthorizationStatus: HKAuthorizationStatus = .notDetermined
+    @Published private(set) var captureOrigin: CaptureOrigin = .iPhone
+    @Published private(set) var lastPresencePublishedAt: Date?
+    @Published private(set) var userAccelerationG: Double?
+    @Published private(set) var rotationRateRadS: Double?
+    @Published private(set) var deviceRollRadians: Double?
+    @Published private(set) var devicePitchRadians: Double?
+    @Published private(set) var deviceYawRadians: Double?
+    @Published private(set) var visualTelemetryHistory: [VisualTelemetryPoint] = []
+    @Published private(set) var productCueInstruction: String?
+    @Published private(set) var indoRemoteStatus: IndoBoardRemoteStatus?
+    @Published private(set) var pendingIndoRemoteCommand:
+        IndoBoardRemoteCommand?
+    @Published private(set) var lastIndoRemoteAck:
+        IndoBoardRemoteCommandAck?
+    @Published private(set) var indoRemoteErrorMessage: String?
+    /// Operator diagnostics for late, foreign, or stale events that were not
+    /// journaled. Not raw evidence.
+    @Published private(set) var captureRejections = CaptureRejectionCounts()
 
     private let motion = WatchMotionRecorder()
     private let workout = WatchWorkoutRecorder()
     private let transport = WatchConnectivityTransport()
 
-    private var pipeline: WatchCapturePipeline?
+    private var journal: CaptureSessionJournal?
+    private var admission = CaptureEventAdmission()
+    private var staleMotionRejectionBaseline: UInt64 = 0
     private var finalized = false
     private var heartRateSequence: UInt64 = 0
+    private var sessionSyncSequence: UInt64 = 0
+    private var productCueTitle: String?
+    private var linkedProductRunID: String?
+    @Published private(set) var rejectedProductControlCount: UInt64 = 0
+    @Published private(set) var pendingTransferCount = 0
+
+    private struct PendingJournalTransfer {
+        let url: URL
+        let evidence: FileEvidenceDigest
+        let metadata: [String: Any]
+    }
+
+    private var pendingJournalTransfers: [String: PendingJournalTransfer] = [:]
     private var closedJournalURL: URL?
     private var closedJournalEvidence: FileEvidenceDigest?
     private var imuHealth = SampleTimingHealth()
-    private var lastTelemetrySentAt = Date.distantPast
+    /// Disposable 4 Hz iPhone preview. Never queued or retried; the journal
+    /// above is the evidence.
+    private var livePublisher = LiveTelemetryPublisher()
+    private var lastHeartRateAt: Date?
+    private var lastBatteryReadAt = Date.distantPast
+    private let liveHeartRateMaxAge: TimeInterval = 15
+    private let batteryReadInterval: TimeInterval = 30
+    private var lastTransferQueueAttemptAt = Date.distantPast
+    private var lastPhonePresenceRequestAt = Date.distantPast
+    private var lastIndoRemoteStatusRequestAt = Date.distantPast
+    private let automaticTransferRetryInterval: TimeInterval = 15
+    private let phonePresenceRequestMinimumInterval: TimeInterval = 5
+    private let indoRemoteStatusRequestMinimumInterval: TimeInterval = 2
 
     private init() {
         workout.onHeartRateBPM = { [weak self] bpm, timestamp in
@@ -76,6 +140,13 @@ final class WatchSessionController: ObservableObject {
             }
         }
 
+        transport.onStateChanged = { [weak self] in
+            guard let self else { return }
+            Task { @MainActor in
+                self.refreshReadinessAndPresence()
+            }
+        }
+
         transport.onFileTransferFinished = {
             [weak self] url, metadata, error in
             guard let self else { return }
@@ -85,6 +156,13 @@ final class WatchSessionController: ObservableObject {
                     metadata: metadata,
                     error: error
                 )
+            }
+        }
+
+        transport.onApplicationContextReceived = { [weak self] context in
+            guard let self else { return }
+            Task { @MainActor in
+                self.ingestPhonePresence(context)
             }
         }
 
@@ -98,8 +176,126 @@ final class WatchSessionController: ObservableObject {
         transport.onMessageReceived = { [weak self] message in
             guard let self else { return }
             Task { @MainActor in
-                self.handleMessage(message)
+                if !self.ingestPhonePresence(message) {
+                    self.handleMessage(message)
+                }
             }
+        }
+
+        recoverPendingJournals()
+        refreshReadinessAndPresence()
+    }
+
+    var healthAccessReady: Bool {
+        healthAuthorizationStatus == .sharingAuthorized
+    }
+
+    var hasRecoverableJournal: Bool {
+        guard let id = sessionID else {
+            return closedJournalURL != nil && closedJournalEvidence != nil
+        }
+        return pendingJournalTransfers[id] != nil
+            || (closedJournalURL != nil && closedJournalEvidence != nil)
+    }
+
+    var canStartCapture: Bool {
+        switch state {
+        case .idle, .journalReady, .transferQueued,
+                .transportComplete, .transferred:
+            return true
+        case .failed:
+            return journal == nil
+        default:
+            return false
+        }
+    }
+
+    var healthAuthorizationLabel: String {
+        switch healthAuthorizationStatus {
+        case .sharingAuthorized:
+            "Enabled"
+        case .sharingDenied:
+            "Denied"
+        case .notDetermined:
+            "Needs access"
+        @unknown default:
+            "Unknown"
+        }
+    }
+
+    var phoneLinkLabel: String {
+        if phoneReachable || phonePresenceConfirmed {
+            return "Ready"
+        }
+        if companionAppInstalled {
+            return "Installed"
+        }
+        if connectivityActivated {
+            return "Open iPhone app"
+        }
+        return "Starting"
+    }
+
+    func applicationDidBecomeActive() {
+        refreshReadinessAndPresence()
+        requestIndoRemoteStatus()
+    }
+
+    var indoRemoteProductSessionActive: Bool {
+        indoRemoteStatus?.isSessionActive == true
+    }
+
+    var indoRemoteCommandPending: Bool {
+        pendingIndoRemoteCommand != nil
+    }
+
+    @discardableResult
+    func sendIndoRemoteCommand(
+        _ action: IndoBoardRemoteAction
+    ) -> Bool {
+        guard phoneReachable else {
+            indoRemoteErrorMessage =
+                "Keep MotionOS open on the iPhone so the Watch can control the camera."
+            WKInterfaceDevice.current().play(.failure)
+            return false
+        }
+
+        guard pendingIndoRemoteCommand == nil else {
+            return false
+        }
+
+        let command = IndoBoardRemoteCommand(action: action)
+        pendingIndoRemoteCommand = command
+        indoRemoteErrorMessage = nil
+
+        guard transport.sendMessage(command.message) else {
+            pendingIndoRemoteCommand = nil
+            indoRemoteErrorMessage =
+                "The iPhone is not reachable right now."
+            WKInterfaceDevice.current().play(.failure)
+            return false
+        }
+
+        WKInterfaceDevice.current().play(.click)
+        return true
+    }
+
+    func requestIndoRemoteStatus(
+        at date: Date = Date()
+    ) {
+        guard phoneReachable,
+              date.timeIntervalSince(lastIndoRemoteStatusRequestAt)
+                >= indoRemoteStatusRequestMinimumInterval
+        else {
+            return
+        }
+
+        let command = IndoBoardRemoteCommand(
+            action: .refreshStatus,
+            sentAtUnixSeconds: date.timeIntervalSince1970
+        )
+        if transport.sendMessage(command.message) {
+            lastIndoRemoteStatusRequestAt = date
         }
     }
 
@@ -109,23 +305,40 @@ final class WatchSessionController: ObservableObject {
 
         do {
             try await workout.requestAuthorization()
+            healthAuthorizationStatus = workout.workoutAuthorizationStatus
             state = .idle
+            publishPresence()
         } catch {
+            healthAuthorizationStatus = workout.workoutAuthorizationStatus
             fail(error)
+            publishPresence()
         }
     }
 
-    func start(configuration: HKWorkoutConfiguration) async {
-        guard [
-            CaptureState.idle,
-            .journalReady,
-            .transferred,
-            .failed,
-        ].contains(state) else {
+    func startLocalSensorCheck() async {
+        let configuration = HKWorkoutConfiguration()
+        configuration.activityType = .other
+        configuration.locationType = .indoor
+        await start(
+            configuration: configuration,
+            mirrorToCompanion: false,
+            origin: .localSensorCheck,
+            sessionPrefix: "smoke-watch"
+        )
+    }
+
+    func start(
+        configuration: HKWorkoutConfiguration,
+        mirrorToCompanion: Bool = true,
+        origin: CaptureOrigin = .iPhone,
+        sessionPrefix: String = "p0-watch"
+    ) async {
+        guard canStartCapture else {
             return
         }
 
         state = .starting
+        captureOrigin = origin
         errorMessage = nil
         heartRateBPM = nil
         eventCount = 0
@@ -138,24 +351,43 @@ final class WatchSessionController: ObservableObject {
         watchBatteryLevel = nil
         guidedCueTitle = nil
         lastIMUSampleReceivedAt = nil
+        userAccelerationG = nil
+        rotationRateRadS = nil
+        deviceRollRadians = nil
+        devicePitchRadians = nil
+        deviceYawRadians = nil
+        visualTelemetryHistory = []
         heartRateSequence = 0
+        sessionSyncSequence = 0
+        productCueTitle = nil
+        productCueInstruction = nil
+        linkedProductRunID = nil
+        rejectedProductControlCount = 0
         finalized = false
         closedJournalURL = nil
         closedJournalEvidence = nil
         lastTransferredURL = nil
         imuHealth = SampleTimingHealth()
-        lastTelemetrySentAt = .distantPast
+        livePublisher.end()
+        lastHeartRateAt = nil
+        lastBatteryReadAt = .distantPast
+        lastTransferQueueAttemptAt = .distantPast
+        admission = CaptureEventAdmission()
+        captureRejections = admission.rejections
+        staleMotionRejectionBaseline = motion.staleCallbackRejectionCount
 
-        let id = Self.makeSessionID()
+        let id = Self.makeSessionID(prefix: sessionPrefix)
         sessionID = id
 
         do {
             let url = try Self.makeJournalURL(sessionID: id)
-            let pipeline = try WatchCapturePipeline(
+            let journal = try CaptureSessionJournal(
                 sessionID: id,
-                journalURL: url
+                url: url
             )
-            self.pipeline = pipeline
+            self.journal = journal
+            admission.begin(sessionID: id)
+            livePublisher.begin(sessionID: id)
 
             let requestedMotionHz = 50.0
             let device = WKInterfaceDevice.current()
@@ -178,6 +410,10 @@ final class WatchSessionController: ObservableObject {
                 "system_name": .string(device.systemName),
                 "system_version": .string(device.systemVersion),
                 "requested_imu_hz": .number(requestedMotionHz),
+                "capture_origin": .string(origin.rawValue),
+                "workout_mirrored_to_companion": .bool(mirrorToCompanion),
+                "hr_timestamp_semantics":
+                    .string("callback_arrival_monotonic"),
                 "app_version": .string(appVersion),
                 "app_build": .string(appBuild),
                 "wrist_location": .string(
@@ -200,7 +436,12 @@ final class WatchSessionController: ObservableObject {
                 deviceTimeNS: MonotonicClock.nowNS(),
                 payload: watchMetadata
             )
-            eventCount = try await pipeline.append(metadataEvent)
+            guard case .appended(let count) =
+                    try await journal.append(metadataEvent)
+            else {
+                throw CaptureStartError.metadataNotJournaled
+            }
+            eventCount = count
 
             try motion.start(
                 sessionID: id,
@@ -215,11 +456,13 @@ final class WatchSessionController: ObservableObject {
 
             try await workout.start(
                 configuration: configuration,
-                mirrorToCompanion: true
+                mirrorToCompanion: mirrorToCompanion
             )
 
             startedAt = Date()
             state = .running
+            WKInterfaceDevice.current().play(.start)
+            publishPresence()
         } catch {
             motion.stop()
             fail(error)
@@ -229,28 +472,216 @@ final class WatchSessionController: ObservableObject {
 
     func stop() {
         guard state == .running || state == .paused else { return }
+        livePublisher.end()
         state = .ending
+        WKInterfaceDevice.current().play(.stop)
+        publishPresence()
         motion.stop()
         workout.stop()
     }
 
     func pause() {
         guard state == .running else { return }
+        WKInterfaceDevice.current().play(.click)
         workout.pause()
     }
 
     func resume() {
         guard state == .paused else { return }
+        WKInterfaceDevice.current().play(.click)
         workout.resume()
     }
 
+    func refreshReadinessAndPresence() {
+        let session = transport.session
+        connectivityActivated = session.activationState == .activated
+        phoneReachable = connectivityActivated && session.isReachable
+
+        if connectivityActivated {
+            _ = ingestPhonePresence(session.receivedApplicationContext)
+            recoverOutstandingTransfers()
+        }
+
+        #if os(watchOS)
+        companionAppInstalled = connectivityActivated
+            && (session.isCompanionAppInstalled || phonePresenceConfirmed)
+        #endif
+
+        let device = WKInterfaceDevice.current()
+        device.isBatteryMonitoringEnabled = true
+        let battery = device.batteryLevel
+        watchBatteryLevel = battery >= 0 ? Double(battery) : nil
+
+        healthAuthorizationStatus = workout.workoutAuthorizationStatus
+        publishPresence()
+        requestPhonePresenceIfNeeded()
+        requestIndoRemoteStatus()
+        retryPendingTransfersIfNeeded()
+    }
+
+    private func recoverOutstandingTransfers() {
+        for transfer in transport.session.outstandingFileTransfers {
+            guard let metadata = transfer.file.metadata,
+                  let id = metadata["session_id"] as? String,
+                  pendingJournalTransfers[id] == nil,
+                  let expectedHash = metadata["journal_sha256"] as? String,
+                  let evidence = try? FileEvidence.digest(
+                    transfer.file.fileURL
+                  ),
+                  expectedHash.lowercased() == evidence.sha256
+            else {
+                continue
+            }
+
+            if let expectedBytes = metadata["journal_byte_count"] as? NSNumber,
+               expectedBytes.uint64Value != evidence.byteCount {
+                continue
+            }
+
+            let pending = PendingJournalTransfer(
+                url: transfer.file.fileURL,
+                evidence: evidence,
+                metadata: metadata
+            )
+            pendingJournalTransfers[id] = pending
+            persistPendingJournal(
+                pending,
+                sessionID: id
+            )
+        }
+
+        pendingTransferCount = pendingJournalTransfers.count
+    }
+
+    private func requestPhonePresenceIfNeeded(
+        at date: Date = Date()
+    ) {
+        guard phoneReachable,
+              date.timeIntervalSince(lastPhonePresenceRequestAt)
+                >= phonePresenceRequestMinimumInterval
+        else {
+            return
+        }
+
+        if transport.sendMessage(
+            [
+                "motionos_message": "phone_presence_request_v1",
+                "sent_at_unix_s": date.timeIntervalSince1970,
+            ]
+        ) {
+            lastPhonePresenceRequestAt = date
+        }
+    }
+
+    private func retryPendingTransfersIfNeeded(
+        at date: Date = Date()
+    ) {
+        guard connectivityActivated,
+              !pendingJournalTransfers.isEmpty,
+              date.timeIntervalSince(lastTransferQueueAttemptAt)
+                >= automaticTransferRetryInterval
+        else {
+            return
+        }
+
+        lastTransferQueueAttemptAt = date
+        for (id, pending) in pendingJournalTransfers {
+            queueTransfer(
+                journalURL: pending.url,
+                sessionID: id
+            )
+        }
+    }
+
+    func dismissCompletedCapture() {
+        guard state == .journalReady
+                || state == .transferQueued
+                || state == .transportComplete
+                || state == .transferred
+        else {
+            return
+        }
+
+        closedJournalURL = nil
+        closedJournalEvidence = nil
+        lastTransferredURL = nil
+        sessionID = nil
+        startedAt = nil
+        errorMessage = nil
+        state = .idle
+        publishPresence()
+    }
+
+    @discardableResult
+    func deleteCurrentRecording() -> Bool {
+        guard state != .running,
+              state != .paused,
+              state != .starting,
+              state != .ending,
+              let id = sessionID
+        else {
+            return false
+        }
+
+        _ = transport.cancelJournalTransfers(sessionID: id)
+
+        let journalURL =
+            pendingJournalTransfers[id]?.url
+                ?? closedJournalURL
+        if let journalURL {
+            let directory = journalURL.deletingLastPathComponent()
+            try? FileManager.default.removeItem(at: directory)
+        }
+
+        pendingJournalTransfers.removeValue(forKey: id)
+        pendingTransferCount = pendingJournalTransfers.count
+
+        closedJournalURL = nil
+        closedJournalEvidence = nil
+        lastTransferredURL = nil
+        sessionID = nil
+        startedAt = nil
+        errorMessage = nil
+        state = .idle
+        publishPresence()
+        return true
+    }
+
+    @discardableResult
+    private func ingestPhonePresence(
+        _ message: [String: Any]
+    ) -> Bool {
+        guard message["motionos_message"] as? String == "phone_presence_v1",
+              message["bundle_id"] as? String == "com.sidhulyalkar.motionos"
+        else {
+            return false
+        }
+
+        let firstConfirmation = !phonePresenceConfirmed
+        phonePresenceConfirmed = true
+        if transport.session.activationState == .activated {
+            #if os(watchOS)
+            companionAppInstalled =
+                transport.session.isCompanionAppInstalled
+                    || phonePresenceConfirmed
+            #endif
+        }
+
+        if firstConfirmation {
+            publishPresence()
+        }
+        return true
+    }
+
     func retryTransfer() {
-        guard [
-            CaptureState.journalReady,
-            .transportComplete,
-        ].contains(state),
-        let journalURL = closedJournalURL,
-        let id = sessionID
+        guard state == .journalReady
+                || state == .transferQueued
+                || state == .transportComplete
+                || (state == .failed && hasRecoverableJournal),
+              let id = sessionID,
+              let journalURL =
+                pendingJournalTransfers[id]?.url
+                    ?? closedJournalURL
         else {
             return
         }
@@ -261,16 +692,52 @@ final class WatchSessionController: ObservableObject {
         )
     }
 
-    private func record(_ event: SensorEnvelope) async {
-        guard let pipeline else { return }
+    @discardableResult
+    private func record(_ event: SensorEnvelope) async -> Bool {
+        guard let journal = admittedJournal(sessionID: event.sessionID) else {
+            return false
+        }
+        return await append(event, to: journal)
+    }
 
+    /// The shutdown and cross-session boundary. Runs synchronously on the main
+    /// actor, so once finalization begins no later callback reaches the
+    /// journal. Rejections are counted, never treated as capture failures.
+    private func admittedJournal(
+        sessionID eventSessionID: String
+    ) -> CaptureSessionJournal? {
+        guard admission.admit(sessionID: eventSessionID) == nil else {
+            refreshCaptureRejections()
+            return nil
+        }
+        guard let journal else {
+            admission.recordRejection(.noActiveSession)
+            refreshCaptureRejections()
+            return nil
+        }
+        return journal
+    }
+
+    @discardableResult
+    private func append(
+        _ event: SensorEnvelope,
+        to journal: CaptureSessionJournal
+    ) async -> Bool {
         do {
-            let count = try await pipeline.append(event)
+            let outcome = try await journal.append(event)
+            guard case .appended(let count) = outcome else {
+                if case .rejected(let rejection) = outcome {
+                    admission.recordRejection(rejection)
+                    refreshCaptureRejections()
+                }
+                return false
+            }
 
             if event.stream == "/body/watch/imu" {
                 imuHealth.observe(timestampNS: event.deviceTimeNS)
                 imuSampleCount = imuHealth.sampleCount
                 lastIMUSampleReceivedAt = Date()
+                updateVisualTelemetry(from: event)
 
                 if imuHealth.sampleCount.isMultiple(of: 25) {
                     observedIMUHz = imuHealth.effectiveHz
@@ -278,15 +745,19 @@ final class WatchSessionController: ObservableObject {
                     maxIMUGapMS = imuHealth.maxGapMS
                     nonMonotonicIMUCount =
                         imuHealth.nonMonotonicCount
+                    appendVisualTelemetryPoint()
                 }
-                publishCaptureHealthIfNeeded()
+                publishLiveTelemetryIfDue()
             }
 
-            if count.isMultiple(of: 25) {
+            // finalizeAndTransfer() publishes the authoritative closed count.
+            if admission.isCapturing, count.isMultiple(of: 25) {
                 eventCount = count
             }
+            return true
         } catch {
             fail(error)
+            return false
         }
     }
 
@@ -294,10 +765,18 @@ final class WatchSessionController: ObservableObject {
         bpm: Double,
         timestamp: UInt64
     ) async {
+        guard let id = sessionID else {
+            admission.recordRejection(.noActiveSession)
+            refreshCaptureRejections()
+            return
+        }
+        // Admit before allocating a sequence so rejected late samples do not
+        // consume one.
+        guard let journal = admittedJournal(sessionID: id) else { return }
+
         heartRateBPM = bpm
         heartRateEventCount += 1
-        guard let id = sessionID else { return }
-
+        lastHeartRateAt = Date()
         let event = SensorEnvelope(
             sessionID: id,
             deviceID: "apple-watch",
@@ -306,20 +785,34 @@ final class WatchSessionController: ObservableObject {
             deviceTimeNS: timestamp,
             sessionTimeNS: nil,
             syncQuality: nil,
-            payload: ["bpm": .number(bpm)]
+            payload: [
+                "bpm": .number(bpm),
+                "source": .string("healthkit_live_workout_builder"),
+                "timestamp_semantics":
+                    .string("callback_arrival_monotonic"),
+            ]
         )
         heartRateSequence += 1
-        await record(event)
+        await append(event, to: journal)
     }
 
     private func finalizeAndTransfer() async {
         guard !finalized else { return }
         finalized = true
         motion.stop()
+        livePublisher.end()
+
+        // Shutdown boundary: before the first await, stop admitting events and
+        // detach the journal. Appends admitted earlier are drained by close().
+        admission.beginFinalizing()
+        let journal = self.journal
+        self.journal = nil
 
         let shouldPreserveFailure = state == .failed
 
-        guard let pipeline else {
+        guard let journal else {
+            admission.finish()
+            refreshCaptureRejections()
             if !shouldPreserveFailure {
                 state = .idle
             }
@@ -327,13 +820,18 @@ final class WatchSessionController: ObservableObject {
         }
 
         do {
-            eventCount = try await pipeline.close()
-            let journalURL = pipeline.journalURL
-            let id = pipeline.sessionID
+            eventCount = try await journal.close()
+            admission.finish()
+            refreshCaptureRejections()
+            let journalURL = journal.url
+            let id = journal.sessionID
 
             closedJournalURL = journalURL
             closedJournalEvidence = try FileEvidence.digest(journalURL)
-            self.pipeline = nil
+            registerPendingJournal(
+                journalURL: journalURL,
+                sessionID: id
+            )
 
             if shouldPreserveFailure {
                 return
@@ -345,42 +843,209 @@ final class WatchSessionController: ObservableObject {
                 sessionID: id
             )
         } catch {
+            admission.finish()
+            refreshCaptureRejections()
             fail(error)
         }
+    }
+
+    private func refreshCaptureRejections() {
+        admission.setStaleMotionGenerationCount(
+            motion.staleCallbackRejectionCount
+                &- staleMotionRejectionBaseline
+        )
+        captureRejections = admission.rejections
+    }
+
+    private func registerPendingJournal(
+        journalURL: URL,
+        sessionID: String
+    ) {
+        guard let evidence = closedJournalEvidence else {
+            return
+        }
+        guard pendingJournalTransfers[sessionID] == nil else {
+            return
+        }
+
+        var transferMetadata: [String: Any] = [
+            "session_id": sessionID,
+            "schema_version": "motionos.m0.v1",
+            "stream": "/body/watch",
+            "journal_sha256": evidence.sha256,
+            "journal_byte_count": evidence.byteCount,
+            "capture_origin": captureOrigin.rawValue,
+            "rejected_after_shutdown_count":
+                captureRejections.afterShutdown,
+            "rejected_session_mismatch_count":
+                captureRejections.sessionMismatch,
+            "rejected_no_session_count":
+                captureRejections.noActiveSession,
+            "rejected_stale_motion_count":
+                captureRejections.staleMotionGeneration,
+            "rejected_product_control_count":
+                rejectedProductControlCount,
+        ]
+        if let linkedProductRunID {
+            transferMetadata["product_run_id"] = linkedProductRunID
+        }
+
+        let pending = PendingJournalTransfer(
+            url: journalURL,
+            evidence: evidence,
+            metadata: transferMetadata
+        )
+        pendingJournalTransfers[sessionID] = pending
+        pendingTransferCount = pendingJournalTransfers.count
+        persistPendingJournal(
+            pending,
+            sessionID: sessionID
+        )
+    }
+
+    private func persistPendingJournal(
+        _ pending: PendingJournalTransfer,
+        sessionID: String
+    ) {
+        let sidecarURL = pending.url
+            .deletingLastPathComponent()
+            .appendingPathComponent("watch-transfer.json")
+
+        let object: [String: Any] = [
+            "schema_version": "motionos.watch-transfer.v1",
+            "session_id": sessionID,
+            "journal_sha256": pending.evidence.sha256,
+            "journal_byte_count": pending.evidence.byteCount,
+            "transfer_metadata": pending.metadata,
+        ]
+
+        guard JSONSerialization.isValidJSONObject(object),
+              let data = try? JSONSerialization.data(
+                withJSONObject: object,
+                options: [.prettyPrinted, .sortedKeys]
+              )
+        else {
+            return
+        }
+        try? data.write(to: sidecarURL, options: .atomic)
+    }
+
+    private func recoverPendingJournals() {
+        let manager = FileManager.default
+        guard let documents = try? manager.url(
+            for: .documentDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        ) else {
+            return
+        }
+
+        let root = documents.appendingPathComponent(
+            "MotionOS",
+            isDirectory: true
+        )
+        guard manager.fileExists(atPath: root.path),
+              let directories = try? manager.contentsOfDirectory(
+                at: root,
+                includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles]
+              )
+        else {
+            return
+        }
+
+        for directory in directories {
+            let journalURL = directory.appendingPathComponent("watch.jsonl")
+            guard manager.fileExists(atPath: journalURL.path),
+                  let evidence = try? FileEvidence.digest(journalURL)
+            else {
+                continue
+            }
+
+            let sessionID = directory.lastPathComponent
+            let sidecarURL = directory.appendingPathComponent(
+                "watch-transfer.json"
+            )
+
+            // Only a sidecar written after journal.close() proves this file was
+            // sealed. Never auto-transfer an orphaned in-progress journal.
+            guard let data = try? Data(contentsOf: sidecarURL),
+                  let object = try? JSONSerialization.jsonObject(
+                    with: data
+                  ) as? [String: Any],
+                  let storedHash = object["journal_sha256"] as? String,
+                  storedHash.lowercased() == evidence.sha256,
+                  let storedMetadata =
+                    object["transfer_metadata"] as? [String: Any]
+            else {
+                continue
+            }
+
+            pendingJournalTransfers[sessionID] = PendingJournalTransfer(
+                url: journalURL,
+                evidence: evidence,
+                metadata: storedMetadata
+            )
+        }
+
+        pendingTransferCount = pendingJournalTransfers.count
     }
 
     private func queueTransfer(
         journalURL: URL,
         sessionID: String
     ) {
-        guard let evidence = closedJournalEvidence else {
-            errorMessage = "Closed Watch journal has no verified digest."
-            state = .journalReady
+        if pendingJournalTransfers[sessionID] == nil {
+            registerPendingJournal(
+                journalURL: journalURL,
+                sessionID: sessionID
+            )
+        }
+
+        guard let pending = pendingJournalTransfers[sessionID] else {
+            if self.sessionID == sessionID {
+                errorMessage = "Closed Watch journal has no verified digest."
+                state = .journalReady
+            }
             return
         }
 
+        lastTransferQueueAttemptAt = Date()
+        let visibleSession = self.sessionID == sessionID
+            && state != .running
+            && state != .paused
+            && state != .starting
+            && state != .ending
+        let preservingCaptureFailure = visibleSession && state == .failed
+        let priorError = errorMessage
+
         let transfer = transport.transferJournal(
-            journalURL,
-            metadata: [
-                "session_id": sessionID,
-                "schema_version": "motionos.m0.v1",
-                "stream": "/body/watch",
-                "journal_sha256": evidence.sha256,
-                "journal_byte_count": evidence.byteCount,
-            ]
+            pending.url,
+            metadata: pending.metadata
         )
 
         if transfer != nil {
-            lastTransferredURL = journalURL
-            errorMessage = nil
-            state = .transferQueued
-        } else {
-            errorMessage = (
-                "WatchConnectivity is not active yet. "
-                + "The journal remains safe on Watch."
+            if visibleSession {
+                lastTransferredURL = pending.url
+                if !preservingCaptureFailure {
+                    errorMessage = nil
+                    state = .transferQueued
+                }
+            }
+        } else if visibleSession {
+            let transferMessage = (
+                "The recording is safe on this Watch and will retry "
+                + "when the iPhone link is available."
             )
-            state = .journalReady
+            errorMessage = preservingCaptureFailure
+                ? [priorError, transferMessage]
+                    .compactMap { $0 }
+                    .joined(separator: " ")
+                : transferMessage
+            state = preservingCaptureFailure ? .failed : .journalReady
         }
+        publishPresence()
     }
 
     private func handleTransferFinished(
@@ -388,39 +1053,239 @@ final class WatchSessionController: ObservableObject {
         metadata: [String: Any]?,
         error: Error?
     ) {
-        guard let id = sessionID,
-              metadata?["session_id"] as? String == id
+        guard let id = metadata?["session_id"] as? String,
+              pendingJournalTransfers[id] != nil
         else {
             return
         }
 
+        let visibleSession = sessionID == id
+            && state != .running
+            && state != .paused
+            && state != .starting
+            && state != .ending
+
         if let error {
-            errorMessage = (
-                "Journal transfer failed: "
-                + error.localizedDescription
-                + ". Source remains safe on Watch."
-            )
-            state = .journalReady
+            if visibleSession {
+                errorMessage = (
+                    "The iPhone transfer paused: "
+                    + error.localizedDescription
+                    + ". The recording is still safe on Watch."
+                )
+                state = .journalReady
+                publishPresence()
+            }
             return
         }
 
-        if state != .transferred {
+        if visibleSession && state != .transferred {
             state = .transportComplete
+            errorMessage = nil
+            publishPresence()
         }
     }
 
     private func handleMessage(
         _ message: [String: Any]
     ) {
-        guard message["motionos_message"] as? String
-                == "guided_protocol_cue_v1",
-              let title = message["step_title"] as? String
-        else {
+        guard let type = message["motionos_message"] as? String else {
             return
         }
 
-        guidedCueTitle = title
-        WKInterfaceDevice.current().play(.notification)
+        if let status = IndoBoardRemoteStatus(message: message) {
+            let previous = indoRemoteStatus
+            let becameStartReady =
+                previous?.startReady != true
+                    && status.startReady
+            let countdownChanged =
+                status.countdownRemaining != nil
+                    && status.countdownRemaining
+                        != previous?.countdownRemaining
+            let sessionStarted =
+                previous?.sessionPhase.lowercased() != "running"
+                    && status.sessionPhase.lowercased() == "running"
+
+            indoRemoteStatus = status
+            indoRemoteErrorMessage = nil
+
+            if sessionStarted {
+                WKInterfaceDevice.current().play(.start)
+            } else if countdownChanged {
+                WKInterfaceDevice.current().play(.click)
+            } else if becameStartReady {
+                WKInterfaceDevice.current().play(.success)
+            }
+            return
+        }
+
+        if let acknowledgment =
+            IndoBoardRemoteCommandAck(message: message) {
+            lastIndoRemoteAck = acknowledgment
+            if pendingIndoRemoteCommand?.requestID
+                == acknowledgment.requestID {
+                pendingIndoRemoteCommand = nil
+            }
+            if acknowledgment.accepted {
+                indoRemoteErrorMessage = nil
+                if acknowledgment.action == .finishSession {
+                    WKInterfaceDevice.current().play(.click)
+                }
+            } else {
+                indoRemoteErrorMessage =
+                    acknowledgment.messageText
+                        ?? "The iPhone could not complete that action."
+                WKInterfaceDevice.current().play(.failure)
+            }
+            return
+        }
+
+        switch type {
+        case "watch_presence_request_v1":
+            publishPresence()
+
+        case "phone_presence_request_v1":
+            // This request is intended for iPhone and is harmless if echoed.
+            return
+
+        case "guided_protocol_cue_v1":
+            guard let title = message["step_title"] as? String else {
+                return
+            }
+            guidedCueTitle = title
+            WKInterfaceDevice.current().play(.notification)
+
+        case "session_protocol_cue_v1":
+            guard state == .running || state == .paused,
+                  validateProductControlSession(message),
+                  let runID = message["run_id"] as? String,
+                  bindProductRunID(runID),
+                  let title = message["step_title"] as? String
+            else {
+                return
+            }
+            productCueTitle = title
+            productCueInstruction =
+                message["instruction"] as? String
+            guidedCueTitle = title
+            WKInterfaceDevice.current().play(.click)
+
+        case "session_stop_request_v1":
+            guard state == .running || state == .paused,
+                  validateProductControlSession(message),
+                  let runID = message["run_id"] as? String,
+                  bindProductRunID(runID)
+            else {
+                return
+            }
+            productCueTitle = nil
+            productCueInstruction = nil
+            guidedCueTitle = "FINISHING"
+            WKInterfaceDevice.current().play(.stop)
+            stop()
+
+        case "session_sync_cue_v1":
+            guard state == .running || state == .paused,
+                  validateProductControlSession(message),
+                  let runID = message["run_id"] as? String,
+                  bindProductRunID(runID),
+                  let cueID = message["cue_id"] as? String,
+                  let label = message["label"] as? String,
+                  let watchSessionID = sessionID
+            else {
+                return
+            }
+
+            let timestamp = MonotonicClock.nowNS()
+            let event = SensorEnvelope(
+                sessionID: watchSessionID,
+                deviceID: "apple-watch",
+                stream: "/sync/session_cue",
+                sequence: sessionSyncSequence,
+                deviceTimeNS: timestamp,
+                payload: [
+                    "run_id": .string(runID),
+                    "cue_id": .string(cueID),
+                    "label": .string(label),
+                    "timing_semantics":
+                        .string("watch_monotonic_receive_time"),
+                ]
+            )
+            sessionSyncSequence &+= 1
+
+            Task { @MainActor [weak self] in
+                guard let self,
+                      await self.record(event)
+                else {
+                    return
+                }
+
+                self.guidedCueTitle = "SYNC · MOVE NOW"
+                WKInterfaceDevice.current().play(.directionUp)
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(180))
+                    WKInterfaceDevice.current().play(.click)
+                }
+
+                let acknowledgment: [String: Any] = [
+                    "motionos_message": "session_sync_cue_ack_v1",
+                    "run_id": runID,
+                    "cue_id": cueID,
+                    "label": label,
+                    "watch_session_id": watchSessionID,
+                    "watch_device_time_ns": timestamp,
+                ]
+                _ = self.transport.sendMessage(acknowledgment)
+                _ = self.transport.queueUserInfo(acknowledgment)
+
+                Task { @MainActor [weak self] in
+                    try? await Task.sleep(for: .milliseconds(1_500))
+                    guard let self,
+                          self.guidedCueTitle == "SYNC · MOVE NOW"
+                    else {
+                        return
+                    }
+                    self.guidedCueTitle = self.productCueTitle
+                }
+            }
+
+        default:
+            return
+        }
+    }
+
+    private func validateProductControlSession(
+        _ message: [String: Any]
+    ) -> Bool {
+        guard let currentSessionID = sessionID,
+              let targetSessionID =
+                message["watch_session_id"] as? String,
+              targetSessionID == currentSessionID
+        else {
+            rejectedProductControlCount &+= 1
+            return false
+        }
+        return true
+    }
+
+    @discardableResult
+    private func bindProductRunID(
+        _ runID: String
+    ) -> Bool {
+        guard !runID.isEmpty else {
+            rejectedProductControlCount &+= 1
+            return false
+        }
+
+        if let linkedProductRunID {
+            guard linkedProductRunID == runID else {
+                rejectedProductControlCount &+= 1
+                return false
+            }
+            return true
+        }
+
+        linkedProductRunID = runID
+        return true
     }
 
     private func handleUserInfo(
@@ -428,67 +1293,176 @@ final class WatchSessionController: ObservableObject {
     ) {
         guard userInfo["motionos_message"] as? String
                 == "journal_received_ack",
-              let id = sessionID,
-              userInfo["session_id"] as? String == id,
-              let evidence = closedJournalEvidence,
+              let id = userInfo["session_id"] as? String,
+              let pending = pendingJournalTransfers[id],
               let receivedHash = userInfo["journal_sha256"] as? String
         else {
             return
         }
 
-        guard receivedHash.lowercased() == evidence.sha256 else {
-            errorMessage = (
-                "iPhone receipt hash did not match the Watch journal. "
-                + "Source remains safe on Watch."
-            )
-            state = .journalReady
+        let visibleSession = sessionID == id
+            && state != .running
+            && state != .paused
+            && state != .starting
+            && state != .ending
+
+        guard receivedHash.lowercased() == pending.evidence.sha256 else {
+            if visibleSession {
+                errorMessage = (
+                    "The iPhone receipt did not match this recording. "
+                    + "The Watch copy has been kept."
+                )
+                state = .journalReady
+                publishPresence()
+            }
             return
         }
 
-        errorMessage = nil
-        state = .transferred
+        releaseVerifiedLocalJournal(
+            sessionID: id,
+            journalURL: pending.url
+        )
+        pendingJournalTransfers.removeValue(forKey: id)
+        pendingTransferCount = pendingJournalTransfers.count
+
+        if visibleSession {
+            errorMessage = nil
+            state = .transferred
+            closedJournalURL = nil
+            closedJournalEvidence = nil
+            WKInterfaceDevice.current().play(.success)
+            publishPresence()
+        }
     }
 
-    private func publishCaptureHealthIfNeeded() {
-        let now = Date()
-        guard now.timeIntervalSince(lastTelemetrySentAt) >= 2.0,
-              let id = sessionID
+    private func releaseVerifiedLocalJournal(
+        sessionID: String,
+        journalURL: URL
+    ) {
+        // The iPhone has re-hashed this exact journal and returned the
+        // matching digest. Only now is the Watch copy eligible for deletion.
+        let sessionDirectory = journalURL.deletingLastPathComponent()
+        do {
+            try FileManager.default.removeItem(at: sessionDirectory)
+        } catch {
+            // Cleanup failure must not invalidate an already verified receipt.
+        }
+    }
+
+    /// At most one disposable snapshot per 0.25 s slot, attempted only while
+    /// the iPhone is reachable. An unreachable slot is dropped, so a missing
+    /// iPhone can never turn the 50 Hz IMU path into a send loop.
+    private func publishLiveTelemetryIfDue() {
+        let activity: LiveTelemetrySnapshot.Activity
+        switch state {
+        case .running:
+            activity = .recording
+        case .paused:
+            activity = .paused
+        default:
+            return
+        }
+
+        let monotonicNS = MonotonicClock.nowNS()
+        guard let id = sessionID,
+              let slot = livePublisher.takeSlot(
+                at: Double(monotonicNS) / 1_000_000_000,
+                channelAvailable: transport.canDeliverLiveTelemetry
+              )
         else {
             return
         }
 
-        let device = WKInterfaceDevice.current()
-        let battery = device.batteryLevel
-        watchBatteryLevel = battery >= 0
-            ? Double(battery)
-            : nil
-
-        var message: [String: Any] = [
-            "motionos_message": "watch_capture_health_v1",
-            "session_id": id,
-            "sent_at_unix_s": now.timeIntervalSince1970,
-            "imu_sample_count": imuSampleCount,
-            "hr_event_count": heartRateEventCount,
-            "max_imu_gap_ms": maxIMUGapMS,
-            "non_monotonic_imu_count": nonMonotonicIMUCount,
-        ]
-        if let observedIMUHz {
-            message["observed_imu_hz"] = observedIMUHz
-        }
-        if let recentMedianIMUHz {
-            message["recent_median_imu_hz"] = recentMedianIMUHz
-        }
-        if let heartRateBPM {
-            message["heart_rate_bpm"] = heartRateBPM
-        }
-        if let watchBatteryLevel {
-            message["watch_battery_level_fraction"] =
-                watchBatteryLevel
+        let now = Date()
+        if now.timeIntervalSince(lastBatteryReadAt) >= batteryReadInterval {
+            lastBatteryReadAt = now
+            let battery = WKInterfaceDevice.current().batteryLevel
+            watchBatteryLevel = battery >= 0 ? Double(battery) : nil
         }
 
-        if transport.sendMessage(message) {
-            lastTelemetrySentAt = now
+        let freshHeartRate = lastHeartRateAt.flatMap { at in
+            now.timeIntervalSince(at) <= liveHeartRateMaxAge ? heartRateBPM : nil
         }
+
+        let snapshot = LiveTelemetrySnapshot(
+            sessionID: id,
+            sequence: slot.sequence,
+            sourceMonotonicNS: monotonicNS,
+            sourceSentAt: now,
+            activity: activity,
+            elapsedSeconds: startedAt.map { max(0, now.timeIntervalSince($0)) },
+            imuSampleCount: imuHealth.sampleCount,
+            effectiveIMUHz: imuHealth.effectiveHz,
+            recentMedianIMUHz: imuHealth.recentMedianHz,
+            maxIMUGapMS: imuHealth.maxGapMS,
+            nonMonotonicIMUCount: imuHealth.nonMonotonicCount,
+            motion: slot.motion,
+            heartRateBPM: freshHeartRate,
+            watchBatteryFraction: watchBatteryLevel
+        )
+        transport.sendLiveTelemetry(snapshot.message)
+    }
+
+    var liveTelemetryAttemptedCount: UInt64 {
+        livePublisher.attemptedCount
+    }
+
+    var liveTelemetryDroppedCount: UInt64 {
+        livePublisher.droppedUnavailableCount
+    }
+
+    private func updateVisualTelemetry(
+        from event: SensorEnvelope
+    ) {
+        guard let derived = WatchMotionDerivation.derive(
+            payload: event.payload
+        )
+        else {
+            return
+        }
+
+        userAccelerationG = derived.userAccelerationG
+        rotationRateRadS = derived.rotationRateRadS
+        deviceRollRadians = number(event.payload["roll"])
+        devicePitchRadians = number(event.payload["pitch"])
+        deviceYawRadians = number(event.payload["yaw"])
+        livePublisher.observe(
+            derived,
+            roll: deviceRollRadians,
+            pitch: devicePitchRadians,
+            yaw: deviceYawRadians
+        )
+    }
+
+    private func appendVisualTelemetryPoint() {
+        guard let userAccelerationG,
+              let rotationRateRadS
+        else {
+            return
+        }
+
+        visualTelemetryHistory.append(
+            VisualTelemetryPoint(
+                timestamp: Date(),
+                userAccelerationG: userAccelerationG,
+                rotationRateRadS: rotationRateRadS,
+                imuHz: recentMedianIMUHz,
+                heartRateBPM: heartRateBPM
+            )
+        )
+
+        if visualTelemetryHistory.count > 48 {
+            visualTelemetryHistory.removeFirst(
+                visualTelemetryHistory.count - 48
+            )
+        }
+    }
+
+    private func number(_ value: JSONValue?) -> Double? {
+        guard case .number(let number) = value else {
+            return nil
+        }
+        return number
     }
 
     private func applyWorkoutState(
@@ -507,18 +1481,71 @@ final class WatchSessionController: ObservableObject {
         default:
             break
         }
+        publishPresence()
+    }
+
+    private func publishPresence() {
+        guard transport.session.activationState == .activated else {
+            return
+        }
+
+        let device = WKInterfaceDevice.current()
+        let appVersion = Bundle.main.object(
+            forInfoDictionaryKey: "CFBundleShortVersionString"
+        ) as? String ?? "unknown"
+        let appBuild = Bundle.main.object(
+            forInfoDictionaryKey: "CFBundleVersion"
+        ) as? String ?? "unknown"
+
+        var presence: [String: Any] = [
+            "motionos_message": "watch_presence_v1",
+            "bundle_id": Bundle.main.bundleIdentifier ?? "unknown",
+            "app_version": appVersion,
+            "app_build": appBuild,
+            "watch_system_version": device.systemVersion,
+            "capture_state": state.rawValue,
+            "capture_origin": captureOrigin.rawValue,
+            "health_authorization": healthAuthorizationLabel,
+            "phone_presence_confirmed": phonePresenceConfirmed,
+            "sent_at_unix_s": Date().timeIntervalSince1970,
+        ]
+
+        if let sessionID {
+            presence["session_id"] = sessionID
+        }
+
+        let battery = device.batteryLevel
+        if battery >= 0 {
+            presence["watch_battery_level_fraction"] = Double(battery)
+        }
+
+        let contextSent = transport.updateApplicationContext(presence)
+        let liveSent = transport.sendMessage(presence)
+        if contextSent || liveSent {
+            lastPresencePublishedAt = Date()
+        }
     }
 
     private func fail(_ error: Error) {
         errorMessage = error.localizedDescription
         state = .failed
+        WKInterfaceDevice.current().play(.failure)
+        publishPresence()
     }
 
-    private static func makeSessionID() -> String {
+    private enum CaptureStartError: LocalizedError {
+        case metadataNotJournaled
+
+        var errorDescription: String? {
+            "The Watch metadata event was not written to the new journal."
+        }
+    }
+
+    private static func makeSessionID(prefix: String) -> String {
         let timestamp = ISO8601DateFormatter()
             .string(from: Date())
             .replacingOccurrences(of: ":", with: "")
-        return "p0-watch-\(timestamp)-\(UUID().uuidString.prefix(8).lowercased())"
+        return "\(prefix)-\(timestamp)-\(UUID().uuidString.prefix(8).lowercased())"
     }
 
     private static func makeJournalURL(

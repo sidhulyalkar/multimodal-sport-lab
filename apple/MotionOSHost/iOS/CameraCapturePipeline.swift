@@ -15,6 +15,12 @@ struct CameraCaptureConfiguration: Sendable {
     let formatHeight: Int32
     let minFrameRate: Double
     let maxFrameRate: Double
+    let requestedFrameRate: Double
+    let configuredFrameRate: Double
+    let frameRateLocked: Bool
+    let videoStabilizationSupported: Bool
+    let preferredVideoStabilizationMode: String
+    let stabilizationLockedOff: Bool
     let intrinsicDeliveryEnabled: Bool
 
     func metadataObject() -> [String: Any] {
@@ -27,6 +33,13 @@ struct CameraCaptureConfiguration: Sendable {
             "format_height": Int(formatHeight),
             "min_supported_frame_rate": minFrameRate,
             "max_supported_frame_rate": maxFrameRate,
+            "requested_frame_rate": requestedFrameRate,
+            "configured_frame_rate": configuredFrameRate,
+            "frame_rate_locked": frameRateLocked,
+            "video_stabilization_supported": videoStabilizationSupported,
+            "preferred_video_stabilization_mode":
+                preferredVideoStabilizationMode,
+            "stabilization_locked_off": stabilizationLockedOff,
             "intrinsic_matrix_delivery_enabled": intrinsicDeliveryEnabled,
         ]
     }
@@ -79,6 +92,9 @@ struct CameraEvidenceBundle: Sendable {
     let videoURL: URL
     let journalURL: URL
     let metadataURL: URL
+    let videoSHA256: String
+    let journalSHA256: String
+    let metadataSHA256: String
 }
 
 enum CameraCaptureError: LocalizedError {
@@ -87,6 +103,7 @@ enum CameraCaptureError: LocalizedError {
     case cannotAddOutput
     case videoConnectionUnavailable
     case writerSettingsUnavailable
+    case targetFrameRateUnavailable(Double)
     case recordingAlreadyActive
     case recordingNotActive
     case invalidPresentationTime
@@ -105,6 +122,9 @@ enum CameraCaptureError: LocalizedError {
             "The capture session has no video connection."
         case .writerSettingsUnavailable:
             "AVFoundation did not provide compatible movie-writer settings."
+        case .targetFrameRateUnavailable(let frameRate):
+            "The active rear-camera format does not support the required "
+                + "\(Int(frameRate)) fps MotionOS capture rate."
         case .recordingAlreadyActive:
             "A camera evidence recording is already active."
         case .recordingNotActive:
@@ -126,6 +146,7 @@ final class CameraCapturePipeline:
 {
     static let schemaVersion = "motionos.camera.v1"
     static let poseStride: UInt64 = 3
+    static let targetFrameRate: Double = 30.0
 
     private let captureSession = AVCaptureSession()
     private let videoOutput = AVCaptureVideoDataOutput()
@@ -135,6 +156,10 @@ final class CameraCapturePipeline:
     private let outputQueue = DispatchQueue(
         label: "motionos.camera.output"
     )
+    private let equipmentDetectors:
+        [any IndoBoardEquipmentFrameDetector]
+    private let equipmentQualificationRegistry:
+        IndoBoardEquipmentModelQualificationRegistry?
 
     private var configuration: CameraCaptureConfiguration?
     private var configured = false
@@ -166,9 +191,19 @@ final class CameraCapturePipeline:
     private var lastPTSNS: UInt64?
     private var firstIntrinsicMatrix: [[Double]]?
     private var lastIntrinsicMatrix: [[Double]]?
+    private var latestPoseFrame: BodyMovementFrame?
+    private var previewFrameSequence: UInt64 = 0
     private var encoder = JSONEncoder()
 
-    override init() {
+    init(
+        equipmentDetectors:
+            [any IndoBoardEquipmentFrameDetector] = [],
+        equipmentQualificationRegistry:
+            IndoBoardEquipmentModelQualificationRegistry? = nil
+    ) {
+        self.equipmentDetectors = equipmentDetectors
+        self.equipmentQualificationRegistry =
+            equipmentQualificationRegistry
         encoder.outputFormatting = [.sortedKeys]
         super.init()
     }
@@ -246,6 +281,14 @@ final class CameraCapturePipeline:
         }
     }
 
+    func livePoseFrame() async -> BodyMovementFrame? {
+        await withCheckedContinuation { continuation in
+            outputQueue.async {
+                continuation.resume(returning: self.latestPoseFrame)
+            }
+        }
+    }
+
     func stopRecording() async throws -> CameraEvidenceBundle {
         await withCheckedContinuation { continuation in
             sessionQueue.async {
@@ -258,9 +301,9 @@ final class CameraCapturePipeline:
 
         return try await withCheckedThrowingContinuation { continuation in
             outputQueue.async {
-                self.finishRecordingOnOutputQueue { result in
-                    continuation.resume(with: result)
-                }
+                self.finishRecordingOnOutputQueue(
+                    continuation: continuation
+                )
             }
         }
     }
@@ -320,10 +363,41 @@ final class CameraCapturePipeline:
             connection.videoRotationAngle = 0
         }
 
+        let stabilizationSupported =
+            connection.isVideoStabilizationSupported
+        if stabilizationSupported {
+            connection.preferredVideoStabilizationMode = .off
+        }
+        let stabilizationLockedOff =
+            !stabilizationSupported
+                || connection.preferredVideoStabilizationMode == .off
+
+        let ranges = device.activeFormat.videoSupportedFrameRateRanges
+        let targetFrameRate = Self.targetFrameRate
+        guard ranges.contains(where: {
+            $0.minFrameRate <= targetFrameRate
+                && targetFrameRate <= $0.maxFrameRate
+        }) else {
+            throw CameraCaptureError.targetFrameRateUnavailable(
+                targetFrameRate
+            )
+        }
+
+        try device.lockForConfiguration()
+        let frameDuration = CMTime(
+            value: 1,
+            timescale: CMTimeScale(targetFrameRate)
+        )
+        device.activeVideoMinFrameDuration = frameDuration
+        device.activeVideoMaxFrameDuration = frameDuration
+        let configuredFrameRate = 1.0 / CMTimeGetSeconds(
+            device.activeVideoMinFrameDuration
+        )
+        device.unlockForConfiguration()
+
         let dimensions = CMVideoFormatDescriptionGetDimensions(
             device.activeFormat.formatDescription
         )
-        let ranges = device.activeFormat.videoSupportedFrameRateRanges
         let minRate = ranges.map(\.minFrameRate).min() ?? 0
         let maxRate = ranges.map(\.maxFrameRate).max() ?? 0
 
@@ -336,6 +410,12 @@ final class CameraCapturePipeline:
             formatHeight: dimensions.height,
             minFrameRate: minRate,
             maxFrameRate: maxRate,
+            requestedFrameRate: targetFrameRate,
+            configuredFrameRate: configuredFrameRate,
+            frameRateLocked: true,
+            videoStabilizationSupported: stabilizationSupported,
+            preferredVideoStabilizationMode: "off",
+            stabilizationLockedOff: stabilizationLockedOff,
             intrinsicDeliveryEnabled: intrinsicsEnabled
         )
         self.configuration = configuration
@@ -434,6 +514,7 @@ final class CameraCapturePipeline:
         lastPTSNS = nil
         firstIntrinsicMatrix = nil
         lastIntrinsicMatrix = nil
+        latestPoseFrame = nil
     }
 
     nonisolated func captureOutput(
@@ -441,7 +522,11 @@ final class CameraCapturePipeline:
         didOutput sampleBuffer: CMSampleBuffer,
         from connection: AVCaptureConnection
     ) {
-        handleFrame(sampleBuffer)
+        if sessionID == nil {
+            handlePreviewFrame(sampleBuffer)
+        } else {
+            handleFrame(sampleBuffer)
+        }
     }
 
     nonisolated func captureOutput(
@@ -450,6 +535,57 @@ final class CameraCapturePipeline:
         from connection: AVCaptureConnection
     ) {
         handleDroppedFrame(sampleBuffer)
+    }
+
+    private func handlePreviewFrame(
+        _ sampleBuffer: CMSampleBuffer
+    ) {
+        let sequence = previewFrameSequence
+        previewFrameSequence += 1
+
+        guard sequence % Self.poseStride == 0,
+              let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer)
+        else {
+            return
+        }
+
+        do {
+            let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+            let ptsNS = try presentationTimeNS(pts)
+
+            guard var payload = try Pose3DExtractor.extract(
+                from: pixelBuffer,
+                orientation: .up,
+                equipmentDetectors:
+                    equipmentDetectors,
+                qualificationRegistry:
+                    equipmentQualificationRegistry
+            ) else {
+                latestPoseFrame = nil
+                return
+            }
+
+            payload["source_frame_sequence"] =
+                .number(Double(sequence))
+            payload["source_frame_pts_ns"] =
+                .number(Double(ptsNS))
+            payload["timestamp_basis"] = .string(
+                "avcapture_presentation_timestamp"
+            )
+            payload["source"] = .string(
+                "vision_preview_pose_from_camera_frame"
+            )
+
+            latestPoseFrame =
+                BodyMovementFrameParser.parseVisionPose(
+                    payload: payload,
+                    sessionID: "camera-preview",
+                    sequence: sequence,
+                    deviceTimeNS: ptsNS
+                )
+        } catch {
+            latestPoseFrame = nil
+        }
     }
 
     private func handleFrame(
@@ -518,7 +654,11 @@ final class CameraCapturePipeline:
                     do {
                         if let pose = try Pose3DExtractor.extract(
                             from: pixelBuffer,
-                            orientation: .up
+                            orientation: .up,
+                            equipmentDetectors:
+                                equipmentDetectors,
+                            qualificationRegistry:
+                                equipmentQualificationRegistry
                         ) {
                             poseStatus = "detected"
                             poseDetectedCount += 1
@@ -600,6 +740,15 @@ final class CameraCapturePipeline:
                         payload: payload
                     )
                 )
+
+                latestPoseFrame =
+                    BodyMovementFrameParser.parseVisionPose(
+                        payload: payload,
+                        sessionID: sessionID,
+                        sequence: poseSequence,
+                        deviceTimeNS: ptsNS
+                    )
+
                 poseSequence += 1
             }
 
@@ -649,6 +798,61 @@ final class CameraCapturePipeline:
         }
     }
 
+    private func equipmentEvidenceMetadata()
+        -> [String: Any] {
+        let qualifications: [[String: Any]] =
+            equipmentQualificationRegistry?
+                .qualifications
+                .map { qualification in
+                    var value: [String: Any] = [
+                        "model_id":
+                            qualification.modelID,
+                        "status":
+                            qualification.status.rawValue,
+                    ]
+
+                    if let datasetID =
+                            qualification.evaluationDatasetID {
+                        value["evaluation_dataset_id"] =
+                            datasetID
+                    }
+                    if let reportHash =
+                            qualification.evaluationReportSHA256 {
+                        value["evaluation_report_sha256"] =
+                            reportHash
+                    }
+
+                    return value
+                }
+                ?? []
+
+        var metadata: [String: Any] = [
+            "fiducial_detector_id": "vision_qr",
+            "markerless_detector_ids":
+                equipmentDetectors.map {
+                    $0.detectorID
+                },
+            "qualifications": qualifications,
+            "routing_policy":
+                "manual_reference_then_fiducial_then_explicitly_qualified_model",
+            "tracking_and_coaching_authorization_separate":
+                true,
+            "shadow_comparison":
+                "normalized_image_space_against_visible_reference",
+        ]
+
+        if let registry =
+                equipmentQualificationRegistry {
+            metadata["qualification_registry_schema"] =
+                registry.schemaVersion
+        } else {
+            metadata["qualification_registry_schema"] =
+                "none"
+        }
+
+        return metadata
+    }
+
     private func makeLiveStats() -> CameraLiveCaptureStats {
         CameraLiveCaptureStats(
             deliveredFrames: deliveredFrameCount,
@@ -665,61 +869,64 @@ final class CameraCapturePipeline:
     }
 
     private func finishRecordingOnOutputQueue(
-        completion: @escaping (
-            Result<CameraEvidenceBundle, Error>
-        ) -> Void
+        continuation: CheckedContinuation<
+            CameraEvidenceBundle,
+            any Error
+        >
     ) {
-        guard let sessionID,
-              let writer,
-              let writerInput,
-              let directoryURL,
-              let videoURL,
-              let journalURL,
-              let metadataURL
+        guard let writer,
+              let writerInput
         else {
-            completion(.failure(CameraCaptureError.recordingNotActive))
+            continuation.resume(
+                throwing: CameraCaptureError.recordingNotActive
+            )
             return
         }
 
         if writerStarted, writer.status == .writing {
             writerInput.markAsFinished()
-            writer.finishWriting {
-                self.outputQueue.async {
-                    self.finalizeEvidence(
-                        sessionID: sessionID,
-                        writer: writer,
-                        directoryURL: directoryURL,
-                        videoURL: videoURL,
-                        journalURL: journalURL,
-                        metadataURL: metadataURL,
-                        completion: completion
+            writer.finishWriting { [weak self] in
+                guard let self else {
+                    continuation.resume(
+                        throwing: CameraCaptureError.recordingNotActive
                     )
+                    return
+                }
+                self.outputQueue.async {
+                    self.completeFinalization(continuation)
                 }
             }
         } else {
-            finalizeEvidence(
-                sessionID: sessionID,
-                writer: writer,
-                directoryURL: directoryURL,
-                videoURL: videoURL,
-                journalURL: journalURL,
-                metadataURL: metadataURL,
-                completion: completion
-            )
+            completeFinalization(continuation)
         }
     }
 
-    private func finalizeEvidence(
-        sessionID: String,
-        writer: AVAssetWriter,
-        directoryURL: URL,
-        videoURL: URL,
-        journalURL: URL,
-        metadataURL: URL,
-        completion: @escaping (
-            Result<CameraEvidenceBundle, Error>
-        ) -> Void
+    private func completeFinalization(
+        _ continuation: CheckedContinuation<
+            CameraEvidenceBundle,
+            any Error
+        >
     ) {
+        do {
+            continuation.resume(
+                returning: try finalizeEvidence()
+            )
+        } catch {
+            continuation.resume(throwing: error)
+        }
+    }
+
+    private func finalizeEvidence() throws -> CameraEvidenceBundle {
+        guard let sessionID,
+              let writer,
+              let directoryURL,
+              let videoURL,
+              let journalURL,
+              let metadataURL
+        else {
+            throw CameraCaptureError.recordingNotActive
+        }
+
         do {
             try journalHandle?.synchronize()
             try journalHandle?.close()
@@ -731,6 +938,9 @@ final class CameraCapturePipeline:
                         ?? "writer did not complete"
                 )
             }
+
+            let videoSHA256 = try sha256(videoURL)
+            let journalSHA256 = try sha256(journalURL)
 
             let metadata: [String: Any] = [
                 "schema_version": Self.schemaVersion,
@@ -762,6 +972,8 @@ final class CameraCapturePipeline:
                         "cameraOriginMatrix preserved per pose",
                     "interpolation": "none",
                 ],
+                "indo_board_equipment":
+                    equipmentEvidenceMetadata(),
                 "counts": [
                     "delivered_frames": Int(deliveredFrameCount),
                     "written_frames": Int(writtenFrameCount),
@@ -787,9 +999,8 @@ final class CameraCapturePipeline:
                 "last_intrinsic_matrix":
                     lastIntrinsicMatrix as Any,
                 "provenance": [
-                    "camera_mov_sha256": try sha256(videoURL),
-                    "camera_frames_jsonl_sha256":
-                        try sha256(journalURL),
+                    "camera_mov_sha256": videoSHA256,
+                    "camera_frames_jsonl_sha256": journalSHA256,
                 ],
                 "claim_boundary":
                     "Vision 3D pose is teacher/validation evidence; "
@@ -802,17 +1013,21 @@ final class CameraCapturePipeline:
             )
             try data.write(to: metadataURL, options: .atomic)
 
+            let metadataSHA256 = try sha256(metadataURL)
             let bundle = CameraEvidenceBundle(
                 directory: directoryURL,
                 videoURL: videoURL,
                 journalURL: journalURL,
-                metadataURL: metadataURL
+                metadataURL: metadataURL,
+                videoSHA256: videoSHA256,
+                journalSHA256: journalSHA256,
+                metadataSHA256: metadataSHA256
             )
             resetRecordingState()
-            completion(.success(bundle))
+            return bundle
         } catch {
             resetRecordingState()
-            completion(.failure(error))
+            throw error
         }
     }
 
