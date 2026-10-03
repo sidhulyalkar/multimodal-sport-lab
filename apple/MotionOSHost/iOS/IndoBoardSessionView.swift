@@ -408,6 +408,19 @@ struct IndoBoardSessionView: View {
                 Text(detail)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
+
+                if hasEvidence {
+                    Text(
+                        "Tracking: \(equipmentSourceLabel(camera.latestIndoBoardState))"
+                            + " · Coaching: "
+                            + equipmentSourceLabel(
+                                camera.latestIndoBoardCoachingState,
+                                fallback: "body pose only"
+                            )
+                    )
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundStyle(.tertiary)
+                }
             }
 
             Spacer()
@@ -420,6 +433,26 @@ struct IndoBoardSessionView: View {
                     .font(.system(size: 8, weight: .bold))
                     .foregroundStyle(.secondary)
             }
+        }
+    }
+
+    private func equipmentSourceLabel(
+        _ state: IndoBoardBalanceState?,
+        fallback: String = "none"
+    ) -> String {
+        guard let state else {
+            return fallback
+        }
+
+        switch state.provenance {
+        case .fiducialMeasured:
+            return "QR measured"
+        case .manualAnnotated:
+            return "reviewed"
+        case .modelEstimated:
+            return "markerless model"
+        case .geometricProxy:
+            return "geometric proxy"
         }
     }
 
