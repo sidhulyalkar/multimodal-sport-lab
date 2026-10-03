@@ -126,6 +126,11 @@ final class IndoBoardEquipmentStateTests: XCTestCase {
                 "leftFoot": .string("leftKnee"),
                 "rightFoot": .string("rightKnee"),
             ]),
+            "indo_board_fiducials_visible": .array([
+                .string("MOS:I:RC1"),
+                .string("MOS:I:DL1"),
+                .string("MOS:I:DR1"),
+            ]),
             "indo_board_equipment": .object([
                 "sequence": .number(7),
                 "device_time_ns": .number(700_000_000),
@@ -165,6 +170,14 @@ final class IndoBoardEquipmentStateTests: XCTestCase {
         XCTAssertEqual(
             frame?.indoBoardEquipment?.modelID,
             "debug-model"
+        )
+        XCTAssertEqual(
+            frame?.indoBoardVisibleFiducials,
+            [
+                .deckLeft,
+                .deckRight,
+                .rollerCenter,
+            ]
         )
         XCTAssertEqual(
             frame?.indoBoardBalanceState?.centerProximity ?? 0,
