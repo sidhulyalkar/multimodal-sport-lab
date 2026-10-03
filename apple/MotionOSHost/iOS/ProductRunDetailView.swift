@@ -548,6 +548,22 @@ struct ProductRunDetailView: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
+            if let values = coach.numericMetrics,
+               let sampleCount = values["board_sample_count"],
+               let coverage =
+                    values["board_state_coverage_fraction"],
+               let confidence =
+                    values["board_state_confidence"] {
+                boardEvidenceRow(
+                    sampleCount:
+                        max(0, Int(sampleCount.rounded())),
+                    coverage:
+                        min(1, max(0, coverage)),
+                    confidence:
+                        min(1, max(0, confidence))
+                )
+            }
+
             if let outcome = coach.experimentOutcome,
                let summary = coach.experimentSummary {
                 let improved = outcome == "improved"
@@ -653,6 +669,70 @@ struct ProductRunDetailView: View {
             .foregroundStyle(.tertiary)
         }
         .cardStyle()
+    }
+
+    private func boardEvidenceRow(
+        sampleCount: Int,
+        coverage: Double,
+        confidence: Double
+    ) -> some View {
+        let usable =
+            sampleCount
+                >= IndoBoardEvidenceQualityThresholds
+                    .minimumSessionSamples
+            && coverage
+                >= IndoBoardEvidenceQualityThresholds
+                    .minimumSessionCoverage
+            && confidence
+                >= IndoBoardEvidenceQualityThresholds
+                    .minimumStateConfidence
+        let accent: Color = usable ? .green : .yellow
+
+        return HStack(spacing: 9) {
+            Image(
+                systemName:
+                    usable
+                        ? "checkmark.shield.fill"
+                        : "viewfinder.circle"
+            )
+            .foregroundStyle(accent)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(
+                    usable
+                        ? "Board-relative evidence usable"
+                        : "Board tracking partial"
+                )
+                .font(.caption.weight(.bold))
+
+                Text(
+                    String(
+                        format:
+                            "%d samples · %.0f%% coverage · %.0f%% confidence",
+                        sampleCount,
+                        coverage * 100,
+                        confidence * 100
+                    )
+                )
+                .font(
+                    .system(
+                        .caption2,
+                        design: .monospaced
+                    )
+                )
+                .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+        }
+        .padding(10)
+        .background(
+            accent.opacity(0.07),
+            in: RoundedRectangle(
+                cornerRadius: 12,
+                style: .continuous
+            )
+        )
     }
 
     private var feedback: some View {
