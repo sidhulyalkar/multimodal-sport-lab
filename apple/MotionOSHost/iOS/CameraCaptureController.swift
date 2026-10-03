@@ -24,6 +24,10 @@ final class CameraCaptureController: ObservableObject {
     @Published private(set) var liveStats: CameraLiveCaptureStats?
     @Published private(set) var latestPoseFrame: BodyMovementFrame?
     @Published private(set) var latestPoseReceivedAt: Date?
+    @Published private(set) var latestIndoBoardState:
+        IndoBoardBalanceState?
+    @Published private(set) var latestIndoBoardStateReceivedAt:
+        Date?
     @Published private(set) var framingAssessment:
         CameraFramingAssessment = .waiting
     @Published private(set) var stanceAssessment:
@@ -44,6 +48,11 @@ final class CameraCaptureController: ObservableObject {
     private var indoCoachStartedAt: Date?
     private var statsTask: Task<Void, Never>?
     private var poseTask: Task<Void, Never>?
+    private var lastProcessedPoseSessionID: String?
+    private var lastProcessedPoseSequence: UInt64?
+
+    private static let livePoseStaleSeconds: TimeInterval = 0.80
+    private static let liveBoardStaleSeconds: TimeInterval = 0.80
 
     var authorizationStatus: AVAuthorizationStatus {
         AVCaptureDevice.authorizationStatus(for: .video)
@@ -65,6 +74,10 @@ final class CameraCaptureController: ObservableObject {
         liveStats = nil
         latestPoseFrame = nil
         latestPoseReceivedAt = nil
+        latestIndoBoardState = nil
+        latestIndoBoardStateReceivedAt = nil
+        lastProcessedPoseSessionID = nil
+        lastProcessedPoseSequence = nil
         framingAssessment = .waiting
         stanceAssessment = .waiting
         stanceGate.reset()
@@ -91,6 +104,10 @@ final class CameraCaptureController: ObservableObject {
         liveStats = nil
         latestPoseFrame = nil
         latestPoseReceivedAt = nil
+        latestIndoBoardState = nil
+        latestIndoBoardStateReceivedAt = nil
+        lastProcessedPoseSessionID = nil
+        lastProcessedPoseSequence = nil
         framingAssessment = .waiting
         stanceAssessment = .waiting
         stanceGate.reset()
@@ -146,49 +163,96 @@ final class CameraCaptureController: ObservableObject {
             }
         }
 
-        // Vision pose is already computed on the camera output queue. Polling
-        // the latest completed frame at 10 Hz adds no additional Vision work
-        // and keeps the 3D body scene responsive without touching evidence.
+        // Vision pose is already computed on the camera output queue.
+        // Polling is intentionally faster than the detector, so only process a
+        // pose when its session/sequence identity changes. Re-processing the
+        // same frame would inflate coaching samples and repeatedly reset the
+        // stance gate because device timestamps are identical.
         poseTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 guard let self else { return }
                 let nextPose = await self.pipeline.livePoseFrame()
                 guard !Task.isCancelled else { return }
-                let framing =
-                    CameraFramingAssessment.evaluate(nextPose)
-                self.framingAssessment = framing
-                self.stanceAssessment = self.stanceGate.update(
-                    frame: nextPose,
-                    framing: framing
-                )
 
-                if let nextPose,
-                   let startedAt = self.indoCoachStartedAt {
-                    let elapsed = max(
-                        0,
-                        Date().timeIntervalSince(startedAt)
-                    )
-                    self.indoCoach.ingest(
-                        frame: nextPose,
-                        elapsedSeconds: elapsed
-                    )
-                    self.latestIndoPrimitive =
-                        self.indoPrimitiveDetector.ingest(
+                let now = Date()
+                let isNewPose: Bool = {
+                    guard let nextPose else {
+                        return false
+                    }
+                    return nextPose.sessionID
+                            != self.lastProcessedPoseSessionID
+                        || nextPose.sequence
+                            != self.lastProcessedPoseSequence
+                }()
+
+                if isNewPose,
+                   let nextPose {
+                    self.lastProcessedPoseSessionID =
+                        nextPose.sessionID
+                    self.lastProcessedPoseSequence =
+                        nextPose.sequence
+
+                    let framing =
+                        CameraFramingAssessment.evaluate(nextPose)
+                    self.framingAssessment = framing
+                    self.stanceAssessment =
+                        self.stanceGate.update(
                             frame: nextPose,
-                            protocolBlockID:
-                                IndoBoardProductProtocol
-                                    .activeBlock(
-                                        at: elapsed
-                                    )?.id
+                            framing: framing
                         )
+
+                    if let startedAt =
+                            self.indoCoachStartedAt {
+                        let elapsed = max(
+                            0,
+                            now.timeIntervalSince(startedAt)
+                        )
+                        self.indoCoach.ingest(
+                            frame: nextPose,
+                            elapsedSeconds: elapsed
+                        )
+                        self.latestIndoPrimitive =
+                            self.indoPrimitiveDetector.ingest(
+                                frame: nextPose,
+                                protocolBlockID:
+                                    IndoBoardProductProtocol
+                                        .activeBlock(
+                                            at: elapsed
+                                        )?.id
+                            )
+                    }
+
+                    self.latestPoseFrame = nextPose
+                    self.latestPoseReceivedAt = now
+
+                    if let boardState =
+                            nextPose.indoBoardBalanceState {
+                        self.latestIndoBoardState =
+                            boardState
+                        self.latestIndoBoardStateReceivedAt =
+                            now
+                    }
                 }
 
-                if nextPose?.sessionID != self.latestPoseFrame?.sessionID
-                    || nextPose?.sequence != self.latestPoseFrame?.sequence {
-                    self.latestPoseFrame = nextPose
-                    self.latestPoseReceivedAt =
-                        nextPose == nil ? nil : Date()
+                if let receivedAt =
+                        self.latestPoseReceivedAt,
+                   now.timeIntervalSince(receivedAt)
+                        > Self.livePoseStaleSeconds {
+                    self.latestPoseFrame = nil
+                    self.latestPoseReceivedAt = nil
+                    self.framingAssessment = .waiting
+                    self.stanceAssessment = .waiting
+                    self.stanceGate.reset()
                 }
+
+                if let receivedAt =
+                        self.latestIndoBoardStateReceivedAt,
+                   now.timeIntervalSince(receivedAt)
+                        > Self.liveBoardStaleSeconds {
+                    self.latestIndoBoardState = nil
+                    self.latestIndoBoardStateReceivedAt = nil
+                }
+
                 try? await Task.sleep(for: .milliseconds(100))
             }
         }
@@ -230,6 +294,8 @@ final class CameraCaptureController: ObservableObject {
         indoCoachReport = nil
         indoCoachIntervention = nil
         latestIndoPrimitive = nil
+        latestIndoBoardState = nil
+        latestIndoBoardStateReceivedAt = nil
         indoCoach.reset()
         indoPrimitiveDetector.reset()
     }
