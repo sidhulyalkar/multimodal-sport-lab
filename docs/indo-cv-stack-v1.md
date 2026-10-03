@@ -246,3 +246,27 @@ This creates a deliberate data flywheel:
 5. Only after qualification does the app replace QR evidence with model-estimated equipment geometry.
 
 QR teacher labels remain image-space supervision. They do not convert a session into calibrated biomechanics ground truth.
+
+## Direct QR-to-markerless evaluation
+
+The first-party three-marker path measures roller center rather than physical roller-axis endpoints, so MotionOS also provides a runtime-contract evaluator that does not invent missing geometry:
+
+    motionos indo-evaluate-runtime-equipment-model \
+      fiducial-teacher-labels.json \
+      markerless-runtime-predictions.json \
+      generated/runtime-equipment-evaluation.json
+
+This scores the exact quantities the product consumes:
+
+- deck left/right keypoint error
+- deck endpoint mean error
+- deck angle error
+- roller center error
+- roller position-along-reference-deck error
+- center-zone agreement
+- edge-zone agreement
+- prediction coverage of trusted reference frames
+
+Roller position is projected onto the reference deck axis during evaluation. This prevents a detector from hiding roller error by shifting its predicted deck and roller together.
+
+Trusted references are limited to fiducial_teacher, human_reviewed, or human_corrected observations. Model proposals cannot silently become their own evaluation truth.
