@@ -186,6 +186,60 @@ final class IndoBoardEquipmentStateTests: XCTestCase {
         )
     }
 
+    func testBodyFrameSeparatesTrackingFromCoachingEquipment() {
+        let payload: [String: JSONValue] = [
+            "joints_root_relative_m": .object([
+                "root": .array([.number(0), .number(0), .number(0)]),
+                "leftHip": .array([.number(-0.1), .number(0), .number(0)]),
+                "rightHip": .array([.number(0.1), .number(0), .number(0)]),
+                "leftKnee": .array([.number(-0.1), .number(-0.3), .number(0)]),
+                "rightKnee": .array([.number(0.1), .number(-0.3), .number(0)]),
+                "leftFoot": .array([.number(-0.1), .number(-0.6), .number(0)]),
+                "rightFoot": .array([.number(0.1), .number(-0.6), .number(0)]),
+            ]),
+            "joint_parents": .object([
+                "root": .null,
+                "leftHip": .string("root"),
+                "rightHip": .string("root"),
+                "leftKnee": .string("leftHip"),
+                "rightKnee": .string("rightHip"),
+                "leftFoot": .string("leftKnee"),
+                "rightFoot": .string("rightKnee"),
+            ]),
+            "indo_board_tracking_equipment": .object([
+                "model_id": .string("tracking-only-model"),
+                "deck": .object([
+                    "left_end": .array([.number(0.2), .number(0.7)]),
+                    "right_end": .array([.number(0.8), .number(0.7)]),
+                    "confidence": .number(0.91),
+                    "provenance": .string("model_estimated"),
+                ]),
+                "roller": .object([
+                    "center": .array([.number(0.56), .number(0.7)]),
+                    "confidence": .number(0.89),
+                    "provenance": .string("model_estimated"),
+                ]),
+            ]),
+        ]
+
+        let frame = BodyMovementFrameParser.parseVisionPose(
+            payload: payload,
+            sessionID: "tracking-only",
+            sequence: 12,
+            deviceTimeNS: 1_200_000_000
+        )
+
+        XCTAssertNil(frame?.indoBoardEquipment)
+        XCTAssertNil(frame?.indoBoardBalanceState)
+        XCTAssertEqual(
+            frame?.indoBoardTrackingEquipment?.modelID,
+            "tracking-only-model"
+        )
+        XCTAssertNotNil(
+            frame?.indoBoardTrackingBalanceState
+        )
+    }
+
     func testEquipmentPayloadInheritsCameraFrameTimestamp() {
         let payload: [String: JSONValue] = [
             "joints_root_relative_m": .object([
