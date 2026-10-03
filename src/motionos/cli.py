@@ -43,6 +43,55 @@ from .experiments import (
     verify_experiment_manifest,
     verify_grouped_split,
 )
+from .indo_annotations import (
+    build_annotation_queue,
+    export_equipment_observations,
+)
+from .indo_board_state import (
+    analyze_board_observations,
+    load_board_observations,
+)
+from .indo_equipment_eval import (
+    evaluate_equipment_predictions,
+)
+from .indo_fiducial_teacher import (
+    extract_fiducial_teacher_labels,
+)
+from .indo_knowledge import (
+    build_session_learning_targets,
+    classify_observable_skills,
+    cold_start_plan,
+    generate_coaching_suggestions,
+    load_indo_skill_taxonomy,
+)
+from .indo_markerless_dataset import (
+    build_markerless_dataset_index,
+    verify_markerless_dataset_index,
+)
+from .indo_model_qualification import (
+    build_equipment_model_qualification_registry,
+)
+from .indo_pose_metrics import analyze_indo_camera_session
+from .indo_public_corpus import (
+    build_indo_video_knowledge_base,
+    discover_indo_youtube,
+    enrich_public_video_urls_with_ytdlp,
+    merge_public_video_specs,
+)
+from .indo_runtime_equipment_eval import (
+    evaluate_runtime_equipment_predictions,
+)
+from .indo_session_report import (
+    build_indo_session_report,
+    load_json_object,
+    write_indo_session_report,
+)
+from .indo_shadow_eval import (
+    summarize_shadow_equipment_evaluation,
+)
+from .indo_shadow_gate import (
+    assess_markerless_shadow_gate,
+)
 from .insole import (
     import_opengo_text_export,
     write_p2_capture_receipt,
@@ -411,6 +460,205 @@ def _parser() -> argparse.ArgumentParser:
     )
     public_video.add_argument("spec")
     public_video.add_argument("output")
+
+    indo_discover = sub.add_parser(
+        "discover-indo-youtube",
+        help="discover Indo Board videos through the official YouTube Data API",
+    )
+    indo_discover.add_argument("queries")
+    indo_discover.add_argument("output")
+
+    indo_enrich = sub.add_parser(
+        "enrich-indo-video-urls",
+        help="extract metadata only for an explicit list of public video URLs",
+    )
+    indo_enrich.add_argument("urls")
+    indo_enrich.add_argument("output")
+
+    indo_merge = sub.add_parser(
+        "merge-indo-video-specs",
+        help="merge and deduplicate Indo Board public-video discovery specs",
+    )
+    indo_merge.add_argument("inputs", nargs="+")
+    indo_merge.add_argument("output")
+
+    indo_kb = sub.add_parser(
+        "build-indo-video-kb",
+        help="build a weak-label retrieval index from an Indo video catalog",
+    )
+    indo_kb.add_argument("catalog")
+    indo_kb.add_argument("output")
+
+    indo_observability = sub.add_parser(
+        "indo-skill-observability",
+        help="classify which INDO BOARD skills are measurable with available channels",
+    )
+    indo_observability.add_argument("taxonomy")
+    indo_observability.add_argument(
+        "--channels",
+        type=_channel_keys,
+        required=True,
+        help="comma-separated observation channels available to the session",
+    )
+
+    indo_cold_start = sub.add_parser(
+        "indo-cold-start-plan",
+        help="emit the first-session INDO BOARD protocol supported by available channels",
+    )
+    indo_cold_start.add_argument("taxonomy")
+    indo_cold_start.add_argument(
+        "--channels",
+        type=_channel_keys,
+        required=True,
+    )
+
+    indo_coach = sub.add_parser(
+        "indo-coach",
+        help="apply conservative INDO BOARD coaching rules to session metrics",
+    )
+    indo_coach.add_argument("taxonomy")
+    indo_coach.add_argument("metrics")
+    indo_coach.add_argument("--max-suggestions", type=int, default=2)
+
+    indo_body_metrics = sub.add_parser(
+        "indo-body-metrics",
+        help="derive body-only INDO BOARD posture metrics from camera pose evidence",
+    )
+    indo_body_metrics.add_argument("session")
+
+    indo_board_state = sub.add_parser(
+        "indo-board-state",
+        help="derive deck/roller balance state and recovery metrics",
+    )
+    indo_board_state.add_argument("observations")
+
+    indo_annotation_queue = sub.add_parser(
+        "indo-annotation-queue",
+        help="build creator-grouped INDO BOARD deck/roller annotation tasks",
+    )
+    indo_annotation_queue.add_argument("catalog")
+    indo_annotation_queue.add_argument("taxonomy")
+    indo_annotation_queue.add_argument("output")
+    indo_annotation_queue.add_argument("--max-sources", type=int)
+
+    indo_equipment_export = sub.add_parser(
+        "indo-export-equipment-labels",
+        help="export human-reviewed deck/roller labels into the runtime equipment contract",
+    )
+    indo_equipment_export.add_argument("annotations")
+    indo_equipment_export.add_argument("output")
+    indo_equipment_export.add_argument(
+        "--allow-model-proposals",
+        action="store_true",
+        help="include model-proposed labels instead of requiring human review",
+    )
+
+    indo_equipment_eval = sub.add_parser(
+        "indo-evaluate-equipment-model",
+        help="evaluate deck/roller predictions against human-reviewed labels",
+    )
+    indo_equipment_eval.add_argument("reference")
+    indo_equipment_eval.add_argument("predictions")
+    indo_equipment_eval.add_argument("output")
+
+    indo_fiducial_teacher = sub.add_parser(
+        "indo-extract-fiducial-teacher-labels",
+        help="extract QR-derived deck/roller teacher labels from a camera JSONL journal",
+    )
+    indo_fiducial_teacher.add_argument("camera_journal")
+    indo_fiducial_teacher.add_argument("output")
+
+    indo_runtime_eval = sub.add_parser(
+        "indo-evaluate-runtime-equipment-model",
+        help="evaluate markerless runtime geometry against QR or reviewed runtime references",
+    )
+    indo_runtime_eval.add_argument("reference")
+    indo_runtime_eval.add_argument("predictions")
+    indo_runtime_eval.add_argument("output")
+
+    indo_shadow_eval = sub.add_parser(
+        "indo-summarize-shadow-equipment-eval",
+        help="aggregate on-device QR-versus-markerless shadow comparisons from a camera journal",
+    )
+    indo_shadow_eval.add_argument("camera_journal")
+    indo_shadow_eval.add_argument("output")
+
+    indo_shadow_gate = sub.add_parser(
+        "indo-assess-markerless-shadow-gate",
+        help="evaluate explicit markerless engineering thresholds without authorizing runtime use",
+    )
+    indo_shadow_gate.add_argument("shadow_evaluation")
+    indo_shadow_gate.add_argument("spec")
+    indo_shadow_gate.add_argument("output")
+
+    indo_markerless_index = sub.add_parser(
+        "indo-build-markerless-dataset-index",
+        help="build a hash-bound frame index for QR/human teacher labels and source videos",
+    )
+    indo_markerless_index.add_argument("spec")
+    indo_markerless_index.add_argument("output")
+
+    indo_markerless_verify = sub.add_parser(
+        "indo-verify-markerless-dataset-index",
+        help="recheck markerless dataset source hashes, sample identities, and acquisition groups",
+    )
+    indo_markerless_verify.add_argument("index")
+
+    indo_model_qualification = sub.add_parser(
+        "indo-build-equipment-model-qualification",
+        help="build an explicit runtime authorization registry from an equipment evaluation report",
+    )
+    indo_model_qualification.add_argument("evaluation")
+    indo_model_qualification.add_argument("output")
+    indo_model_qualification.add_argument(
+        "--model-id",
+        required=True,
+    )
+    indo_model_qualification.add_argument(
+        "--status",
+        choices=(
+            "unqualified",
+            "evaluation_only",
+            "qualified_for_beta_tracking",
+            "qualified_for_beta_coaching",
+        ),
+        default="evaluation_only",
+    )
+    indo_model_qualification.add_argument(
+        "--evaluation-dataset-id",
+    )
+    indo_model_qualification.add_argument(
+        "--authorization-note",
+    )
+
+    indo_report = sub.add_parser(
+        "indo-session-report",
+        help="merge body/board evidence into a conservative INDO BOARD coaching report",
+    )
+    indo_report.add_argument("session_id")
+    indo_report.add_argument("taxonomy")
+    indo_report.add_argument("output")
+    indo_report.add_argument("--body-metrics")
+    indo_report.add_argument("--board-observations")
+    indo_report.add_argument("--profile")
+
+    indo_next = sub.add_parser(
+        "indo-next-skills",
+        help="choose measurable next INDO BOARD skills from completed prerequisites",
+    )
+    indo_next.add_argument("taxonomy")
+    indo_next.add_argument(
+        "--completed",
+        type=_channel_keys,
+        default=(),
+        help="comma-separated completed skill ids",
+    )
+    indo_next.add_argument(
+        "--channels",
+        type=_channel_keys,
+        required=True,
+    )
+    indo_next.add_argument("--limit", type=int, default=4)
 
     public_export = sub.add_parser(
         "validate-public-export",
@@ -883,6 +1131,400 @@ def main(argv: list[str] | None = None) -> int:
                 sort_keys=True,
             )
         )
+        return 0
+
+    if args.command == "discover-indo-youtube":
+        payload = discover_indo_youtube(args.queries, args.output)
+        print(
+            json.dumps(
+                {
+                    "schema_version": payload["schema_version"],
+                    "unique_video_count": len(payload["records"]),
+                    "output": args.output,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    if args.command == "enrich-indo-video-urls":
+        payload = enrich_public_video_urls_with_ytdlp(
+            args.urls,
+            args.output,
+        )
+        print(
+            json.dumps(
+                {
+                    "schema_version": payload["schema_version"],
+                    "record_count": len(payload["records"]),
+                    "failure_count": len(payload["failures"]),
+                    "output": args.output,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    if args.command == "merge-indo-video-specs":
+        payload = merge_public_video_specs(args.inputs, args.output)
+        print(
+            json.dumps(
+                {
+                    "schema_version": payload["schema_version"],
+                    "record_count": len(payload["records"]),
+                    "output": args.output,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    if args.command == "build-indo-video-kb":
+        payload = build_indo_video_knowledge_base(
+            args.catalog,
+            args.output,
+        )
+        print(
+            json.dumps(
+                {
+                    "schema_version": payload["schema_version"],
+                    "source_count": payload["source_count"],
+                    "topic_count": len(payload["topics"]),
+                    "output": args.output,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    if args.command == "indo-skill-observability":
+        taxonomy = load_indo_skill_taxonomy(args.taxonomy)
+        result = classify_observable_skills(
+            taxonomy,
+            set(args.channels),
+        )
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+
+    if args.command == "indo-cold-start-plan":
+        taxonomy = load_indo_skill_taxonomy(args.taxonomy)
+        result = cold_start_plan(
+            taxonomy,
+            available_channels=set(args.channels),
+        )
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+
+    if args.command == "indo-coach":
+        taxonomy = load_indo_skill_taxonomy(args.taxonomy)
+        with open(args.metrics, encoding="utf-8") as handle:
+            payload = json.load(handle)
+        if not isinstance(payload, dict):
+            raise TypeError("metrics input must be a JSON object")
+        metrics = payload.get("metrics", payload)
+        confidences = payload.get("confidence", {})
+        if not isinstance(metrics, dict):
+            raise TypeError("metrics must be a JSON object")
+        if not isinstance(confidences, dict):
+            raise TypeError("confidence must be a JSON object")
+        result = generate_coaching_suggestions(
+            taxonomy,
+            metrics,
+            metric_confidence=confidences,
+            max_suggestions=args.max_suggestions,
+        )
+        print(
+            json.dumps(
+                [item.to_dict() for item in result],
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    if args.command == "indo-body-metrics":
+        result = analyze_indo_camera_session(args.session)
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+
+    if args.command == "indo-board-state":
+        payload = load_board_observations(args.observations)
+        result = analyze_board_observations(payload)
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+
+    if args.command == "indo-annotation-queue":
+        payload = build_annotation_queue(
+            args.catalog,
+            args.taxonomy,
+            args.output,
+            max_sources=args.max_sources,
+        )
+        print(
+            json.dumps(
+                {
+                    "schema_version": payload["schema_version"],
+                    "task_count": payload["task_count"],
+                    "split_counts": payload["split_counts"],
+                    "output": args.output,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    if args.command == "indo-export-equipment-labels":
+        payload = export_equipment_observations(
+            args.annotations,
+            args.output,
+            require_human_review=not args.allow_model_proposals,
+        )
+        print(
+            json.dumps(
+                {
+                    "schema_version": payload["schema_version"],
+                    "observation_count":
+                        payload["observation_count"],
+                    "skipped_unreviewed_count":
+                        payload["skipped_unreviewed_count"],
+                    "output": args.output,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    if args.command == "indo-evaluate-equipment-model":
+        payload = evaluate_equipment_predictions(
+            args.reference,
+            args.predictions,
+            args.output,
+        )
+        print(
+            json.dumps(
+                {
+                    "schema_version": payload["schema_version"],
+                    "reference_count": payload["reference_count"],
+                    "matched_count": payload["matched_count"],
+                    "reference_coverage_fraction":
+                        payload["reference_coverage_fraction"],
+                    "metrics": payload["metrics"],
+                    "output": args.output,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    if args.command == "indo-extract-fiducial-teacher-labels":
+        payload = extract_fiducial_teacher_labels(
+            args.camera_journal,
+            args.output,
+        )
+        print(
+            json.dumps(
+                {
+                    "schema_version": payload["schema_version"],
+                    "pose_event_count": payload["pose_event_count"],
+                    "observation_count": payload["observation_count"],
+                    "skipped_non_fiducial_count":
+                        payload["skipped_non_fiducial_count"],
+                    "output": args.output,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    if args.command == "indo-evaluate-runtime-equipment-model":
+        payload = evaluate_runtime_equipment_predictions(
+            args.reference,
+            args.predictions,
+            args.output,
+        )
+        print(
+            json.dumps(
+                {
+                    "schema_version": payload["schema_version"],
+                    "reference_count": payload["reference_count"],
+                    "prediction_count": payload["prediction_count"],
+                    "matched_count": payload["matched_count"],
+                    "reference_coverage_fraction":
+                        payload["reference_coverage_fraction"],
+                    "metrics": payload["metrics"],
+                    "output": args.output,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    if args.command == "indo-summarize-shadow-equipment-eval":
+        payload = summarize_shadow_equipment_evaluation(
+            args.camera_journal,
+            args.output,
+        )
+        print(
+            json.dumps(
+                {
+                    "schema_version": payload["schema_version"],
+                    "pose_event_count": payload["pose_event_count"],
+                    "routing_event_count": payload["routing_event_count"],
+                    "comparison_count": payload["comparison_count"],
+                    "groups": payload["groups"],
+                    "detector_execution_groups":
+                        payload["detector_execution_groups"],
+                    "output": args.output,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    if args.command == "indo-assess-markerless-shadow-gate":
+        payload = assess_markerless_shadow_gate(
+            args.shadow_evaluation,
+            args.spec,
+            args.output,
+        )
+        print(
+            json.dumps(
+                {
+                    "schema_version": payload["schema_version"],
+                    "model_id": payload["model_id"],
+                    "candidate_detector_id":
+                        payload["candidate_detector_id"],
+                    "passed": payload["passed"],
+                    "authorization_effect":
+                        payload["authorization_effect"],
+                    "criteria": payload["criteria"],
+                    "output": args.output,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    if args.command == "indo-build-markerless-dataset-index":
+        payload = build_markerless_dataset_index(
+            args.spec,
+            args.output,
+        )
+        print(
+            json.dumps(
+                {
+                    "schema_version": payload["schema_version"],
+                    "sample_count": payload["sample_count"],
+                    "source_count": payload["source_count"],
+                    "output": args.output,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    if args.command == "indo-verify-markerless-dataset-index":
+        payload = verify_markerless_dataset_index(
+            args.index,
+        )
+        print(
+            json.dumps(
+                payload,
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    if args.command == "indo-build-equipment-model-qualification":
+        payload = build_equipment_model_qualification_registry(
+            args.evaluation,
+            args.output,
+            model_id=args.model_id,
+            status=args.status,
+            evaluation_dataset_id=args.evaluation_dataset_id,
+            authorization_note=args.authorization_note,
+        )
+        qualification = payload["qualifications"][0]
+        print(
+            json.dumps(
+                {
+                    "schema_version": payload["schema_version"],
+                    "model_id": qualification["model_id"],
+                    "status": qualification["status"],
+                    "evaluation_dataset_id":
+                        qualification["evaluation_dataset_id"],
+                    "evaluation_report_sha256":
+                        qualification["evaluation_report_sha256"],
+                    "output": args.output,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    if args.command == "indo-session-report":
+        body = (
+            load_json_object(args.body_metrics)
+            if args.body_metrics
+            else None
+        )
+        board = (
+            load_json_object(args.board_observations)
+            if args.board_observations
+            else None
+        )
+        profile = (
+            load_json_object(args.profile)
+            if args.profile
+            else None
+        )
+        report = build_indo_session_report(
+            session_id=args.session_id,
+            taxonomy_path=args.taxonomy,
+            body_metrics=body,
+            board_observations=board,
+            profile=profile,
+        )
+        write_indo_session_report(args.output, report)
+        print(
+            json.dumps(
+                {
+                    "schema_version": report["schema_version"],
+                    "session_id": report["session_id"],
+                    "primary_rule": report[
+                        "primary_coaching"
+                    ]["rule_id"],
+                    "output": args.output,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    if args.command == "indo-next-skills":
+        taxonomy = load_indo_skill_taxonomy(args.taxonomy)
+        result = build_session_learning_targets(
+            taxonomy,
+            completed_skill_ids=set(args.completed),
+            available_channels=set(args.channels),
+            limit=args.limit,
+        )
+        print(json.dumps(result, indent=2, sort_keys=True))
         return 0
 
     if args.command == "validate-public-export":

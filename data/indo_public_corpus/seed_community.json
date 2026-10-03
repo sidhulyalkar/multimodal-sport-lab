@@ -1,0 +1,244 @@
+{
+  "schema_version": "motionos.indo-video-discovery.v1",
+  "purpose": "Seed non-authoritative community references for INDO BOARD movement vocabulary and training hypotheses.",
+  "records": [
+    {
+      "platform": "other",
+      "source_id": "forum/newschoolers-79439",
+      "source_url": "https://www.newschoolers.com/forum/thread/79439/indo-board-",
+      "creator": null,
+      "title": "indo board?",
+      "rights_status": "platform_only",
+      "retention_policy": "derived_only",
+      "weak_labels": [
+        "indo-board",
+        "community",
+        "ski-snowboard-transfer",
+        "tricks",
+        "general-balance"
+      ],
+      "discovery": {
+        "method": "manual_web_research_seed",
+        "evidence_class": "community_practice"
+      }
+    },
+    {
+      "platform": "other",
+      "source_id": "forum/surfing-waves-26396",
+      "source_url": "https://surfing-waves.com/forum/viewtopic.php?f=9&t=26396",
+      "creator": "SurfShape",
+      "title": "Indo Boarding to Improve Your Surfing",
+      "rights_status": "platform_only",
+      "retention_policy": "derived_only",
+      "weak_labels": [
+        "indo-board",
+        "community",
+        "section-balancing",
+        "barrel-stance",
+        "70-30-hold",
+        "70-30-squat",
+        "surf-transfer"
+      ],
+      "discovery": {
+        "method": "manual_web_research_seed",
+        "evidence_class": "community_practice"
+      }
+    },
+    {
+      "platform": "other",
+      "source_id": "forum/windsurfing33-92780",
+      "source_url": "https://www.windsurfing33.com/forum/viewtopic.php?f=23&t=92780",
+      "creator": null,
+      "title": "Indo board: qu'est-ce qu'on y gagne?",
+      "rights_status": "platform_only",
+      "retention_policy": "derived_only",
+      "weak_labels": [
+        "indo-board",
+        "community",
+        "weight-transfer",
+        "foot-control",
+        "ankle-control",
+        "calf-control",
+        "general-balance"
+      ],
+      "discovery": {
+        "method": "manual_web_research_seed",
+        "evidence_class": "community_practice"
+      }
+    },
+    {
+      "platform": "reddit",
+      "source_id": "reddit/onewheel/10ztf5d",
+      "source_url": "https://www.reddit.com/r/onewheel/comments/10ztf5d",
+      "creator": null,
+      "title": "balance board for one wheeling?",
+      "rights_status": "platform_only",
+      "retention_policy": "derived_only",
+      "weak_labels": [
+        "indo-board",
+        "community",
+        "ankle-mobility",
+        "foot-mobility",
+        "trick-transfer",
+        "transfer-limitations"
+      ],
+      "discovery": {
+        "method": "manual_web_research_seed",
+        "evidence_class": "community_practice"
+      }
+    },
+    {
+      "platform": "reddit",
+      "source_id": "reddit/snowboarding/12m4w44",
+      "source_url": "https://www.reddit.com/r/snowboarding/comments/12m4w44/",
+      "creator": null,
+      "title": "Off-season stability practice discussion",
+      "rights_status": "platform_only",
+      "retention_policy": "derived_only",
+      "weak_labels": [
+        "indo-board",
+        "community",
+        "deep-squat",
+        "snowboard-transfer",
+        "off-season"
+      ],
+      "discovery": {
+        "method": "manual_web_research_seed",
+        "evidence_class": "community_practice",
+        "researched_at": "2026-10-02"
+      }
+    },
+    {
+      "platform": "reddit",
+      "source_id": "reddit/snowboarding/1gc96ed",
+      "source_url": "https://www.reddit.com/r/snowboarding/comments/1gc96ed/the_balance_board_can_they_really_help_improve/",
+      "creator": null,
+      "title": "The balance board: can they really help improve snowboarding technique?",
+      "rights_status": "platform_only",
+      "retention_policy": "derived_only",
+      "weak_labels": [
+        "balance-board",
+        "community",
+        "center-hold",
+        "edge-hold",
+        "single-leg",
+        "squat",
+        "switch",
+        "ankle-control",
+        "landing-recovery"
+      ],
+      "discovery": {
+        "method": "manual_web_research_seed",
+        "evidence_class": "community_practice"
+      }
+    },
+    {
+      "platform": "reddit",
+      "source_id": "reddit/snowboardingnoobs/1qkw2zf",
+      "source_url": "https://www.reddit.com/r/snowboardingnoobs/comments/1qkw2zf/a_balance_board_is_a_great_off_mountain_exercise/",
+      "creator": null,
+      "title": "A balance board is a great off mountain exercise",
+      "rights_status": "platform_only",
+      "retention_policy": "derived_only",
+      "weak_labels": [
+        "balance-board",
+        "community",
+        "squat",
+        "weight-distribution",
+        "ankle-control",
+        "boots"
+      ],
+      "discovery": {
+        "method": "manual_web_research_seed",
+        "evidence_class": "community_practice"
+      }
+    },
+    {
+      "platform": "reddit",
+      "source_id": "reddit/sup/1rlori6",
+      "source_url": "https://www.reddit.com/r/Sup/comments/1rlori6/balance_board/",
+      "creator": null,
+      "title": "Balance board? SUP training discussion",
+      "rights_status": "platform_only",
+      "retention_policy": "derived_only",
+      "weak_labels": [
+        "indo-board",
+        "community",
+        "general-balance",
+        "rough-water-transfer",
+        "workout",
+        "transfer-uncertainty"
+      ],
+      "discovery": {
+        "method": "manual_web_research_seed",
+        "evidence_class": "community_practice",
+        "researched_at": "2026-10-02"
+      }
+    },
+    {
+      "platform": "reddit",
+      "source_id": "reddit/surfing/188qeg2",
+      "source_url": "https://www.reddit.com/r/surfing/comments/188qeg2",
+      "creator": null,
+      "title": "Advice? Learning to ride a short board",
+      "rights_status": "platform_only",
+      "retention_policy": "derived_only",
+      "weak_labels": [
+        "indo-board",
+        "community",
+        "hip-led-control",
+        "upright-posture",
+        "surf-transfer"
+      ],
+      "discovery": {
+        "method": "manual_web_research_seed",
+        "evidence_class": "community_practice"
+      }
+    },
+    {
+      "platform": "reddit",
+      "source_id": "reddit/surfing/1raxq42",
+      "source_url": "https://www.reddit.com/r/surfing/comments/1raxq42/balance_board_recommendations/",
+      "creator": null,
+      "title": "Balance board recommendations discussion",
+      "rights_status": "platform_only",
+      "retention_policy": "derived_only",
+      "weak_labels": [
+        "balance-board",
+        "community",
+        "equipment-variation",
+        "diy-board",
+        "transfer-uncertainty"
+      ],
+      "discovery": {
+        "method": "manual_web_research_seed",
+        "evidence_class": "community_practice",
+        "researched_at": "2026-10-02"
+      }
+    },
+    {
+      "platform": "reddit",
+      "source_id": "reddit/surfing/mz0984",
+      "source_url": "https://www.reddit.com/r/surfing/comments/mz0984",
+      "creator": null,
+      "title": "Indo boards?",
+      "rights_status": "platform_only",
+      "retention_policy": "derived_only",
+      "weak_labels": [
+        "indo-board",
+        "community",
+        "squat",
+        "cross-step",
+        "hang-ten-hold",
+        "ski-stance",
+        "drop-knee",
+        "surf-transfer"
+      ],
+      "discovery": {
+        "method": "manual_web_research_seed",
+        "evidence_class": "community_practice"
+      }
+    }
+  ],
+  "claim_boundary": "Community reports are hypothesis sources and movement-vocabulary seeds, not verified coaching ground truth or causal evidence."
+}
