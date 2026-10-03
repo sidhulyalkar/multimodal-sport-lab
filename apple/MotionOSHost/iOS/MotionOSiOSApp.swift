@@ -125,6 +125,19 @@ struct MotionOSiOSApp: App {
                         ).rounded()
                     )
                     : nil,
+            boardTrackingProvenance:
+                cameraController
+                    .latestIndoBoardState?
+                    .provenance
+                    .rawValue,
+            boardCoachingEvidenceReady:
+                cameraController
+                    .latestIndoBoardCoachingState != nil,
+            boardCoachingProvenance:
+                cameraController
+                    .latestIndoBoardCoachingState?
+                    .provenance
+                    .rawValue,
             coachHeadline: coach?.headline,
             coachTip: coach?.tip,
             coachDrill: coach?.drill,
