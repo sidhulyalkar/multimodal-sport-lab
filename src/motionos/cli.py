@@ -64,6 +64,9 @@ from .indo_knowledge import (
     generate_coaching_suggestions,
     load_indo_skill_taxonomy,
 )
+from .indo_markerless_dataset import (
+    build_markerless_dataset_index,
+)
 from .indo_model_qualification import (
     build_equipment_model_qualification_registry,
 )
@@ -575,6 +578,13 @@ def _parser() -> argparse.ArgumentParser:
     )
     indo_shadow_eval.add_argument("camera_journal")
     indo_shadow_eval.add_argument("output")
+
+    indo_markerless_index = sub.add_parser(
+        "indo-build-markerless-dataset-index",
+        help="build a hash-bound frame index for QR/human teacher labels and source videos",
+    )
+    indo_markerless_index.add_argument("spec")
+    indo_markerless_index.add_argument("output")
 
     indo_model_qualification = sub.add_parser(
         "indo-build-equipment-model-qualification",
@@ -1355,6 +1365,25 @@ def main(argv: list[str] | None = None) -> int:
                     "groups": payload["groups"],
                     "detector_execution_groups":
                         payload["detector_execution_groups"],
+                    "output": args.output,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    if args.command == "indo-build-markerless-dataset-index":
+        payload = build_markerless_dataset_index(
+            args.spec,
+            args.output,
+        )
+        print(
+            json.dumps(
+                {
+                    "schema_version": payload["schema_version"],
+                    "sample_count": payload["sample_count"],
+                    "source_count": payload["source_count"],
                     "output": args.output,
                 },
                 indent=2,
