@@ -89,6 +89,9 @@ from .indo_session_report import (
 from .indo_shadow_eval import (
     summarize_shadow_equipment_evaluation,
 )
+from .indo_shadow_gate import (
+    assess_markerless_shadow_gate,
+)
 from .insole import (
     import_opengo_text_export,
     write_p2_capture_receipt,
@@ -579,6 +582,14 @@ def _parser() -> argparse.ArgumentParser:
     )
     indo_shadow_eval.add_argument("camera_journal")
     indo_shadow_eval.add_argument("output")
+
+    indo_shadow_gate = sub.add_parser(
+        "indo-assess-markerless-shadow-gate",
+        help="evaluate explicit markerless engineering thresholds without authorizing runtime use",
+    )
+    indo_shadow_gate.add_argument("shadow_evaluation")
+    indo_shadow_gate.add_argument("spec")
+    indo_shadow_gate.add_argument("output")
 
     indo_markerless_index = sub.add_parser(
         "indo-build-markerless-dataset-index",
@@ -1372,6 +1383,31 @@ def main(argv: list[str] | None = None) -> int:
                     "groups": payload["groups"],
                     "detector_execution_groups":
                         payload["detector_execution_groups"],
+                    "output": args.output,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    if args.command == "indo-assess-markerless-shadow-gate":
+        payload = assess_markerless_shadow_gate(
+            args.shadow_evaluation,
+            args.spec,
+            args.output,
+        )
+        print(
+            json.dumps(
+                {
+                    "schema_version": payload["schema_version"],
+                    "model_id": payload["model_id"],
+                    "candidate_detector_id":
+                        payload["candidate_detector_id"],
+                    "passed": payload["passed"],
+                    "authorization_effect":
+                        payload["authorization_effect"],
+                    "criteria": payload["criteria"],
                     "output": args.output,
                 },
                 indent=2,
