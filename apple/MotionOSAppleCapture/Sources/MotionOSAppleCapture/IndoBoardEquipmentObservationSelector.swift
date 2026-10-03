@@ -48,7 +48,8 @@ public struct IndoBoardEquipmentModelQualification:
     public let status:
         IndoBoardEquipmentModelQualificationStatus
     public let evaluationDatasetID: String?
-    public let evaluationReferenceSHA256: String?
+    public let evaluationReportSHA256: String?
+    public let authorizationNote: String?
     public let metrics: [String: Double]
     public let claimBoundary: String
 
@@ -58,8 +59,10 @@ public struct IndoBoardEquipmentModelQualification:
         case status
         case evaluationDatasetID =
             "evaluation_dataset_id"
-        case evaluationReferenceSHA256 =
-            "evaluation_reference_sha256"
+        case evaluationReportSHA256 =
+            "evaluation_report_sha256"
+        case authorizationNote =
+            "authorization_note"
         case metrics
         case claimBoundary = "claim_boundary"
     }
@@ -73,15 +76,17 @@ public struct IndoBoardEquipmentModelQualification:
         status:
             IndoBoardEquipmentModelQualificationStatus,
         evaluationDatasetID: String? = nil,
-        evaluationReferenceSHA256: String? = nil,
+        evaluationReportSHA256: String? = nil,
+        authorizationNote: String? = nil,
         metrics: [String: Double] = [:]
     ) {
         self.schemaVersion = schemaVersion
         self.modelID = modelID
         self.status = status
         self.evaluationDatasetID = evaluationDatasetID
-        self.evaluationReferenceSHA256 =
-            evaluationReferenceSHA256
+        self.evaluationReportSHA256 =
+            evaluationReportSHA256
+        self.authorizationNote = authorizationNote
         self.metrics = metrics
         self.claimBoundary = (
             "Qualification authorizes only the declared MotionOS beta "
