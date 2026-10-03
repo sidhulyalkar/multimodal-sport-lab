@@ -48,6 +48,9 @@ final class IndoBoardRemoteControlTests: XCTestCase {
             boardTrackingReady: true,
             boardTrackingConfidencePercent: 91,
             boardTrackingCoveragePercent: 73,
+            boardTrackingProvenance: "model_estimated",
+            boardCoachingEvidenceReady: false,
+            boardCoachingProvenance: nil,
             sentAtUnixSeconds: 100
         )
 
@@ -58,6 +61,13 @@ final class IndoBoardRemoteControlTests: XCTestCase {
         }
 
         XCTAssertEqual(parsed, status)
+        XCTAssertEqual(
+            parsed.boardTrackingProvenance,
+            "model_estimated"
+        )
+        XCTAssertFalse(
+            parsed.boardCoachingEvidenceReady
+        )
 
         let later = IndoBoardRemoteStatus(
             cameraPhase: status.cameraPhase,
@@ -80,6 +90,12 @@ final class IndoBoardRemoteControlTests: XCTestCase {
                 status.boardTrackingConfidencePercent,
             boardTrackingCoveragePercent:
                 status.boardTrackingCoveragePercent,
+            boardTrackingProvenance:
+                status.boardTrackingProvenance,
+            boardCoachingEvidenceReady:
+                status.boardCoachingEvidenceReady,
+            boardCoachingProvenance:
+                status.boardCoachingProvenance,
             sentAtUnixSeconds: 999
         )
 
