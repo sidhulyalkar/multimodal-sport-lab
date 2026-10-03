@@ -64,6 +64,9 @@ from .indo_knowledge import (
     generate_coaching_suggestions,
     load_indo_skill_taxonomy,
 )
+from .indo_model_qualification import (
+    build_equipment_model_qualification_registry,
+)
 from .indo_pose_metrics import analyze_indo_camera_session
 from .indo_public_corpus import (
     build_indo_video_knowledge_base,
@@ -562,6 +565,33 @@ def _parser() -> argparse.ArgumentParser:
     indo_runtime_eval.add_argument("reference")
     indo_runtime_eval.add_argument("predictions")
     indo_runtime_eval.add_argument("output")
+
+    indo_model_qualification = sub.add_parser(
+        "indo-build-equipment-model-qualification",
+        help="build an explicit runtime authorization registry from an equipment evaluation report",
+    )
+    indo_model_qualification.add_argument("evaluation")
+    indo_model_qualification.add_argument("output")
+    indo_model_qualification.add_argument(
+        "--model-id",
+        required=True,
+    )
+    indo_model_qualification.add_argument(
+        "--status",
+        choices=(
+            "unqualified",
+            "evaluation_only",
+            "qualified_for_beta_tracking",
+            "qualified_for_beta_coaching",
+        ),
+        default="evaluation_only",
+    )
+    indo_model_qualification.add_argument(
+        "--evaluation-dataset-id",
+    )
+    indo_model_qualification.add_argument(
+        "--authorization-note",
+    )
 
     indo_report = sub.add_parser(
         "indo-session-report",
@@ -1292,6 +1322,34 @@ def main(argv: list[str] | None = None) -> int:
                     "reference_coverage_fraction":
                         payload["reference_coverage_fraction"],
                     "metrics": payload["metrics"],
+                    "output": args.output,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    if args.command == "indo-build-equipment-model-qualification":
+        payload = build_equipment_model_qualification_registry(
+            args.evaluation,
+            args.output,
+            model_id=args.model_id,
+            status=args.status,
+            evaluation_dataset_id=args.evaluation_dataset_id,
+            authorization_note=args.authorization_note,
+        )
+        qualification = payload["qualifications"][0]
+        print(
+            json.dumps(
+                {
+                    "schema_version": payload["schema_version"],
+                    "model_id": qualification["model_id"],
+                    "status": qualification["status"],
+                    "evaluation_dataset_id":
+                        qualification["evaluation_dataset_id"],
+                    "evaluation_report_sha256":
+                        qualification["evaluation_report_sha256"],
                     "output": args.output,
                 },
                 indent=2,
