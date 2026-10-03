@@ -130,6 +130,50 @@ final class IndoBoardEquipmentEvidenceRouterTests:
         XCTAssertEqual(candidates.count, 1)
     }
 
+    func testQRReferenceProducesMarkerlessShadowComparison() {
+        let router =
+            IndoBoardEquipmentEvidenceRouter(
+                registry:
+                    IndoBoardEquipmentModelQualificationRegistry(
+                        qualifications: []
+                    )
+            )
+
+        let result = router.route([
+            fiducialCandidate(confidence: 0.90),
+            shiftedModelCandidate(),
+        ])
+
+        XCTAssertEqual(
+            result.audit.shadowComparisons.count,
+            1
+        )
+
+        guard let comparison =
+                result.audit.shadowComparisons.first
+        else {
+            XCTFail("Expected shadow comparison")
+            return
+        }
+
+        XCTAssertEqual(
+            comparison.referenceDetectorID,
+            "qr"
+        )
+        XCTAssertEqual(
+            comparison.candidateDetectorID,
+            "markerless-shifted"
+        )
+        XCTAssertGreaterThan(
+            comparison.rollerCenterError,
+            0
+        )
+        XCTAssertGreaterThan(
+            comparison.rollerAlongReferenceDeckAbsError,
+            0
+        )
+    }
+
     func testIncompleteCandidateIsPreservedInAudit() {
         let incomplete =
             IndoBoardEquipmentDetectionCandidate(
@@ -201,6 +245,40 @@ final class IndoBoardEquipmentEvidenceRouterTests:
                 IndoBoardFiducialEquipmentBuilder.modelID,
             provenance: .fiducialMeasured,
             confidence: confidence
+        )
+    }
+
+    private func shiftedModelCandidate()
+        -> IndoBoardEquipmentDetectionCandidate {
+        IndoBoardEquipmentDetectionCandidate(
+            observation:
+                IndoBoardEquipmentObservation(
+                    sequence: 1,
+                    deviceTimeNS: 1,
+                    deck: IndoBoardDeckObservation(
+                        polygon: [],
+                        leftEnd: .init(
+                            x: 0.22,
+                            y: 0.70
+                        ),
+                        rightEnd: .init(
+                            x: 0.82,
+                            y: 0.70
+                        ),
+                        confidence: 0.95,
+                        provenance: .modelEstimated
+                    ),
+                    roller: IndoBoardRollerObservation(
+                        center: .init(
+                            x: 0.58,
+                            y: 0.70
+                        ),
+                        confidence: 0.95,
+                        provenance: .modelEstimated
+                    ),
+                    modelID: "markerless-v1"
+                ),
+            detectorID: "markerless-shifted"
         )
     }
 
