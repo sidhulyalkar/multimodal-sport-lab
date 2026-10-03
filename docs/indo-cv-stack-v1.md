@@ -270,3 +270,31 @@ This scores the exact quantities the product consumes:
 Roller position is projected onto the reference deck axis during evaluation. This prevents a detector from hiding roller error by shifting its predicted deck and roller together.
 
 Trusted references are limited to fiducial_teacher, human_reviewed, or human_corrected observations. Model proposals cannot silently become their own evaluation truth.
+
+## Explicit model promotion receipt
+
+Detector evaluation and runtime authorization are separate operations.
+
+Build an evaluation-only registry from a completed equipment evaluation:
+
+    motionos indo-build-equipment-model-qualification \
+      runtime-equipment-evaluation.json \
+      equipment-model-qualification.json \
+      --model-id indo-equipment-v1 \
+      --status evaluation_only
+
+The registry copies evaluation metrics and records the SHA-256 of the exact evaluation report. It does not auto-promote the model.
+
+To authorize a model for beta tracking or coaching, an explicit human authorization note is required:
+
+    motionos indo-build-equipment-model-qualification \
+      runtime-equipment-evaluation.json \
+      equipment-model-qualification.json \
+      --model-id indo-equipment-v1 \
+      --status qualified_for_beta_tracking \
+      --evaluation-dataset-id indo-heldout-2026-10 \
+      --authorization-note "Approved after held-out geometry and physical beta review."
+
+Tracking authorization does not imply coaching authorization. A later coaching promotion must be explicit as well.
+
+The output schema is intentionally byte-compatible in field naming with the shared Swift markerless runtime contract, so the research pipeline can produce a registry that the app decodes without schema translation.
