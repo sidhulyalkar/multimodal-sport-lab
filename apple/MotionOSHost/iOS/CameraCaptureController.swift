@@ -278,6 +278,12 @@ final class CameraCaptureController: ObservableObject {
                             coachingState
                         self.latestIndoBoardCoachingEquipment =
                             coachingEquipment
+                    } else {
+                        // Coaching authorization is frame-local. Never keep a
+                        // prior QR/authorized-model state alive while a
+                        // tracking-only model continues to produce frames.
+                        self.latestIndoBoardCoachingState = nil
+                        self.latestIndoBoardCoachingEquipment = nil
                     }
                 }
 
@@ -288,6 +294,8 @@ final class CameraCaptureController: ObservableObject {
                     self.latestPoseFrame = nil
                     self.latestPoseReceivedAt = nil
                     self.latestVisibleIndoBoardFiducials = []
+                    self.latestIndoBoardCoachingState = nil
+                    self.latestIndoBoardCoachingEquipment = nil
                     self.framingAssessment = .waiting
                     self.stanceAssessment = .waiting
                     self.stanceGate.reset()
