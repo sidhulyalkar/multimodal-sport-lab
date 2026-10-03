@@ -69,6 +69,61 @@ public struct IndoBoardEquipmentModelQualification:
 
     public var id: String { modelID }
 
+    fileprivate var hasCompleteAuthorizationReceipt: Bool {
+        guard let datasetID = evaluationDatasetID?
+                    .trimmingCharacters(
+                        in: .whitespacesAndNewlines
+                    ),
+              !datasetID.isEmpty,
+              let reportHash = evaluationReportSHA256?
+                    .trimmingCharacters(
+                        in: .whitespacesAndNewlines
+                    ),
+              reportHash.count == 64,
+              reportHash.allSatisfy({
+                  $0.isHexDigit
+              }),
+              let note = authorizationNote?
+                    .trimmingCharacters(
+                        in: .whitespacesAndNewlines
+                    ),
+              !note.isEmpty
+        else {
+            return false
+        }
+
+        return true
+    }
+
+    fileprivate var effectiveAuthorizationRank: Int {
+        guard status.rank
+                >= IndoBoardEquipmentModelQualificationStatus
+                    .qualifiedForBetaTracking.rank
+        else {
+            return status.rank
+        }
+
+        return hasCompleteAuthorizationReceipt
+            ? status.rank
+            : IndoBoardEquipmentModelQualificationStatus
+                .evaluationOnly.rank
+    }
+
+    fileprivate func authorizes(
+        _ intent: IndoBoardEquipmentUseIntent
+    ) -> Bool {
+        switch intent {
+        case .displayTracking:
+            return effectiveAuthorizationRank
+                >= IndoBoardEquipmentModelQualificationStatus
+                    .qualifiedForBetaTracking.rank
+        case .coachingEvidence:
+            return effectiveAuthorizationRank
+                >= IndoBoardEquipmentModelQualificationStatus
+                    .qualifiedForBetaCoaching.rank
+        }
+    }
+
     public init(
         schemaVersion: String =
             IndoBoardEquipmentModelQualification.schemaVersion,
@@ -297,8 +352,8 @@ public struct IndoBoardEquipmentObservationSelector:
 
             if let existing =
                     strongest[qualification.modelID],
-               existing.status.rank
-                    >= qualification.status.rank {
+               existing.effectiveAuthorizationRank
+                    >= qualification.effectiveAuthorizationRank {
                 continue
             }
 
@@ -365,16 +420,9 @@ public struct IndoBoardEquipmentObservationSelector:
                 return false
             }
 
-            switch intent {
-            case .displayTracking:
-                return qualification.status.rank
-                    >= IndoBoardEquipmentModelQualificationStatus
-                        .qualifiedForBetaTracking.rank
-            case .coachingEvidence:
-                return qualification.status.rank
-                    >= IndoBoardEquipmentModelQualificationStatus
-                        .qualifiedForBetaCoaching.rank
-            }
+            return qualification.authorizes(
+                intent
+            )
         }
 
         if let selected = strongest(
