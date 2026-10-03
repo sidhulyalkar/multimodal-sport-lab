@@ -312,7 +312,7 @@ def _sample_id(
     frame_index: int,
 ) -> str:
     digest = hashlib.sha256(
-        f"{source_id}\0{frame_index}".encode("utf-8")
+        f"{source_id}\0{frame_index}".encode()
     ).hexdigest()[:16]
     return f"indo-equipment/{source_id}/{frame_index:09d}/{digest}"
 
