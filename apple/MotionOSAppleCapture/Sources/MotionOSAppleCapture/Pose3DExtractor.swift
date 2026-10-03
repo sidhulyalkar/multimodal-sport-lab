@@ -131,6 +131,25 @@ public enum Pose3DExtractor {
                 )
             }
 
+        let visibleFiducials = Array(
+            Set(
+                fiducials.map {
+                    $0.marker.rawValue
+                }
+            )
+        )
+        .sorted()
+
+        if !visibleFiducials.isEmpty {
+            payload[
+                "indo_board_fiducials_visible"
+            ] = .array(
+                visibleFiducials.map {
+                    .string($0)
+                }
+            )
+        }
+
         if let equipment =
                 IndoBoardFiducialEquipmentBuilder
                     .makeObservation(
