@@ -4,6 +4,7 @@ public enum IndoBoardFiducialMarkerID:
     String,
     Codable,
     CaseIterable,
+    Hashable,
     Sendable {
     case deckLeft = "MOS:I:DL1"
     case deckRight = "MOS:I:DR1"
