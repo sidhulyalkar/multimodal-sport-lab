@@ -49,6 +49,8 @@ public struct IndoBoardEquipmentRoutingAudit:
         IndoBoardEquipmentSelectionReceipt
     public let candidates:
         [IndoBoardEquipmentCandidateAudit]
+    public let shadowComparisons:
+        [IndoBoardEquipmentShadowComparison]
     public let claimBoundary: String
 
     enum CodingKeys: String, CodingKey {
@@ -56,6 +58,8 @@ public struct IndoBoardEquipmentRoutingAudit:
         case tracking
         case coaching
         case candidates
+        case shadowComparisons =
+            "shadow_comparisons"
         case claimBoundary = "claim_boundary"
     }
 
@@ -67,12 +71,16 @@ public struct IndoBoardEquipmentRoutingAudit:
         coaching:
             IndoBoardEquipmentSelectionReceipt,
         candidates:
-            [IndoBoardEquipmentCandidateAudit]
+            [IndoBoardEquipmentCandidateAudit],
+        shadowComparisons:
+            [IndoBoardEquipmentShadowComparison] = []
     ) {
         self.schemaVersion = schemaVersion
         self.tracking = tracking
         self.coaching = coaching
         self.candidates = candidates
+        self.shadowComparisons =
+            shadowComparisons
         self.claimBoundary = (
             "Routing records which equipment source was eligible for "
                 + "display and which source was eligible for coaching. "
@@ -88,6 +96,11 @@ public struct IndoBoardEquipmentRoutingAudit:
             "coaching": receiptJSON(coaching),
             "candidates": .array(
                 candidates.map(candidateJSON)
+            ),
+            "shadow_comparisons": .array(
+                shadowComparisons.map {
+                    $0.cameraPayload
+                }
             ),
             "claim_boundary": .string(claimBoundary),
         ])
@@ -239,6 +252,12 @@ public struct IndoBoardEquipmentEvidenceRouter:
                 $0.detectorID < $1.detectorID
             }
 
+        let shadowComparisons =
+            makeShadowComparisons(
+                candidates: candidates,
+                tracking: tracking
+            )
+
         let audit =
             IndoBoardEquipmentRoutingAudit(
                 tracking:
@@ -249,7 +268,9 @@ public struct IndoBoardEquipmentEvidenceRouter:
                     coaching.receipt(
                         intent: .coachingEvidence
                     ),
-                candidates: audits
+                candidates: audits,
+                shadowComparisons:
+                    shadowComparisons
             )
 
         return IndoBoardEquipmentRoutingResult(
@@ -257,5 +278,42 @@ public struct IndoBoardEquipmentEvidenceRouter:
             coaching: coaching,
             audit: audit
         )
+    }
+
+    private func makeShadowComparisons(
+        candidates:
+            [IndoBoardEquipmentDetectionCandidate],
+        tracking:
+            IndoBoardEquipmentSelection
+    ) -> [IndoBoardEquipmentShadowComparison] {
+        guard let reference =
+                tracking.selected,
+              let provenance =
+                reference.balanceState?.provenance,
+              provenance == .manualAnnotated
+                || provenance == .fiducialMeasured
+        else {
+            return []
+        }
+
+        return candidates.compactMap { candidate in
+            guard candidate.detectorID
+                    != reference.detectorID,
+                  candidate.balanceState?.provenance
+                    == .modelEstimated
+            else {
+                return nil
+            }
+
+            return IndoBoardEquipmentShadowComparator
+                .compare(
+                    reference: reference,
+                    candidate: candidate
+                )
+        }
+        .sorted {
+            $0.candidateDetectorID
+                < $1.candidateDetectorID
+        }
     }
 }
