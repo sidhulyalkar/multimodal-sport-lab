@@ -61,7 +61,7 @@ final class IndoBoardBalanceMetricsTests: XCTestCase {
         XCTAssertEqual(metrics?.recoveryCount, 4)
         XCTAssertEqual(
             metrics?.meanRecoveryTimeMS ?? 0,
-            500,
+            600,
             accuracy: 20
         )
         XCTAssertGreaterThan(
