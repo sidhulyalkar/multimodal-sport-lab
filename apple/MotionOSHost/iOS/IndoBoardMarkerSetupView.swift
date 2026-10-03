@@ -5,6 +5,9 @@ import SwiftUI
 import UIKit
 
 struct IndoBoardMarkerSetupView: View {
+    @EnvironmentObject private var camera:
+        CameraCaptureController
+
     @State private var artifacts: [URL] = []
     @State private var errorMessage: String?
 
@@ -36,6 +39,7 @@ struct IndoBoardMarkerSetupView: View {
         ScrollView {
             LazyVStack(spacing: 16) {
                 intro
+                liveDetectionCard
 
                 ForEach(markers, id: \.id) { marker in
                     markerCard(marker)
@@ -91,6 +95,126 @@ struct IndoBoardMarkerSetupView: View {
         .cardStyle()
     }
 
+    private var liveDetectionCard: some View {
+        let visible = Set(
+            camera.latestVisibleIndoBoardFiducials
+        )
+        let required: Set<IndoBoardFiducialMarkerID> = [
+            .deckLeft,
+            .deckRight,
+            .rollerCenter,
+        ]
+        let complete =
+            required.isSubset(of: visible)
+        let health = camera.indoBoardTrackingHealth
+
+        return VStack(alignment: .leading, spacing: 10) {
+            MotionOSSectionHeader(
+                title: "Live marker check",
+                subtitle:
+                    complete
+                        ? "All three required codes are visible"
+                        : "Use this to diagnose the missing marker",
+                systemImage: "viewfinder.circle",
+                accent: complete ? .green : .yellow
+            )
+
+            HStack(spacing: 8) {
+                liveMarkerPill(
+                    "Deck L",
+                    marker: .deckLeft
+                )
+                liveMarkerPill(
+                    "Deck R",
+                    marker: .deckRight
+                )
+                liveMarkerPill(
+                    "Roller",
+                    marker: .rollerCenter
+                )
+            }
+
+            if health.sampleCount > 0 {
+                HStack {
+                    Text(
+                        String(
+                            format:
+                                "%.0f%% recent visibility",
+                            health.coverageFraction * 100
+                        )
+                    )
+                    Spacer()
+                    Text(
+                        String(
+                            format:
+                                "%.0f%% confidence",
+                            health.meanConfidence * 100
+                        )
+                    )
+                }
+                .font(
+                    .system(
+                        .caption2,
+                        design: .monospaced
+                    )
+                )
+                .foregroundStyle(.secondary)
+            }
+
+            Text(
+                camera.phase == .idle
+                    ? "Prepare the iPhone camera first to run the live marker check. You can still print the kit now."
+                    : (
+                        complete
+                            ? "Keep this camera angle. MotionOS still requires sustained visibility before the Watch reports stable board tracking."
+                            : "Adjust lighting, marker angle, or iPhone position until each required code turns green."
+                    )
+            )
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            .fixedSize(
+                horizontal: false,
+                vertical: true
+            )
+        }
+        .cardStyle()
+    }
+
+    private func liveMarkerPill(
+        _ label: String,
+        marker: IndoBoardFiducialMarkerID
+    ) -> some View {
+        let visible =
+            camera.latestVisibleIndoBoardFiducials
+                .contains(marker)
+
+        return Label(
+            label,
+            systemImage:
+                visible
+                    ? "checkmark.circle.fill"
+                    : "circle.dashed"
+        )
+        .font(.caption.weight(.semibold))
+        .foregroundStyle(
+            visible
+                ? Color.green
+                : Color.secondary
+        )
+        .padding(.horizontal, 9)
+        .padding(.vertical, 7)
+        .frame(maxWidth: .infinity)
+        .background(
+            (
+                visible
+                    ? Color.green
+                    : Color.primary
+            )
+            .opacity(0.06),
+            in: Capsule()
+        )
+    }
+
     private func markerCard(
         _ marker: (
             id: IndoBoardFiducialMarkerID,
@@ -119,8 +243,26 @@ struct IndoBoardMarkerSetupView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 5) {
-                    Text(marker.title)
-                        .font(.headline)
+                    HStack(spacing: 7) {
+                        Text(marker.title)
+                            .font(.headline)
+
+                        if camera.latestVisibleIndoBoardFiducials
+                            .contains(marker.id) {
+                            Label(
+                                "LIVE",
+                                systemImage:
+                                    "checkmark.circle.fill"
+                            )
+                            .font(
+                                .system(
+                                    size: 8,
+                                    weight: .bold
+                                )
+                            )
+                            .foregroundStyle(.green)
+                        }
+                    }
 
                     Text(marker.placement)
                         .font(.caption)
