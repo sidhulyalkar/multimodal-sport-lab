@@ -66,6 +66,7 @@ from .indo_knowledge import (
 )
 from .indo_markerless_dataset import (
     build_markerless_dataset_index,
+    verify_markerless_dataset_index,
 )
 from .indo_model_qualification import (
     build_equipment_model_qualification_registry,
@@ -585,6 +586,12 @@ def _parser() -> argparse.ArgumentParser:
     )
     indo_markerless_index.add_argument("spec")
     indo_markerless_index.add_argument("output")
+
+    indo_markerless_verify = sub.add_parser(
+        "indo-verify-markerless-dataset-index",
+        help="recheck markerless dataset source hashes, sample identities, and acquisition groups",
+    )
+    indo_markerless_verify.add_argument("index")
 
     indo_model_qualification = sub.add_parser(
         "indo-build-equipment-model-qualification",
@@ -1386,6 +1393,19 @@ def main(argv: list[str] | None = None) -> int:
                     "source_count": payload["source_count"],
                     "output": args.output,
                 },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    if args.command == "indo-verify-markerless-dataset-index":
+        payload = verify_markerless_dataset_index(
+            args.index,
+        )
+        print(
+            json.dumps(
+                payload,
                 indent=2,
                 sort_keys=True,
             )
