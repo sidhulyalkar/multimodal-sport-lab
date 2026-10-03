@@ -145,6 +145,10 @@ final class ProductRunLibrary: ObservableObject {
         )
         let formatter = ISO8601DateFormatter()
         let decoder = JSONDecoder()
+        let linkedWatchSessions = watchSessionIDsByProductRun(
+            documents: documents,
+            manager: manager
+        )
 
         return directories.compactMap {
             directory -> ProductRunRecord? in
@@ -201,11 +205,7 @@ final class ProductRunLibrary: ObservableObject {
                 productManifest?.watchSessionID
                     ?? sealReadiness["watch_session_id"]
                     ?? startReadiness["watch_session_id"]
-            ) ?? watchSessionIDLinked(
-                to: runID,
-                documents: documents,
-                manager: manager
-            )
+            ) ?? linkedWatchSessions[runID]
             let cameraSessionID = usefulIdentifier(
                 productManifest?.cameraSessionID
                     ?? sealReadiness["iphone_camera_session_id"]
@@ -365,11 +365,10 @@ final class ProductRunLibrary: ObservableObject {
         }
     }
 
-    nonisolated private static func watchSessionIDLinked(
-        to runID: String,
+    nonisolated private static func watchSessionIDsByProductRun(
         documents: URL,
         manager: FileManager
-    ) -> String? {
+    ) -> [String: String] {
         let root = documents.appendingPathComponent(
             "MotionOSInbox",
             isDirectory: true
@@ -381,10 +380,10 @@ final class ProductRunLibrary: ObservableObject {
                 options: [.skipsHiddenFiles]
               )
         else {
-            return nil
+            return [:]
         }
 
-        var matches: [String] = []
+        var candidates: [String: Set<String>] = [:]
         for directory in directories {
             let hostURL = directory.appendingPathComponent(
                 "iphone-host.json"
@@ -395,7 +394,8 @@ final class ProductRunLibrary: ObservableObject {
                   ) as? [String: Any],
                   let transfer =
                     object["transfer_metadata"] as? [String: Any],
-                  transfer["product_run_id"] as? String == runID
+                  let runID = transfer["product_run_id"] as? String,
+                  !runID.isEmpty
             else {
                 continue
             }
@@ -403,15 +403,23 @@ final class ProductRunLibrary: ObservableObject {
             let sessionID =
                 object["session_id"] as? String
                     ?? directory.lastPathComponent
-            matches.append(sessionID)
+            candidates[runID, default: []].insert(sessionID)
         }
 
-        let unique = Set(matches)
-        // Fail closed if multiple Watch sessions claim the same product run.
-        guard unique.count == 1 else {
-            return nil
-        }
-        return unique.first
+        return Dictionary(
+            uniqueKeysWithValues: candidates.compactMap {
+                runID,
+                sessionIDs -> (String, String)? in
+                // Preserve the existing fail-closed policy: an ambiguous
+                // product run never gets linked to an arbitrary Watch session.
+                guard sessionIDs.count == 1,
+                      let sessionID = sessionIDs.first
+                else {
+                    return nil
+                }
+                return (runID, sessionID)
+            }
+        )
     }
 
     nonisolated private static func stringMap(

@@ -95,25 +95,7 @@ final class CameraCaptureController: ObservableObject {
         // Preview preparation starts a new capture opportunity. Never let a
         // prior sealed camera bundle or session identifier leak into a later
         // product run that fails before recording actually starts.
-        sessionID = nil
-        evidenceBundle = nil
-        liveStats = nil
-        latestPoseFrame = nil
-        latestPoseReceivedAt = nil
-        latestIndoBoardState = nil
-        latestIndoBoardEquipment = nil
-        latestIndoBoardCoachingState = nil
-        latestIndoBoardCoachingEquipment = nil
-        latestVisibleIndoBoardFiducials = []
-        latestIndoBoardStateReceivedAt = nil
-        indoBoardTrackingHealth = .empty
-        indoBoardTrackingWindow.reset()
-        lastProcessedPoseSessionID = nil
-        lastProcessedPoseSequence = nil
-        framingAssessment = .waiting
-        stanceAssessment = .waiting
-        stanceGate.reset()
-        resetIndoCoachingSession()
+        resetCaptureOpportunityState()
 
         do {
             let authorized = try await ensureAuthorization()
@@ -131,25 +113,9 @@ final class CameraCaptureController: ObservableObject {
     }
 
     func startRecording() async {
+        stopLivePolling()
         errorMessage = nil
-        evidenceBundle = nil
-        liveStats = nil
-        latestPoseFrame = nil
-        latestPoseReceivedAt = nil
-        latestIndoBoardState = nil
-        latestIndoBoardEquipment = nil
-        latestIndoBoardCoachingState = nil
-        latestIndoBoardCoachingEquipment = nil
-        latestVisibleIndoBoardFiducials = []
-        latestIndoBoardStateReceivedAt = nil
-        indoBoardTrackingHealth = .empty
-        indoBoardTrackingWindow.reset()
-        lastProcessedPoseSessionID = nil
-        lastProcessedPoseSequence = nil
-        framingAssessment = .waiting
-        stanceAssessment = .waiting
-        stanceGate.reset()
-        resetIndoCoachingSession()
+        resetCaptureOpportunityState()
 
         do {
             let authorized = try await ensureAuthorization()
@@ -379,6 +345,20 @@ final class CameraCaptureController: ObservableObject {
         indoBoardTrackingHealth = .empty
         indoCoach.reset()
         indoPrimitiveDetector.reset()
+    }
+
+    private func resetCaptureOpportunityState() {
+        sessionID = nil
+        evidenceBundle = nil
+        liveStats = nil
+        latestPoseFrame = nil
+        latestPoseReceivedAt = nil
+        lastProcessedPoseSessionID = nil
+        lastProcessedPoseSequence = nil
+        framingAssessment = .waiting
+        stanceAssessment = .waiting
+        stanceGate.reset()
+        resetIndoCoachingSession()
     }
 
     private func stopLivePolling() {
