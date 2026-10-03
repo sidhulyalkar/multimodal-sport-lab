@@ -298,3 +298,34 @@ To authorize a model for beta tracking or coaching, an explicit human authorizat
 Tracking authorization does not imply coaching authorization. A later coaching promotion must be explicit as well.
 
 The output schema is intentionally byte-compatible in field naming with the shared Swift markerless runtime contract, so the research pipeline can produce a registry that the app decodes without schema translation.
+
+## Leakage-aware markerless training index
+
+QR teacher labels and reviewed annotations can now be bound back to their source videos without extracting or copying the video first.
+
+Create a dataset spec with one entry per physical acquisition, including the source video, teacher-label file, subject/day/run/remount IDs, camera view, and board ID. Then build the hash-bound frame index:
+
+    motionos indo-build-markerless-dataset-index \
+      configs/indo-markerless-dataset.json \
+      generated/indo-markerless-index.json
+
+The index keeps:
+
+- source video path + SHA-256
+- teacher-label path + SHA-256
+- exact frame index and camera timestamp when available
+- trusted label provenance
+- shared deck/roller equipment contract
+- acquisition grouping fields
+
+Only fiducial_teacher, human_reviewed, and human_corrected observations with complete deck endpoints + roller center are admitted.
+
+Use the existing grouped-split tool for leakage-safe partitions. A useful first physical split is:
+
+    motionos build-grouped-split \
+      generated/indo-markerless-index.json \
+      generated/indo-markerless-split.json \
+      --group-by subject_id,day_id,run_id,camera_view \
+      --seed indo-markerless-v1
+
+Do not split by individual frames. Adjacent frames from one physical run are highly correlated and must remain in the same partition.
