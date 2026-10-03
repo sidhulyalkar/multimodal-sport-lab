@@ -113,6 +113,7 @@ final class CameraCaptureController: ObservableObject {
     }
 
     func startRecording() async {
+        stopLivePolling()
         errorMessage = nil
         resetCaptureOpportunityState()
 
