@@ -433,6 +433,9 @@ struct IndoBoardMarkerSetupView: View {
         let data = renderer.pdfData { context in
             context.beginPage()
 
+            UIColor.white.setFill()
+            context.cgContext.fill(page)
+
             let titleAttributes: [
                 NSAttributedString.Key: Any
             ] = [
@@ -440,7 +443,7 @@ struct IndoBoardMarkerSetupView: View {
                     ofSize: 20,
                     weight: .bold
                 ),
-                .foregroundColor: UIColor.label,
+                .foregroundColor: UIColor.black,
             ]
             let subtitleAttributes: [
                 NSAttributedString.Key: Any
@@ -449,7 +452,7 @@ struct IndoBoardMarkerSetupView: View {
                     ofSize: 10,
                     weight: .regular
                 ),
-                .foregroundColor: UIColor.secondaryLabel,
+                .foregroundColor: UIColor.darkGray,
             ]
             let markerTitleAttributes: [
                 NSAttributedString.Key: Any
@@ -458,7 +461,7 @@ struct IndoBoardMarkerSetupView: View {
                     ofSize: 14,
                     weight: .semibold
                 ),
-                .foregroundColor: UIColor.label,
+                .foregroundColor: UIColor.black,
             ]
             let bodyAttributes: [
                 NSAttributedString.Key: Any
@@ -467,7 +470,7 @@ struct IndoBoardMarkerSetupView: View {
                     ofSize: 9.5,
                     weight: .regular
                 ),
-                .foregroundColor: UIColor.secondaryLabel,
+                .foregroundColor: UIColor.darkGray,
             ]
             let codeAttributes: [
                 NSAttributedString.Key: Any
@@ -476,7 +479,7 @@ struct IndoBoardMarkerSetupView: View {
                     ofSize: 8,
                     weight: .medium
                 ),
-                .foregroundColor: UIColor.secondaryLabel,
+                .foregroundColor: UIColor.darkGray,
             ]
 
             NSString(
