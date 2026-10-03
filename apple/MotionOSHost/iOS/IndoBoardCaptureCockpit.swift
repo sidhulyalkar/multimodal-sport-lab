@@ -255,8 +255,7 @@ struct IndoBoardLiveSignalCard: View {
                 }
 
                 if let state =
-                        camera.latestPoseFrame?
-                            .indoBoardBalanceState {
+                        camera.latestIndoBoardState {
                     VStack(alignment: .leading, spacing: 7) {
                         HStack(spacing: 8) {
                             boardMetric(
