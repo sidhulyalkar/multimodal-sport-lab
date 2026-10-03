@@ -467,7 +467,7 @@ struct WatchContentView: View {
                 ? "Board + roller stable"
                 : (
                     hasIntermittentEvidence
-                        ? "Board markers intermittent"
+                        ? "Board tracking intermittent"
                         : "Body-only beta mode"
                 )
         let symbol =
@@ -510,6 +510,43 @@ struct WatchContentView: View {
                 )
             )
             .foregroundStyle(.tertiary)
+
+            Text(
+                "Track "
+                    + equipmentProvenanceLabel(
+                        status.boardTrackingProvenance,
+                        fallback: "unknown"
+                    )
+                    + " · Coach "
+                    + (
+                        status.boardCoachingEvidenceReady
+                            ? equipmentProvenanceLabel(
+                                status.boardCoachingProvenance,
+                                fallback: "board"
+                            )
+                            : "body"
+                    )
+            )
+            .font(.system(size: 8, weight: .medium))
+            .foregroundStyle(.tertiary)
+        }
+    }
+
+    private func equipmentProvenanceLabel(
+        _ provenance: String?,
+        fallback: String
+    ) -> String {
+        switch provenance {
+        case "fiducial_measured":
+            return "QR"
+        case "manual_annotated":
+            return "reviewed"
+        case "model_estimated":
+            return "model"
+        case "geometric_proxy":
+            return "proxy"
+        default:
+            return fallback
         }
     }
 
