@@ -12,11 +12,17 @@ public enum Pose3DExtractor {
     ) throws -> [String: JSONValue]? {
         let request3D = VNDetectHumanBodyPose3DRequest()
         let request2D = VNDetectHumanBodyPoseRequest()
+        let barcodeRequest = VNDetectBarcodesRequest()
+        barcodeRequest.symbologies = [.qr]
         let handler = VNImageRequestHandler(
             cvPixelBuffer: pixelBuffer,
             orientation: orientation
         )
-        try handler.perform([request3D, request2D])
+        try handler.perform([
+            request3D,
+            request2D,
+            barcodeRequest,
+        ])
         guard let observation = request3D.results?.first else { return nil }
 
         var joints: [String: JSONValue] = [:]
@@ -98,6 +104,45 @@ public enum Pose3DExtractor {
                 payload["body_pose_2d_coordinate_frame"] =
                     .string("vision_normalized_image_bottom_left_origin")
             }
+        }
+
+        let fiducials = (barcodeRequest.results ?? [])
+            .compactMap { observation
+                -> IndoBoardFiducialDetection? in
+                guard let raw =
+                        observation.payloadStringValue,
+                      let marker =
+                        IndoBoardFiducialMarkerID(
+                            rawValue: raw
+                        )
+                else {
+                    return nil
+                }
+
+                let box = observation.boundingBox
+                return IndoBoardFiducialDetection(
+                    marker: marker,
+                    center: NormalizedImagePoint2D(
+                        x: Double(box.midX),
+                        y: Double(box.midY)
+                    ),
+                    confidence:
+                        Double(observation.confidence)
+                )
+            }
+
+        if let equipment =
+                IndoBoardFiducialEquipmentBuilder
+                    .makeObservation(
+                        detections: fiducials
+                    ) {
+            payload["indo_board_equipment"] =
+                equipment.cameraPayload
+            payload["indo_board_equipment_source"] =
+                .string(
+                    IndoBoardFiducialEquipmentBuilder
+                        .modelID
+                )
         }
 
         return payload
