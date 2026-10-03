@@ -39,9 +39,9 @@ jobs:
         run: swift test --package-path apple/MotionOSAppleCapture
       - name: Install XcodeGen
         run: brew install xcodegen
-      - name: Generate Xcode project
+      - name: Bootstrap Apple host exactly as local development
         working-directory: apple/MotionOSHost
-        run: xcodegen generate
+        run: bash bootstrap.sh --no-open
       - name: Build iPhone host
         run: |
           xcodebuild \
@@ -49,6 +49,7 @@ jobs:
             -scheme MotionOS-iOS \
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath "$RUNNER_TEMP/motionos-derived" \
+            -clonedSourcePackagesDirPath "$GITHUB_WORKSPACE/.build/apple-source-packages" \
             CODE_SIGNING_ALLOWED=NO \
             build
       - name: Verify embedded Watch companion
@@ -62,5 +63,6 @@ jobs:
             -scheme MotionOS-Watch \
             -destination 'generic/platform=watchOS Simulator' \
             -derivedDataPath "$RUNNER_TEMP/motionos-watch-derived" \
+            -clonedSourcePackagesDirPath "$GITHUB_WORKSPACE/.build/apple-source-packages" \
             CODE_SIGNING_ALLOWED=NO \
             build
