@@ -57,9 +57,6 @@ from .indo_equipment_eval import (
 from .indo_fiducial_teacher import (
     extract_fiducial_teacher_labels,
 )
-from .indo_runtime_equipment_eval import (
-    evaluate_runtime_equipment_predictions,
-)
 from .indo_knowledge import (
     build_session_learning_targets,
     classify_observable_skills,
@@ -73,6 +70,9 @@ from .indo_public_corpus import (
     discover_indo_youtube,
     enrich_public_video_urls_with_ytdlp,
     merge_public_video_specs,
+)
+from .indo_runtime_equipment_eval import (
+    evaluate_runtime_equipment_predictions,
 )
 from .indo_session_report import (
     build_indo_session_report,
