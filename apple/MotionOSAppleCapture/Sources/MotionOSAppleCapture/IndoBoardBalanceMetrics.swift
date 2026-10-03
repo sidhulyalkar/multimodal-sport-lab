@@ -1,5 +1,15 @@
 import Foundation
 
+public enum IndoBoardBalanceThresholds {
+    /// Normalized roller position along the detected deck half-length.
+    /// These constants intentionally mirror the offline Python evaluator.
+    public static let centerZone: Double = 0.20
+    public static let recoveryDeparture: Double = 0.35
+    public static let recoveryComplete: Double = 0.15
+    public static let edgeZone: Double = 0.75
+    public static let minimumStateConfidence: Double = 0.35
+}
+
 public struct IndoBoardBalanceMetrics:
     Codable,
     Equatable,
@@ -81,7 +91,7 @@ public final class IndoBoardBalanceMetricAccumulator {
         _ state: IndoBoardBalanceState,
         elapsedSeconds: Double
     ) {
-        guard state.confidence >= 0.35,
+        guard state.confidence >= IndoBoardBalanceThresholds.minimumStateConfidence,
               elapsedSeconds.isFinite
         else {
             return
@@ -97,10 +107,10 @@ public final class IndoBoardBalanceMetricAccumulator {
         let absolute = abs(sample.position)
 
         if recoveryStart == nil,
-           absolute >= 0.55 {
+           absolute >= IndoBoardBalanceThresholds.recoveryDeparture {
             recoveryStart = sample
         } else if let recoveryStart,
-                  absolute <= 0.25,
+                  absolute <= IndoBoardBalanceThresholds.recoveryComplete,
                   sample.elapsedSeconds
                     > recoveryStart.elapsedSeconds {
             recoveryDurations.append(
@@ -139,7 +149,7 @@ public final class IndoBoardBalanceMetricAccumulator {
             abs($0.position)
         }
         let centerCount = positions.filter {
-            $0 <= 0.25
+            $0 <= IndoBoardBalanceThresholds.centerZone
         }.count
         let meanConfidence =
             samples.map(\.confidence)
@@ -185,11 +195,11 @@ public final class IndoBoardBalanceMetricAccumulator {
 
         var count = 0
         var previousNearEdge =
-            abs(samples[0].position) >= 0.75
+            abs(samples[0].position) >= IndoBoardBalanceThresholds.edgeZone
 
         for sample in samples.dropFirst() {
             let nearEdge =
-                abs(sample.position) >= 0.75
+                abs(sample.position) >= IndoBoardBalanceThresholds.edgeZone
             if nearEdge && !previousNearEdge {
                 count += 1
             }
