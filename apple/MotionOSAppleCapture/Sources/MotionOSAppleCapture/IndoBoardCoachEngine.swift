@@ -372,12 +372,19 @@ public final class IndoBoardCoachEngine {
                     * min(1, Double(baseline.count) / 180.0)
             )
         )
-        let boardBaseline = blockSamples("free-balance-a")
+        let firstBalanceBlock =
+            blockSamples("free-balance-a")
+        let boardBaseline = firstBalanceBlock
             .filter {
                 ($0.boardStateConfidence ?? 0) >= 0.55
                     && $0.rollerAlongDeck != nil
             }
-        if boardBaseline.count >= 30 {
+        let boardBaselineCoverage = boardCoverage(
+            firstBalanceBlock,
+            minimumConfidence: 0.55
+        )
+        if boardBaseline.count >= 30,
+           boardBaselineCoverage >= 0.60 {
             let excursion = percentile(
                 boardBaseline.compactMap {
                     $0.rollerAlongDeck.map(abs)
@@ -633,6 +640,27 @@ public final class IndoBoardCoachEngine {
 
         let balanceMetrics =
             balanceAccumulator.makeMetrics()
+        let boardCoverageAll = boardCoverage(
+            samples,
+            minimumConfidence: 0.55
+        )
+        let boardCoverageFirstBalance = boardCoverage(
+            blockSamples("free-balance-a"),
+            minimumConfidence: 0.55
+        )
+        let boardCoverageSecondBalance = boardCoverage(
+            blockSamples("free-balance-b"),
+            minimumConfidence: 0.55
+        )
+        numericMetrics["board_state_coverage_fraction"] =
+            boardCoverageAll
+        numericMetrics[
+            "board_free_balance_a_coverage_fraction"
+        ] = boardCoverageFirstBalance
+        numericMetrics[
+            "board_free_balance_b_coverage_fraction"
+        ] = boardCoverageSecondBalance
+
         if let balanceMetrics {
             numericMetrics["board_sample_count"] =
                 Double(balanceMetrics.sampleCount)
@@ -716,7 +744,8 @@ public final class IndoBoardCoachEngine {
 
         if let balanceMetrics,
            balanceMetrics.sampleCount >= 60,
-           balanceMetrics.meanConfidence >= 0.55 {
+           balanceMetrics.meanConfidence >= 0.55,
+           boardCoverageAll >= 0.50 {
             if let recovery =
                     balanceMetrics.p90RecoveryTimeMS,
                balanceMetrics.recoveryCount >= 3,
@@ -907,6 +936,33 @@ public final class IndoBoardCoachEngine {
             )
         }
 
+        if intervention.targetMetric == .rollerExcursionP90
+            || intervention.targetMetric == .centerTimeFraction {
+            let beforeCoverage = boardCoverage(
+                beforeSamples,
+                minimumConfidence: 0.55
+            )
+            let afterCoverage = boardCoverage(
+                afterSamples,
+                minimumConfidence: 0.55
+            )
+
+            guard beforeCoverage >= 0.60,
+                  afterCoverage >= 0.60
+            else {
+                return IndoBoardCoachExperimentResult(
+                    targetMetric:
+                        intervention.targetMetric,
+                    before: nil,
+                    after: nil,
+                    relativeChange: nil,
+                    outcome: .insufficientEvidence,
+                    summary:
+                        "The coached retry did not keep deck-and-roller tracking visible often enough to score the board-relative cue."
+                )
+            }
+        }
+
         let before: Double?
         let after: Double?
 
@@ -1051,7 +1107,12 @@ public final class IndoBoardCoachEngine {
             ($0.boardStateConfidence ?? 0) >= 0.55
                 && $0.rollerAlongDeck != nil
         }
-        guard qualified.count >= 20 else {
+        guard qualified.count >= 20,
+              boardCoverage(
+                values,
+                minimumConfidence: 0.55
+              ) >= 0.60
+        else {
             return nil
         }
 
@@ -1061,6 +1122,24 @@ public final class IndoBoardCoachEngine {
         }.count
         return Double(centered)
             / Double(qualified.count)
+    }
+
+    private func boardCoverage(
+        _ values: [Sample],
+        minimumConfidence: Double
+    ) -> Double {
+        guard !values.isEmpty else {
+            return 0
+        }
+
+        let qualified = values.filter {
+            ($0.boardStateConfidence ?? 0)
+                >= minimumConfidence
+                && $0.rollerAlongDeck != nil
+        }.count
+
+        return Double(qualified)
+            / Double(values.count)
     }
 
     private func metricCards(
