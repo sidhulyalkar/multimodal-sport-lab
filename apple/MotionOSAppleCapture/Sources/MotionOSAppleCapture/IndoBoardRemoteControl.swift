@@ -150,6 +150,9 @@ public struct IndoBoardRemoteStatus: Equatable, Sendable {
     public let boardTrackingReady: Bool
     public let boardTrackingConfidencePercent: Int?
     public let boardTrackingCoveragePercent: Int?
+    public let boardTrackingProvenance: String?
+    public let boardCoachingEvidenceReady: Bool
+    public let boardCoachingProvenance: String?
     public let coachHeadline: String?
     public let coachTip: String?
     public let coachDrill: String?
@@ -178,6 +181,9 @@ public struct IndoBoardRemoteStatus: Equatable, Sendable {
         boardTrackingReady: Bool = false,
         boardTrackingConfidencePercent: Int? = nil,
         boardTrackingCoveragePercent: Int? = nil,
+        boardTrackingProvenance: String? = nil,
+        boardCoachingEvidenceReady: Bool = false,
+        boardCoachingProvenance: String? = nil,
         coachHeadline: String? = nil,
         coachTip: String? = nil,
         coachDrill: String? = nil,
@@ -212,6 +218,12 @@ public struct IndoBoardRemoteStatus: Equatable, Sendable {
             boardTrackingCoveragePercent.map {
                 min(100, max(0, $0))
             }
+        self.boardTrackingProvenance =
+            boardTrackingProvenance
+        self.boardCoachingEvidenceReady =
+            boardCoachingEvidenceReady
+        self.boardCoachingProvenance =
+            boardCoachingProvenance
         self.coachHeadline = coachHeadline
         self.coachTip = coachTip
         self.coachDrill = coachDrill
@@ -287,6 +299,16 @@ public struct IndoBoardRemoteStatus: Equatable, Sendable {
             ).map {
                 min(100, max(0, $0))
             }
+        self.boardTrackingProvenance =
+            message["board_tracking_provenance"]
+                as? String
+        self.boardCoachingEvidenceReady =
+            message["board_coaching_evidence_ready"]
+                as? Bool
+                ?? false
+        self.boardCoachingProvenance =
+            message["board_coaching_provenance"]
+                as? String
         self.coachHeadline =
             message["coach_headline"] as? String
         self.coachTip =
@@ -351,6 +373,21 @@ public struct IndoBoardRemoteStatus: Equatable, Sendable {
                 "board_tracking_coverage_percent"
             ] = boardTrackingCoveragePercent
         }
+        if let boardTrackingProvenance,
+           !boardTrackingProvenance.isEmpty {
+            payload[
+                "board_tracking_provenance"
+            ] = boardTrackingProvenance
+        }
+        payload[
+            "board_coaching_evidence_ready"
+        ] = boardCoachingEvidenceReady
+        if let boardCoachingProvenance,
+           !boardCoachingProvenance.isEmpty {
+            payload[
+                "board_coaching_provenance"
+            ] = boardCoachingProvenance
+        }
         if let coachHeadline, !coachHeadline.isEmpty {
             payload["coach_headline"] = coachHeadline
         }
@@ -414,6 +451,12 @@ public struct IndoBoardRemoteStatus: Equatable, Sendable {
                 == other.boardTrackingConfidencePercent
             && boardTrackingCoveragePercent
                 == other.boardTrackingCoveragePercent
+            && boardTrackingProvenance
+                == other.boardTrackingProvenance
+            && boardCoachingEvidenceReady
+                == other.boardCoachingEvidenceReady
+            && boardCoachingProvenance
+                == other.boardCoachingProvenance
             && coachHeadline == other.coachHeadline
             && coachTip == other.coachTip
             && coachDrill == other.coachDrill
