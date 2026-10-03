@@ -8,6 +8,8 @@ public enum IndoBoardCoachTargetMetric:
     case trunkExcursionP90 = "trunk_excursion_p90"
     case medianKneeFlexion = "median_knee_flexion_deg"
     case pelvisMotionSpread = "pelvis_motion_spread"
+    case rollerExcursionP90 = "roller_excursion_p90"
+    case centerTimeFraction = "center_time_fraction"
 }
 
 public enum IndoBoardCoachDirection:
@@ -160,16 +162,21 @@ public final class IndoBoardCoachEngine {
         let pelvisX: Double?
         let stanceWidthRatio: Double?
         let armExcursionRatio: Double?
+        let rollerAlongDeck: Double?
+        let boardStateConfidence: Double?
     }
 
     private var samples: [Sample] = []
     private var lastSequence: UInt64?
+    private let balanceAccumulator =
+        IndoBoardBalanceMetricAccumulator()
 
     public init() {}
 
     public func reset() {
         samples.removeAll(keepingCapacity: true)
         lastSequence = nil
+        balanceAccumulator.reset()
     }
 
     public func ingest(
@@ -318,6 +325,14 @@ public final class IndoBoardCoachEngine {
                 at: elapsedSeconds
             )?.id ?? "unclassified"
 
+        let balanceState = frame.indoBoardBalanceState
+        if let balanceState {
+            balanceAccumulator.ingest(
+                balanceState,
+                elapsedSeconds: elapsedSeconds
+            )
+        }
+
         samples.append(
             Sample(
                 elapsedSeconds: elapsedSeconds,
@@ -327,7 +342,11 @@ public final class IndoBoardCoachEngine {
                 trunkOffsetRatio: trunkOffset,
                 pelvisX: pelvis?.x,
                 stanceWidthRatio: stanceWidth,
-                armExcursionRatio: armExcursion
+                armExcursionRatio: armExcursion,
+                rollerAlongDeck:
+                    balanceState?.rollerAlongDeck,
+                boardStateConfidence:
+                    balanceState?.confidence
             )
         )
 
@@ -353,6 +372,44 @@ public final class IndoBoardCoachEngine {
                     * min(1, Double(baseline.count) / 180.0)
             )
         )
+        let boardBaseline = blockSamples("free-balance-a")
+            .filter {
+                ($0.boardStateConfidence ?? 0) >= 0.55
+                    && $0.rollerAlongDeck != nil
+            }
+        if boardBaseline.count >= 30 {
+            let excursion = percentile(
+                boardBaseline.compactMap {
+                    $0.rollerAlongDeck.map(abs)
+                },
+                q: 0.90
+            )
+            let centerTime =
+                Double(
+                    boardBaseline.filter {
+                        abs($0.rollerAlongDeck ?? 1) <= 0.25
+                    }.count
+                )
+                / Double(boardBaseline.count)
+
+            if (excursion ?? 0) >= 0.58
+                || centerTime < 0.55 {
+                return IndoBoardCoachIntervention(
+                    id: "earlier-smaller-board-recovery",
+                    title: "Recover earlier",
+                    cue:
+                        "On the next balance block, start a smaller correction before the roller travels as far from center.",
+                    drill:
+                        "Natural balance with small early returns toward center",
+                    targetMetric: .rollerExcursionP90,
+                    desiredDirection: .decrease,
+                    confidence: confidence * 0.92,
+                    evidenceLabel:
+                        "Deck + roller image geometry · within-session experiment"
+                )
+            }
+        }
+
         let medianKnee = median(
             baseline.compactMap(\.kneeFlexionDeg)
         )
@@ -368,6 +425,67 @@ public final class IndoBoardCoachEngine {
                 .compactMap(\.kneeFlexionDeg),
             q: 0.75
         )
+
+        if let balanceMetrics,
+           balanceMetrics.sampleCount >= 60,
+           balanceMetrics.meanConfidence >= 0.55 {
+            if let recovery =
+                    balanceMetrics.p90RecoveryTimeMS,
+               balanceMetrics.recoveryCount >= 3,
+               recovery > 900 {
+                return IndoBoardCoachReport(
+                    headline: "Start the recovery earlier",
+                    observation:
+                        "Your longer deck-and-roller recoveries took over 0.9 seconds to return toward center.",
+                    tip:
+                        "Begin with a smaller correction before the roller travels as far from center.",
+                    drill:
+                        "5 slow excursions, returning toward center before the board reaches the outer zone",
+                    confidence:
+                        min(0.92, balanceMetrics.meanConfidence * 0.90),
+                    evidenceLabel:
+                        "Deck + roller image geometry · balance proxy",
+                    metrics: Array(metrics.prefix(6)),
+                    numericMetrics: numericMetrics
+                )
+            }
+
+            if balanceMetrics.centerTimeFraction < 0.55 {
+                return IndoBoardCoachReport(
+                    headline: "Own the center longer",
+                    observation:
+                        "The roller spent less than 55% of measured time in the central deck zone.",
+                    tip:
+                        "Use smaller early corrections and pause briefly when the roller returns near center.",
+                    drill:
+                        "5 slow left/right shifts with a one-second center hold",
+                    confidence:
+                        min(0.92, balanceMetrics.meanConfidence * 0.88),
+                    evidenceLabel:
+                        "Deck + roller image geometry · balance proxy",
+                    metrics: Array(metrics.prefix(6)),
+                    numericMetrics: numericMetrics
+                )
+            }
+
+            if balanceMetrics.edgeApproachCount >= 3 {
+                return IndoBoardCoachReport(
+                    headline: "Reduce repeated edge approaches",
+                    observation:
+                        "The roller entered the outer deck zone several times during this session.",
+                    tip:
+                        "Try catching the motion earlier with a smaller correction instead of waiting for a larger rescue.",
+                    drill:
+                        "Controlled shifts that stop short of the outer zone",
+                    confidence:
+                        min(0.90, balanceMetrics.meanConfidence * 0.84),
+                    evidenceLabel:
+                        "Deck + roller image geometry · balance proxy",
+                    metrics: Array(metrics.prefix(6)),
+                    numericMetrics: numericMetrics
+                )
+            }
+        }
 
         if let medianKnee,
            let trunkP90,
@@ -555,7 +673,7 @@ public final class IndoBoardCoachEngine {
         )
         let squatDepth = percentile(squatKnees, q: 0.75)
 
-        let metrics = metricCards(
+        var metrics = metricCards(
             medianKnee: medianKnee,
             trunkP90: trunkP90,
             startSpread: startSpread,
@@ -572,6 +690,58 @@ public final class IndoBoardCoachEngine {
             "correction_direction_changes":
                 Double(correctionProxy),
         ]
+
+        let balanceMetrics =
+            balanceAccumulator.makeMetrics()
+        if let balanceMetrics {
+            numericMetrics["board_sample_count"] =
+                Double(balanceMetrics.sampleCount)
+            numericMetrics["board_state_confidence"] =
+                balanceMetrics.meanConfidence
+            numericMetrics["board_center_time_fraction"] =
+                balanceMetrics.centerTimeFraction
+            numericMetrics["board_roller_excursion_p90"] =
+                balanceMetrics.rollerExcursionP90
+            numericMetrics["board_edge_approach_count"] =
+                Double(balanceMetrics.edgeApproachCount)
+            numericMetrics["board_direction_change_count"] =
+                Double(balanceMetrics.directionChangeCount)
+            numericMetrics["board_recovery_count"] =
+                Double(balanceMetrics.recoveryCount)
+            if let recovery =
+                    balanceMetrics.meanRecoveryTimeMS {
+                numericMetrics["board_mean_recovery_ms"] =
+                    recovery
+            }
+            if let recovery =
+                    balanceMetrics.p90RecoveryTimeMS {
+                numericMetrics["board_p90_recovery_ms"] =
+                    recovery
+            }
+
+            metrics.insert(
+                IndoBoardCoachMetric(
+                    id: "board-center-time",
+                    label: "Board center time",
+                    value: String(
+                        format: "%.0f%%",
+                        balanceMetrics.centerTimeFraction * 100
+                    )
+                ),
+                at: 0
+            )
+            metrics.insert(
+                IndoBoardCoachMetric(
+                    id: "board-excursion",
+                    label: "Roller excursion P90",
+                    value: String(
+                        format: "%.2f",
+                        balanceMetrics.rollerExcursionP90
+                    )
+                ),
+                at: min(1, metrics.count)
+            )
+        }
         if let medianKnee {
             numericMetrics["median_knee_flexion_deg"] =
                 medianKnee
@@ -765,6 +935,38 @@ public final class IndoBoardCoachEngine {
             after = robustSpread(
                 afterSamples.compactMap(\.pelvisX)
             )
+
+        case .rollerExcursionP90:
+            before = percentile(
+                beforeSamples.compactMap {
+                    guard ($0.boardStateConfidence ?? 0)
+                            >= 0.55
+                    else {
+                        return nil
+                    }
+                    return $0.rollerAlongDeck.map(abs)
+                },
+                q: 0.90
+            )
+            after = percentile(
+                afterSamples.compactMap {
+                    guard ($0.boardStateConfidence ?? 0)
+                            >= 0.55
+                    else {
+                        return nil
+                    }
+                    return $0.rollerAlongDeck.map(abs)
+                },
+                q: 0.90
+            )
+
+        case .centerTimeFraction:
+            before = centerTimeFraction(
+                beforeSamples
+            )
+            after = centerTimeFraction(
+                afterSamples
+            )
         }
 
         guard let before,
@@ -809,6 +1011,10 @@ public final class IndoBoardCoachEngine {
             metricLabel = "median knee flexion"
         case .pelvisMotionSpread:
             metricLabel = "pelvis-motion spread"
+        case .rollerExcursionP90:
+            metricLabel = "roller excursion"
+        case .centerTimeFraction:
+            metricLabel = "center time"
         }
 
         let summary: String
@@ -835,6 +1041,24 @@ public final class IndoBoardCoachEngine {
             outcome: outcome,
             summary: summary
         )
+    }
+
+    private func centerTimeFraction(
+        _ values: [Sample]
+    ) -> Double? {
+        let qualified = values.filter {
+            ($0.boardStateConfidence ?? 0) >= 0.55
+                && $0.rollerAlongDeck != nil
+        }
+        guard qualified.count >= 20 else {
+            return nil
+        }
+
+        let centered = qualified.filter {
+            abs($0.rollerAlongDeck ?? 1) <= 0.25
+        }.count
+        return Double(centered)
+            / Double(qualified.count)
     }
 
     private func metricCards(
