@@ -324,7 +324,11 @@ public enum BodyMovementFrameParser {
             imageFraming: parseImageFraming(payload),
             imageJoints: parseImageJoints(payload),
             indoBoardEquipment:
-                parseIndoBoardEquipment(payload)
+                parseIndoBoardEquipment(
+                    payload,
+                    fallbackSequence: sequence,
+                    fallbackDeviceTimeNS: deviceTimeNS
+                )
         )
     }
 
@@ -390,7 +394,9 @@ public enum BodyMovementFrameParser {
     }
 
     private static func parseIndoBoardEquipment(
-        _ payload: [String: JSONValue]
+        _ payload: [String: JSONValue],
+        fallbackSequence: UInt64,
+        fallbackDeviceTimeNS: UInt64
     ) -> IndoBoardEquipmentObservation? {
         guard case .object(let object) =
                 payload["indo_board_equipment"]
@@ -464,25 +470,23 @@ public enum BodyMovementFrameParser {
             return nil
         }
 
+        let parsedSequence = number(
+            object["sequence"]
+        ).map {
+            UInt64(max(0, $0).rounded())
+        }
+        let parsedDeviceTimeNS = number(
+            object["device_time_ns"]
+        ).map {
+            UInt64(max(0, $0).rounded())
+        }
+
         return IndoBoardEquipmentObservation(
             sequence:
-                UInt64(
-                    max(
-                        0,
-                        number(object["sequence"])
-                            ?? 0
-                    )
-                    .rounded()
-                ),
+                parsedSequence ?? fallbackSequence,
             deviceTimeNS:
-                UInt64(
-                    max(
-                        0,
-                        number(object["device_time_ns"])
-                            ?? 0
-                    )
-                    .rounded()
-                ),
+                parsedDeviceTimeNS
+                    ?? fallbackDeviceTimeNS,
             deck: deck,
             roller: roller,
             modelID: modelID
