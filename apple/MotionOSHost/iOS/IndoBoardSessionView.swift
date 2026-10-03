@@ -360,43 +360,59 @@ struct IndoBoardSessionView: View {
     }
 
     private var boardTrackingRow: some View {
-        let state =
-            camera.latestIndoBoardState
+        let health = camera.indoBoardTrackingHealth
+        let hasEvidence = health.trackedSampleCount > 0
+        let stable = health.isStable
+        let accent: Color =
+            stable
+                ? .green
+                : (hasEvidence ? .yellow : .secondary)
+
+        let detail: String = {
+            guard health.sampleCount > 0 else {
+                return "optional · body-only beta still available"
+            }
+            guard hasEvidence else {
+                return "no deck + roller observations in the recent window"
+            }
+            return String(
+                format:
+                    "%.0f%% visible · %.0f%% confidence",
+                health.coverageFraction * 100,
+                health.meanConfidence * 100
+            )
+        }()
 
         return HStack(spacing: 9) {
             Image(
                 systemName:
-                    state == nil
-                        ? "viewfinder"
-                        : "viewfinder.circle.fill"
+                    stable
+                        ? "viewfinder.circle.fill"
+                        : "viewfinder"
             )
-            .foregroundStyle(
-                state == nil
-                    ? Color.secondary
-                    : Color.green
-            )
+            .foregroundStyle(accent)
             .frame(width: 22)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("Board tracking")
-                    .font(.subheadline.weight(.medium))
                 Text(
-                    state.map {
-                        String(
-                            format:
-                                "deck + roller visible · %.0f%% confidence",
-                            $0.confidence * 100
+                    stable
+                        ? "Board tracking stable"
+                        : (
+                            hasEvidence
+                                ? "Board tracking intermittent"
+                                : "Board tracking"
                         )
-                    }
-                    ?? "optional · body-only beta still available"
                 )
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+                .font(.subheadline.weight(.medium))
+
+                Text(detail)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
             }
 
             Spacer()
 
-            if state != nil {
+            if stable {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundStyle(.green)
             } else {
