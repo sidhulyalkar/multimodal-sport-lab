@@ -54,6 +54,9 @@ from .indo_board_state import (
 from .indo_equipment_eval import (
     evaluate_equipment_predictions,
 )
+from .indo_fiducial_teacher import (
+    extract_fiducial_teacher_labels,
+)
 from .indo_knowledge import (
     build_session_learning_targets,
     classify_observable_skills,
@@ -541,6 +544,13 @@ def _parser() -> argparse.ArgumentParser:
     indo_equipment_eval.add_argument("reference")
     indo_equipment_eval.add_argument("predictions")
     indo_equipment_eval.add_argument("output")
+
+    indo_fiducial_teacher = sub.add_parser(
+        "indo-extract-fiducial-teacher-labels",
+        help="extract QR-derived deck/roller teacher labels from a camera JSONL journal",
+    )
+    indo_fiducial_teacher.add_argument("camera_journal")
+    indo_fiducial_teacher.add_argument("output")
 
     indo_report = sub.add_parser(
         "indo-session-report",
@@ -1226,6 +1236,27 @@ def main(argv: list[str] | None = None) -> int:
                     "reference_coverage_fraction":
                         payload["reference_coverage_fraction"],
                     "metrics": payload["metrics"],
+                    "output": args.output,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    if args.command == "indo-extract-fiducial-teacher-labels":
+        payload = extract_fiducial_teacher_labels(
+            args.camera_journal,
+            args.output,
+        )
+        print(
+            json.dumps(
+                {
+                    "schema_version": payload["schema_version"],
+                    "pose_event_count": payload["pose_event_count"],
+                    "observation_count": payload["observation_count"],
+                    "skipped_non_fiducial_count":
+                        payload["skipped_non_fiducial_count"],
                     "output": args.output,
                 },
                 indent=2,
