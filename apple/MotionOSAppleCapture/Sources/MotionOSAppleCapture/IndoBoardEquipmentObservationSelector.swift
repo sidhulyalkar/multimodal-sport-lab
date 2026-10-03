@@ -52,6 +52,18 @@ public struct IndoBoardEquipmentModelQualification:
     public let metrics: [String: Double]
     public let claimBoundary: String
 
+    enum CodingKeys: String, CodingKey {
+        case schemaVersion = "schema_version"
+        case modelID = "model_id"
+        case status
+        case evaluationDatasetID =
+            "evaluation_dataset_id"
+        case evaluationReferenceSHA256 =
+            "evaluation_reference_sha256"
+        case metrics
+        case claimBoundary = "claim_boundary"
+    }
+
     public var id: String { modelID }
 
     public init(
@@ -91,6 +103,12 @@ public struct IndoBoardEquipmentModelQualificationRegistry:
     public let qualifications:
         [IndoBoardEquipmentModelQualification]
     public let claimBoundary: String
+
+    enum CodingKeys: String, CodingKey {
+        case schemaVersion = "schema_version"
+        case qualifications
+        case claimBoundary = "claim_boundary"
+    }
 
     public init(
         schemaVersion: String =
@@ -170,6 +188,22 @@ public struct IndoBoardEquipmentSelectionReceipt:
         IndoBoardEquipmentProvenance?
     public let selectedConfidence: Double?
     public let rejectedDetectorIDs: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case schemaVersion = "schema_version"
+        case intent
+        case reason
+        case selectedDetectorID =
+            "selected_detector_id"
+        case selectedModelID =
+            "selected_model_id"
+        case selectedProvenance =
+            "selected_provenance"
+        case selectedConfidence =
+            "selected_confidence"
+        case rejectedDetectorIDs =
+            "rejected_detector_ids"
+    }
 
     public init(
         schemaVersion: String =
