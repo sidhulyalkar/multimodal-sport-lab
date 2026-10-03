@@ -68,7 +68,6 @@ public final class IndoBoardBalanceMetricAccumulator {
     private var samples: [Sample] = []
     private var recoveryStart: Sample?
     private var recoveryDurations: [Double] = []
-    private var wasNearEdge = false
 
     public init() {}
 
@@ -76,7 +75,6 @@ public final class IndoBoardBalanceMetricAccumulator {
         samples.removeAll(keepingCapacity: true)
         recoveryStart = nil
         recoveryDurations.removeAll(keepingCapacity: true)
-        wasNearEdge = false
     }
 
     public func ingest(
@@ -118,8 +116,6 @@ public final class IndoBoardBalanceMetricAccumulator {
             self.recoveryStart = nil
         }
 
-        let nearEdge = absolute >= 0.75
-        wasNearEdge = nearEdge
 
         if samples.count > 8_000 {
             samples.removeFirst(
