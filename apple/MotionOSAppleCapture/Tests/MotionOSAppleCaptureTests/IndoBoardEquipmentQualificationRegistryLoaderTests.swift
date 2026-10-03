@@ -77,8 +77,8 @@ final class IndoBoardEquipmentQualificationRegistryLoaderTests:
         {
           "schema_version": "motionos.indo-equipment-model-qualification-registry.v1",
           "qualifications": [
-            (qualification),
-            (qualification)
+            \(qualification),
+            \(qualification)
           ],
           "claim_boundary": "registry boundary"
         }
