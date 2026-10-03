@@ -173,6 +173,93 @@ final class IndoBoardEquipmentStateTests: XCTestCase {
         )
     }
 
+    func testEquipmentPayloadInheritsCameraFrameTimestamp() {
+        let payload: [String: JSONValue] = [
+            "joints_root_relative_m": .object([
+                "root": .array([
+                    .number(0),
+                    .number(0),
+                    .number(0),
+                ]),
+                "leftHip": .array([
+                    .number(-0.1),
+                    .number(0),
+                    .number(0),
+                ]),
+                "rightHip": .array([
+                    .number(0.1),
+                    .number(0),
+                    .number(0),
+                ]),
+                "leftKnee": .array([
+                    .number(-0.1),
+                    .number(-0.3),
+                    .number(0),
+                ]),
+                "rightKnee": .array([
+                    .number(0.1),
+                    .number(-0.3),
+                    .number(0),
+                ]),
+                "leftFoot": .array([
+                    .number(-0.1),
+                    .number(-0.6),
+                    .number(0),
+                ]),
+                "rightFoot": .array([
+                    .number(0.1),
+                    .number(-0.6),
+                    .number(0),
+                ]),
+            ]),
+            "joint_parents": .object([
+                "root": .null,
+                "leftHip": .string("root"),
+                "rightHip": .string("root"),
+                "leftKnee": .string("leftHip"),
+                "rightKnee": .string("rightHip"),
+                "leftFoot": .string("leftKnee"),
+                "rightFoot": .string("rightKnee"),
+            ]),
+            "indo_board_equipment": .object([
+                "deck": .object([
+                    "left_end": .array([
+                        .number(0.2),
+                        .number(0.7),
+                    ]),
+                    "right_end": .array([
+                        .number(0.8),
+                        .number(0.7),
+                    ]),
+                    "confidence": .number(0.9),
+                ]),
+                "roller": .object([
+                    "center": .array([
+                        .number(0.5),
+                        .number(0.7),
+                    ]),
+                    "confidence": .number(0.85),
+                ]),
+            ]),
+        ]
+
+        let frame = BodyMovementFrameParser.parseVisionPose(
+            payload: payload,
+            sessionID: "timestamp-test",
+            sequence: 42,
+            deviceTimeNS: 4_200_000_000
+        )
+
+        XCTAssertEqual(
+            frame?.indoBoardEquipment?.sequence,
+            42
+        )
+        XCTAssertEqual(
+            frame?.indoBoardEquipment?.deviceTimeNS,
+            4_200_000_000
+        )
+    }
+
     func testMissingRollerFailsClosed() {
         let observation = IndoBoardEquipmentObservation(
             sequence: 1,
