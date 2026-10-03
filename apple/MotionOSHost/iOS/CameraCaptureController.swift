@@ -28,6 +28,8 @@ final class CameraCaptureController: ObservableObject {
         IndoBoardBalanceState?
     @Published private(set) var latestIndoBoardEquipment:
         IndoBoardEquipmentObservation?
+    @Published private(set) var latestVisibleIndoBoardFiducials:
+        [IndoBoardFiducialMarkerID] = []
     @Published private(set) var latestIndoBoardStateReceivedAt:
         Date?
     @Published private(set) var indoBoardTrackingHealth:
@@ -82,6 +84,7 @@ final class CameraCaptureController: ObservableObject {
         latestPoseReceivedAt = nil
         latestIndoBoardState = nil
         latestIndoBoardEquipment = nil
+        latestVisibleIndoBoardFiducials = []
         latestIndoBoardStateReceivedAt = nil
         indoBoardTrackingHealth = .empty
         indoBoardTrackingWindow.reset()
@@ -115,6 +118,7 @@ final class CameraCaptureController: ObservableObject {
         latestPoseReceivedAt = nil
         latestIndoBoardState = nil
         latestIndoBoardEquipment = nil
+        latestVisibleIndoBoardFiducials = []
         latestIndoBoardStateReceivedAt = nil
         indoBoardTrackingHealth = .empty
         indoBoardTrackingWindow.reset()
@@ -236,6 +240,9 @@ final class CameraCaptureController: ObservableObject {
 
                     self.latestPoseFrame = nextPose
                     self.latestPoseReceivedAt = now
+                    self.latestVisibleIndoBoardFiducials =
+                        nextPose.indoBoardVisibleFiducials
+                            ?? []
 
                     let boardState =
                         nextPose.indoBoardBalanceState
@@ -262,6 +269,7 @@ final class CameraCaptureController: ObservableObject {
                         > Self.livePoseStaleSeconds {
                     self.latestPoseFrame = nil
                     self.latestPoseReceivedAt = nil
+                    self.latestVisibleIndoBoardFiducials = []
                     self.framingAssessment = .waiting
                     self.stanceAssessment = .waiting
                     self.stanceGate.reset()
@@ -321,6 +329,7 @@ final class CameraCaptureController: ObservableObject {
         latestIndoPrimitive = nil
         latestIndoBoardState = nil
         latestIndoBoardEquipment = nil
+        latestVisibleIndoBoardFiducials = []
         latestIndoBoardStateReceivedAt = nil
         indoBoardTrackingWindow.reset()
         indoBoardTrackingHealth = .empty
