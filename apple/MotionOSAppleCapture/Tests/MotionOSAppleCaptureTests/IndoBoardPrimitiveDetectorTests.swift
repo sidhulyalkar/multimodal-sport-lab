@@ -99,11 +99,58 @@ final class IndoBoardPrimitiveDetectorTests: XCTestCase {
         )
     }
 
+    func testPrimitiveCarriesQualifiedBoardEvidence() {
+        let detector = IndoBoardPrimitiveDetector()
+
+        for sequence in 0..<20 {
+            _ = detector.ingest(
+                frame: frame(
+                    sequence: UInt64(sequence),
+                    pelvisOffset: 0,
+                    kneeOffset: 0,
+                    ankleLift: 0,
+                    rollerAlongDeck: 0
+                ),
+                protocolBlockID: "neutral-settle"
+            )
+        }
+
+        let shifted = detector.ingest(
+            frame: frame(
+                sequence: 30,
+                pelvisOffset: 0.07,
+                kneeOffset: 0,
+                ankleLift: 0,
+                rollerAlongDeck: 0.55
+            ),
+            protocolBlockID: "controlled-shifts"
+        )
+
+        XCTAssertEqual(
+            shifted.kind,
+            .lateralShiftRight
+        )
+        XCTAssertEqual(
+            shifted.rollerAlongDeck ?? 0,
+            0.55,
+            accuracy: 0.02
+        )
+        XCTAssertEqual(
+            shifted.boardStateProvenance,
+            .modelEstimated
+        )
+        XCTAssertEqual(
+            shifted.evidenceLabel,
+            "camera_body_pose_plus_deck_roller_geometry"
+        )
+    }
+
     private func frame(
         sequence: UInt64,
         pelvisOffset: Double,
         kneeOffset: Double,
-        ankleLift: Double
+        ankleLift: Double,
+        rollerAlongDeck: Double? = nil
     ) -> BodyMovementFrame {
         let pelvisBase = 0.45 + pelvisOffset
         let joints = [
@@ -191,7 +238,38 @@ final class IndoBoardPrimitiveDetectorTests: XCTestCase {
                 coordinateFrame:
                     "vision_normalized_image_bottom_left_origin"
             ),
-            imageJoints: joints
+            imageJoints: joints,
+            indoBoardEquipment:
+                rollerAlongDeck.map { normalized in
+                    IndoBoardEquipmentObservation(
+                        sequence: sequence,
+                        deviceTimeNS:
+                            sequence * 100_000_000,
+                        deck: IndoBoardDeckObservation(
+                            polygon: [],
+                            leftEnd: .init(
+                                x: 0.20,
+                                y: 0.70
+                            ),
+                            rightEnd: .init(
+                                x: 0.80,
+                                y: 0.70
+                            ),
+                            confidence: 0.92,
+                            provenance: .modelEstimated
+                        ),
+                        roller: IndoBoardRollerObservation(
+                            center: .init(
+                                x: 0.50
+                                    + 0.30 * normalized,
+                                y: 0.70
+                            ),
+                            confidence: 0.90,
+                            provenance: .modelEstimated
+                        ),
+                        modelID: "primitive-test-board"
+                    )
+                }
         )
     }
 }
