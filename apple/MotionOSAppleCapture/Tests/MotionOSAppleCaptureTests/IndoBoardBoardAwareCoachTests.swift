@@ -100,9 +100,93 @@ final class IndoBoardBoardAwareCoachTests: XCTestCase {
         )
     }
 
+    func testSparseBoardTrackingDoesNotDriveIntervention() {
+        let coach = IndoBoardCoachEngine()
+
+        for index in 0..<80 {
+            let position: Double? =
+                index < 24
+                    ? sin(Double(index) * 0.22) * 0.76
+                    : nil
+            coach.ingest(
+                frame: frame(
+                    sequence: index,
+                    rollerPosition: position
+                ),
+                elapsedSeconds:
+                    16 + Double(index) * 0.1
+            )
+        }
+
+        let intervention = coach.makeIntervention()
+
+        XCTAssertNotEqual(
+            intervention?.targetMetric,
+            .rollerExcursionP90
+        )
+    }
+
+    func testBoardCueFailsClosedWhenRetryTrackingDropsOut() {
+        let coach = IndoBoardCoachEngine()
+
+        for index in 0..<80 {
+            let position =
+                sin(Double(index) * 0.22) * 0.76
+            coach.ingest(
+                frame: frame(
+                    sequence: index,
+                    rollerPosition: position
+                ),
+                elapsedSeconds:
+                    16 + Double(index) * 0.1
+            )
+        }
+
+        guard let intervention = coach.makeIntervention()
+        else {
+            XCTFail("Expected board-aware intervention")
+            return
+        }
+        XCTAssertEqual(
+            intervention.targetMetric,
+            .rollerExcursionP90
+        )
+
+        for index in 80..<160 {
+            let local = index - 80
+            let position: Double? =
+                local < 20
+                    ? sin(Double(local) * 0.22) * 0.36
+                    : nil
+            coach.ingest(
+                frame: frame(
+                    sequence: index,
+                    rollerPosition: position
+                ),
+                elapsedSeconds:
+                    86 + Double(local) * 0.1
+            )
+        }
+
+        let report = coach.makeReport(
+            intervention: intervention
+        )
+
+        XCTAssertEqual(
+            report.experimentResult?.outcome,
+            .insufficientEvidence
+        )
+        XCTAssertTrue(
+            report.experimentResult?.summary
+                .localizedCaseInsensitiveContains(
+                    "tracking visible"
+                ) == true
+        )
+    }
+
     private func frame(
         sequence: Int,
-        rollerPosition: Double
+        rollerPosition: Double?
     ) -> BodyMovementFrame {
         let joints = [
             BodyJoint2D(
@@ -169,8 +253,9 @@ final class IndoBoardBoardAwareCoachTests: XCTestCase {
 
         // For deck endpoints x=0.2...0.8, this mapping makes the
         // estimator recover rollerPosition in approximately -1...+1.
-        let rollerX =
-            0.50 + 0.30 * rollerPosition
+        let rollerX = rollerPosition.map {
+            0.50 + 0.30 * $0
+        }
 
         return BodyMovementFrame(
             sessionID: "board-aware-coach",
@@ -197,34 +282,36 @@ final class IndoBoardBoardAwareCoachTests: XCTestCase {
             ),
             imageJoints: joints,
             indoBoardEquipment:
-                IndoBoardEquipmentObservation(
-                    sequence: UInt64(sequence),
-                    deviceTimeNS:
-                        UInt64(sequence)
-                            * 100_000_000,
-                    deck: IndoBoardDeckObservation(
-                        polygon: [],
-                        leftEnd: .init(
-                            x: 0.20,
-                            y: 0.70
+                rollerX.map { rollerX in
+                    IndoBoardEquipmentObservation(
+                        sequence: UInt64(sequence),
+                        deviceTimeNS:
+                            UInt64(sequence)
+                                * 100_000_000,
+                        deck: IndoBoardDeckObservation(
+                            polygon: [],
+                            leftEnd: .init(
+                                x: 0.20,
+                                y: 0.70
+                            ),
+                            rightEnd: .init(
+                                x: 0.80,
+                                y: 0.70
+                            ),
+                            confidence: 0.92,
+                            provenance: .modelEstimated
                         ),
-                        rightEnd: .init(
-                            x: 0.80,
-                            y: 0.70
+                        roller: IndoBoardRollerObservation(
+                            center: .init(
+                                x: rollerX,
+                                y: 0.70
+                            ),
+                            confidence: 0.90,
+                            provenance: .modelEstimated
                         ),
-                        confidence: 0.92,
-                        provenance: .modelEstimated
-                    ),
-                    roller: IndoBoardRollerObservation(
-                        center: .init(
-                            x: rollerX,
-                            y: 0.70
-                        ),
-                        confidence: 0.90,
-                        provenance: .modelEstimated
-                    ),
-                    modelID: "test-equipment"
-                )
+                        modelID: "test-equipment"
+                    )
+                }
         )
     }
 }
