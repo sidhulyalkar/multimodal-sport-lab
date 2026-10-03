@@ -1159,6 +1159,11 @@ struct IndoBoardSessionView: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
+            if let quality =
+                    boardTrackingQuality(coach) {
+                boardTrackingQualityCard(quality)
+            }
+
             if let experiment = coach.experimentResult {
                 HStack(alignment: .top, spacing: 9) {
                     Image(
@@ -1250,6 +1255,175 @@ struct IndoBoardSessionView: View {
             ),
             in: RoundedRectangle(
                 cornerRadius: 18,
+                style: .continuous
+            )
+        )
+    }
+
+    private struct BoardTrackingQuality {
+        let sampleCount: Int
+        let coverage: Double
+        let confidence: Double
+        let firstBalanceCoverage: Double?
+        let secondBalanceCoverage: Double?
+
+        var usableForBoardCoaching: Bool {
+            sampleCount
+                >= IndoBoardEvidenceQualityThresholds
+                    .minimumSessionSamples
+                && coverage
+                    >= IndoBoardEvidenceQualityThresholds
+                        .minimumSessionCoverage
+                && confidence
+                    >= IndoBoardEvidenceQualityThresholds
+                        .minimumStateConfidence
+        }
+    }
+
+    private func boardTrackingQuality(
+        _ coach: IndoBoardCoachReport
+    ) -> BoardTrackingQuality? {
+        guard let values = coach.numericMetrics,
+              let samples = values["board_sample_count"],
+              let coverage =
+                values["board_state_coverage_fraction"],
+              let confidence =
+                values["board_state_confidence"]
+        else {
+            return nil
+        }
+
+        return BoardTrackingQuality(
+            sampleCount: max(0, Int(samples.rounded())),
+            coverage: min(1, max(0, coverage)),
+            confidence: min(1, max(0, confidence)),
+            firstBalanceCoverage:
+                values[
+                    "board_free_balance_a_coverage_fraction"
+                ],
+            secondBalanceCoverage:
+                values[
+                    "board_free_balance_b_coverage_fraction"
+                ]
+        )
+    }
+
+    @ViewBuilder
+    private func boardTrackingQualityCard(
+        _ quality: BoardTrackingQuality
+    ) -> some View {
+        let usable = quality.usableForBoardCoaching
+        let accent: Color = usable ? .green : .yellow
+
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Label(
+                    usable
+                        ? "Board-relative evidence usable"
+                        : "Board tracking was partial",
+                    systemImage:
+                        usable
+                            ? "checkmark.shield.fill"
+                            : "viewfinder.circle"
+                )
+                .font(.caption.weight(.bold))
+                .foregroundStyle(accent)
+
+                Spacer()
+
+                Text(
+                    String(
+                        format: "%.0f%% coverage",
+                        quality.coverage * 100
+                    )
+                )
+                .font(
+                    .system(
+                        .caption2,
+                        design: .monospaced
+                    )
+                )
+                .foregroundStyle(.secondary)
+            }
+
+            HStack(spacing: 8) {
+                trackingQualityMetric(
+                    "Samples",
+                    "\(quality.sampleCount)"
+                )
+                trackingQualityMetric(
+                    "Confidence",
+                    String(
+                        format: "%.0f%%",
+                        quality.confidence * 100
+                    )
+                )
+                trackingQualityMetric(
+                    "Coverage",
+                    String(
+                        format: "%.0f%%",
+                        quality.coverage * 100
+                    )
+                )
+            }
+
+            if let first = quality.firstBalanceCoverage,
+               let second = quality.secondBalanceCoverage {
+                Text(
+                    String(
+                        format:
+                            "Balance blocks · first %.0f%% · coached retry %.0f%%",
+                        first * 100,
+                        second * 100
+                    )
+                )
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            }
+
+            Text(
+                usable
+                    ? "Deck-relative metrics met this beta run's minimum sample, confidence, and visibility gates."
+                    : "The raw geometry is preserved, but MotionOS falls back to body-pose coaching when board visibility is too sparse."
+            )
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(10)
+        .background(
+            accent.opacity(0.07),
+            in: RoundedRectangle(
+                cornerRadius: 12,
+                style: .continuous
+            )
+        )
+    }
+
+    private func trackingQualityMetric(
+        _ label: String,
+        _ value: String
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label.uppercased())
+                .font(.system(size: 8, weight: .bold))
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(
+                    .system(
+                        .caption,
+                        design: .monospaced,
+                        weight: .semibold
+                    )
+                )
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            Color.primary.opacity(0.035),
+            in: RoundedRectangle(
+                cornerRadius: 9,
                 style: .continuous
             )
         )
