@@ -182,6 +182,55 @@ final class MotionOSAppleCaptureTests: XCTestCase {
         XCTAssertTrue(decoded.claimBoundary.contains("does not itself prove"))
     }
 
+    func testBindingWatchEvidencePreservesExistingProductEvidence() throws {
+        let coach = ProductSessionManifest.CoachSummary(
+            headline: "Keep the return quiet",
+            observation: "The coached retry reduced correction spread.",
+            tip: "Use one smaller correction.",
+            drill: "Five slow returns",
+            confidence: 0.84,
+            evidenceLabel: "Camera body pose",
+            metrics: ["pelvis_spread": "0.08"],
+            numericMetrics: ["pelvis_spread": 0.08],
+            interventionID: "quiet-return"
+        )
+        let manifest = ProductSessionManifest(
+            runID: "run-bind-watch",
+            captureMode: "Watch + iPhone",
+            targetDurationSeconds: 120,
+            createdAtUTC: "2026-10-03T18:00:00Z",
+            outcome: .completed,
+            watchSessionID: "watch-original",
+            cameraSessionID: "camera-1",
+            operatorJournalSHA256: "operator-journal",
+            operatorMetadataSHA256: "operator-metadata",
+            cameraVideoSHA256: "camera-video",
+            cameraJournalSHA256: "camera-journal",
+            cameraMetadataSHA256: "camera-metadata",
+            syncReceipts: [],
+            externalCameraExpected: true,
+            externalCameraImported: true,
+            externalCameraSHA256: "external-video",
+            operatorEvidenceSealed: true,
+            cameraEvidenceSealed: true,
+            coachSummary: coach
+        )
+
+        let updated = manifest.bindingWatchEvidence(
+            watchSessionID: "watch-retry",
+            journalSHA256: "watch-journal",
+            journalByteCount: 8_192
+        )
+
+        XCTAssertEqual(updated.watchSessionID, "watch-original")
+        XCTAssertEqual(updated.watchJournalSHA256, "watch-journal")
+        XCTAssertEqual(updated.watchJournalByteCount, 8_192)
+        XCTAssertEqual(updated.cameraVideoSHA256, "camera-video")
+        XCTAssertEqual(updated.operatorJournalSHA256, "operator-journal")
+        XCTAssertEqual(updated.externalCameraSHA256, "external-video")
+        XCTAssertEqual(updated.coachSummary, coach)
+    }
+
     func testProductSessionManifestOutcomeRoundTripAndLegacyDefault() throws {
         let aborted = ProductSessionManifest(
             runID: "run-aborted",

@@ -167,6 +167,36 @@ public struct ProductSessionManifest: Codable, Equatable, Sendable {
         )
     }
 
+    public func bindingWatchEvidence(
+        watchSessionID: String,
+        journalSHA256: String,
+        journalByteCount: UInt64
+    ) -> ProductSessionManifest {
+        ProductSessionManifest(
+            runID: runID,
+            captureMode: captureMode,
+            targetDurationSeconds: targetDurationSeconds,
+            createdAtUTC: createdAtUTC,
+            outcome: outcome,
+            watchSessionID: self.watchSessionID ?? watchSessionID,
+            watchJournalSHA256: journalSHA256,
+            watchJournalByteCount: journalByteCount,
+            cameraSessionID: cameraSessionID,
+            operatorJournalSHA256: operatorJournalSHA256,
+            operatorMetadataSHA256: operatorMetadataSHA256,
+            cameraVideoSHA256: cameraVideoSHA256,
+            cameraJournalSHA256: cameraJournalSHA256,
+            cameraMetadataSHA256: cameraMetadataSHA256,
+            syncReceipts: syncReceipts,
+            externalCameraExpected: externalCameraExpected,
+            externalCameraImported: externalCameraImported,
+            externalCameraSHA256: externalCameraSHA256,
+            operatorEvidenceSealed: operatorEvidenceSealed,
+            cameraEvidenceSealed: cameraEvidenceSealed,
+            coachSummary: coachSummary
+        )
+    }
+
     public var resolvedOutcome: ProductSessionOutcome {
         outcome ?? .completed
     }
