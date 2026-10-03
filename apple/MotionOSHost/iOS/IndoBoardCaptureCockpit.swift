@@ -108,6 +108,18 @@ struct IndoBoardFramingCard: View {
             }
             .aspectRatio(16 / 10, contentMode: .fit)
 
+            if let boardState =
+                    camera.latestIndoBoardState {
+                boardTrackingGauge(boardState)
+            } else {
+                Label(
+                    "Board markers optional · body-only tracking is still available",
+                    systemImage: "qrcode.viewfinder"
+                )
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            }
+
             if let stats = camera.liveStats {
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: 8) {
@@ -174,6 +186,119 @@ struct IndoBoardFramingCard: View {
             .foregroundStyle(.tertiary)
         }
         .cardStyle()
+    }
+
+    private func boardTrackingGauge(
+        _ state: IndoBoardBalanceState
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack {
+                Label(
+                    "DECK + ROLLER LIVE",
+                    systemImage: "viewfinder.circle.fill"
+                )
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(.green)
+
+                Spacer()
+
+                Text(
+                    "\(Int((state.confidence * 100).rounded()))%"
+                )
+                .font(
+                    .system(
+                        .caption2,
+                        design: .monospaced
+                    )
+                )
+                .foregroundStyle(.secondary)
+            }
+
+            GeometryReader { proxy in
+                let width = proxy.size.width
+                let clamped = min(
+                    1.15,
+                    max(-1.15, state.rollerAlongDeck)
+                )
+                let normalized =
+                    (clamped + 1.15) / 2.30
+                let rollerX =
+                    max(
+                        7,
+                        min(
+                            width - 7,
+                            width * normalized
+                        )
+                    )
+
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color.primary.opacity(0.08))
+                        .frame(height: 7)
+                        .position(
+                            x: width / 2,
+                            y: 11
+                        )
+
+                    Rectangle()
+                        .fill(Color.cyan.opacity(0.55))
+                        .frame(width: 1.5, height: 17)
+                        .position(
+                            x: width / 2,
+                            y: 11
+                        )
+
+                    Circle()
+                        .fill(Color.green)
+                        .frame(width: 14, height: 14)
+                        .overlay {
+                            Circle()
+                                .stroke(
+                                    Color(.systemBackground),
+                                    lineWidth: 2
+                                )
+                        }
+                        .position(
+                            x: rollerX,
+                            y: 11
+                        )
+                }
+            }
+            .frame(height: 22)
+
+            HStack {
+                Text("LEFT")
+                Spacer()
+                Text(
+                    abs(state.rollerAlongDeck)
+                        <= IndoBoardBalanceThresholds.centerZone
+                        ? "CENTERED"
+                        : rollerPositionText(state)
+                )
+                Spacer()
+                Text("RIGHT")
+            }
+            .font(.system(size: 8, weight: .semibold))
+            .foregroundStyle(.secondary)
+        }
+        .padding(10)
+        .background(
+            Color.green.opacity(0.055),
+            in: RoundedRectangle(
+                cornerRadius: 12,
+                style: .continuous
+            )
+        )
+    }
+
+    private func rollerPositionText(
+        _ state: IndoBoardBalanceState
+    ) -> String {
+        String(
+            format: "%@ %.2f",
+            state.rollerAlongDeck < 0 ? "L" : "R",
+            abs(state.rollerAlongDeck)
+        )
     }
 
     private var cameraStatus: String {
