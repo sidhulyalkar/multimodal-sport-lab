@@ -82,6 +82,9 @@ from .indo_session_report import (
     load_json_object,
     write_indo_session_report,
 )
+from .indo_shadow_eval import (
+    summarize_shadow_equipment_evaluation,
+)
 from .insole import (
     import_opengo_text_export,
     write_p2_capture_receipt,
@@ -565,6 +568,13 @@ def _parser() -> argparse.ArgumentParser:
     indo_runtime_eval.add_argument("reference")
     indo_runtime_eval.add_argument("predictions")
     indo_runtime_eval.add_argument("output")
+
+    indo_shadow_eval = sub.add_parser(
+        "indo-summarize-shadow-equipment-eval",
+        help="aggregate on-device QR-versus-markerless shadow comparisons from a camera journal",
+    )
+    indo_shadow_eval.add_argument("camera_journal")
+    indo_shadow_eval.add_argument("output")
 
     indo_model_qualification = sub.add_parser(
         "indo-build-equipment-model-qualification",
@@ -1322,6 +1332,27 @@ def main(argv: list[str] | None = None) -> int:
                     "reference_coverage_fraction":
                         payload["reference_coverage_fraction"],
                     "metrics": payload["metrics"],
+                    "output": args.output,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    if args.command == "indo-summarize-shadow-equipment-eval":
+        payload = summarize_shadow_equipment_evaluation(
+            args.camera_journal,
+            args.output,
+        )
+        print(
+            json.dumps(
+                {
+                    "schema_version": payload["schema_version"],
+                    "pose_event_count": payload["pose_event_count"],
+                    "routing_event_count": payload["routing_event_count"],
+                    "comparison_count": payload["comparison_count"],
+                    "groups": payload["groups"],
                     "output": args.output,
                 },
                 indent=2,
