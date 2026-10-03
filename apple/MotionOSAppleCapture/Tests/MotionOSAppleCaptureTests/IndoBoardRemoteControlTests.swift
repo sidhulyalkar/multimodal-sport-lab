@@ -45,6 +45,9 @@ final class IndoBoardRemoteControlTests: XCTestCase {
             startBlocker: nil,
             phoneBatteryFraction: 0.75,
             phoneStorageGB: 42.5,
+            boardTrackingReady: true,
+            boardTrackingConfidencePercent: 91,
+            boardTrackingCoveragePercent: 73,
             sentAtUnixSeconds: 100
         )
 
@@ -72,6 +75,11 @@ final class IndoBoardRemoteControlTests: XCTestCase {
             startBlocker: status.startBlocker,
             phoneBatteryFraction: status.phoneBatteryFraction,
             phoneStorageGB: status.phoneStorageGB,
+            boardTrackingReady: status.boardTrackingReady,
+            boardTrackingConfidencePercent:
+                status.boardTrackingConfidencePercent,
+            boardTrackingCoveragePercent:
+                status.boardTrackingCoveragePercent,
             sentAtUnixSeconds: 999
         )
 
