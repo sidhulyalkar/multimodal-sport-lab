@@ -420,34 +420,7 @@ struct WatchContentView: View {
                     .font(.system(size: 9))
                     .foregroundStyle(.secondary)
 
-                Label(
-                    status.boardTrackingReady
-                        ? "Board + roller tracked"
-                        : "Body-only beta mode",
-                    systemImage:
-                        status.boardTrackingReady
-                            ? "viewfinder.circle.fill"
-                            : "figure.stand"
-                )
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(
-                    status.boardTrackingReady
-                        ? .green
-                        : .secondary
-                )
-
-                if status.boardTrackingReady,
-                   let confidence =
-                        status.boardTrackingConfidencePercent {
-                    Text("\(confidence)% equipment confidence")
-                        .font(
-                            .system(
-                                size: 8,
-                                design: .monospaced
-                            )
-                        )
-                        .foregroundStyle(.tertiary)
-                }
+                boardTrackingBadge(status)
             }
             .frame(maxWidth: .infinity)
 
@@ -479,6 +452,64 @@ struct WatchContentView: View {
                 symbol: "exclamationmark.circle",
                 color: .yellow
             )
+        }
+    }
+
+    @ViewBuilder
+    private func boardTrackingBadge(
+        _ status: IndoBoardRemoteStatus
+    ) -> some View {
+        let coverage =
+            status.boardTrackingCoveragePercent ?? 0
+        let hasIntermittentEvidence = coverage > 0
+        let title =
+            status.boardTrackingReady
+                ? "Board + roller stable"
+                : (
+                    hasIntermittentEvidence
+                        ? "Board markers intermittent"
+                        : "Body-only beta mode"
+                )
+        let symbol =
+            status.boardTrackingReady
+                ? "viewfinder.circle.fill"
+                : (
+                    hasIntermittentEvidence
+                        ? "viewfinder.circle"
+                        : "figure.stand"
+                )
+        let accent: Color =
+            status.boardTrackingReady
+                ? .green
+                : (
+                    hasIntermittentEvidence
+                        ? .yellow
+                        : .secondary
+                )
+
+        Label(
+            title,
+            systemImage: symbol
+        )
+        .font(.system(size: 9, weight: .semibold))
+        .foregroundStyle(accent)
+
+        if hasIntermittentEvidence {
+            let confidence =
+                status.boardTrackingConfidencePercent
+            Text(
+                confidence.map {
+                    "\(coverage)% visible · \($0)% confidence"
+                }
+                ?? "\(coverage)% visible"
+            )
+            .font(
+                .system(
+                    size: 8,
+                    design: .monospaced
+                )
+            )
+            .foregroundStyle(.tertiary)
         }
     }
 
