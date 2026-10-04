@@ -56,7 +56,7 @@ public struct TimedSyncWindow: Codable, Equatable, Identifiable, Sendable {
 }
 
 public enum IndoBoardProductProtocol {
-    public static let protocolID = "motionos.indo-board-product-session.v1"
+    public static let protocolID = "motionos.indo-board-product-session.v2"
     public static let targetDurationSeconds = 120.0
 
     public static let blocks: [TimedProtocolBlock] = [
@@ -123,11 +123,11 @@ public enum IndoBoardProductProtocol {
         .init(
             id: "sync-middle",
             label: "middle",
-            startSeconds: 82,
-            preferredSeconds: 85,
-            endSeconds: 89,
+            startSeconds: 61,
+            preferredSeconds: 63,
+            endSeconds: 66,
             instruction:
-                "When the Watch cues MIDDLE sync, make one sharp arm gesture, then return to natural balance."
+                "When the Watch cues MIDDLE sync, make one sharp arm gesture near neutral, then begin the partial-squat block."
         ),
         .init(
             id: "sync-end",

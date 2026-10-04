@@ -119,6 +119,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         let label: String
         let acknowledgedAt: Date
         let watchDeviceTimeNS: UInt64
+        let iPhoneCameraPTSNS: UInt64?
     }
 
     static let targetDurationSeconds: TimeInterval =
@@ -455,6 +456,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
 
     func acknowledge(
         _ acknowledgment: SessionSyncAcknowledgment,
+        camera: CameraCaptureController,
         fieldRun: FieldRunCoordinator
     ) {
         guard (phase == .running || phase == .finishing),
@@ -473,7 +475,10 @@ final class IndoBoardSessionCoordinator: ObservableObject {
                     id: acknowledgment.cueID,
                     label: normalized,
                     acknowledgedAt: acknowledgment.receivedAt,
-                    watchDeviceTimeNS: acknowledgment.watchDeviceTimeNS
+                    watchDeviceTimeNS: acknowledgment.watchDeviceTimeNS,
+                    iPhoneCameraPTSNS:
+                        camera.latestPoseFrame?.deviceTimeNS
+                            ?? camera.liveStats?.lastPTSNS
                 )
             )
             fieldRun.markSyncCue(normalized)
@@ -1236,7 +1241,8 @@ final class IndoBoardSessionCoordinator: ObservableObject {
                     ISO8601DateFormatter().string(
                         from: $0.acknowledgedAt
                     ),
-                watchDeviceTimeNS: $0.watchDeviceTimeNS
+                watchDeviceTimeNS: $0.watchDeviceTimeNS,
+                iPhoneCameraPTSNS: $0.iPhoneCameraPTSNS
             )
         }
 

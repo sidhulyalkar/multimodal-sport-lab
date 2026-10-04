@@ -62,6 +62,7 @@ struct IndoBoardSessionView: View {
             guard let acknowledgment else { return }
             session.acknowledge(
                 acknowledgment,
+                camera: camera,
                 fieldRun: fieldRun
             )
         }

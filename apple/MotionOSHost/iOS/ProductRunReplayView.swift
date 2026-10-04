@@ -331,6 +331,8 @@ struct ProductRunReplayView: View {
 
     @StateObject private var controller =
         ProductRunReplayController()
+    @StateObject private var action4Sync =
+        Action4SyncAnalysisController()
 
     @State private var bodyMode:
         ProductReplayBodyMode = .video
@@ -349,6 +351,11 @@ struct ProductRunReplayView: View {
                 hero
                 sourceSelector
                 replayStage
+
+                if controller.selectedSource == .action4 {
+                    action4SyncCard
+                }
+
                 layerControls
                 evidenceStatus
 
@@ -370,10 +377,12 @@ struct ProductRunReplayView: View {
         .navigationTitle("Replay")
         .navigationBarTitleDisplayMode(.inline)
         .task(id: run.runID) {
+            action4Sync.loadExisting(run: run)
             await controller.load(run)
         }
         .onDisappear {
             controller.stop()
+            action4Sync.cancel()
         }
         .onChange(of: controller.selectedSource) {
             _, source in
@@ -537,10 +546,16 @@ struct ProductRunReplayView: View {
 
             if controller.selectedSource == .action4 {
                 Label(
-                    "Original is preserved and playable. Body overlays stay "
-                        + "off until the Action 4 PTS is aligned to the "
-                        + "MotionOS reference timeline.",
-                    systemImage: "clock.badge.exclamationmark"
+                    action4Sync.artifact == nil
+                        ? "Original preserved. Analyze the three sync gestures "
+                            + "before enabling cross-view overlays."
+                        : "A motion-based alignment proposal exists. Overlays "
+                            + "remain locked until that proposal is reviewed "
+                            + "and sealed as synchronization evidence.",
+                    systemImage:
+                        action4Sync.artifact == nil
+                            ? "clock.badge.exclamationmark"
+                            : "waveform.path.ecg.rectangle"
                 )
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -632,6 +647,217 @@ struct ProductRunReplayView: View {
         )
     }
 
+    private var action4SyncCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            MotionOSSectionHeader(
+                title: "Action 4 alignment",
+                subtitle: action4SyncSubtitle,
+                systemImage: "waveform.path.ecg.rectangle",
+                accent:
+                    action4Sync.phase == .ready
+                        ? .green
+                        : .purple
+            )
+
+            if let artifact = action4Sync.artifact {
+                let proposal = artifact.proposal
+
+                HStack(spacing: 8) {
+                    alignmentMetric(
+                        "Confidence",
+                        String(
+                            format:
+                                "%.0f%%",
+                            proposal.confidence * 100
+                        )
+                    )
+                    alignmentMetric(
+                        "Mid residual",
+                        String(
+                            format:
+                                "%.0f ms",
+                            proposal.middleResidualNS
+                                / 1_000_000
+                        )
+                    )
+                    alignmentMetric(
+                        "Peaks",
+                        "\(proposal.externalPeakCount)"
+                    )
+                }
+
+                ForEach(
+                    proposal.anchors,
+                    id: \.label
+                ) { anchor in
+                    HStack(spacing: 8) {
+                        Text(anchor.label.uppercased())
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 48, alignment: .leading)
+
+                        Text(
+                            formatPTS(anchor.externalPTSNS)
+                        )
+                        .font(
+                            .system(
+                                .caption,
+                                design: .monospaced,
+                                weight: .semibold
+                            )
+                        )
+
+                        Image(systemName: "arrow.right")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+
+                        Text(
+                            formatPTS(anchor.referenceTimeNS)
+                        )
+                        .font(
+                            .system(
+                                .caption,
+                                design: .monospaced
+                            )
+                        )
+                        .foregroundStyle(.secondary)
+
+                        Spacer()
+
+                        Text(
+                            String(
+                                format:
+                                    "%.0f%%",
+                                anchor.confidence * 100
+                            )
+                        )
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    }
+                }
+
+                Label(
+                    proposal.confidence >= 0.70
+                        ? "Strong proposal · review before sealing alignment"
+                        : "Proposal needs review · do not unlock overlays yet",
+                    systemImage:
+                        proposal.confidence >= 0.70
+                            ? "checkmark.circle.fill"
+                            : "exclamationmark.triangle.fill"
+                )
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(
+                    proposal.confidence >= 0.70
+                        ? .green
+                        : .orange
+                )
+
+                Text(artifact.claimBoundary)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            } else if action4Sync.phase == .analyzing {
+                HStack(spacing: 10) {
+                    ProgressView()
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Finding the three sync gestures…")
+                            .font(.subheadline.weight(.semibold))
+                        Text(
+                            "MotionOS samples Action 4 pose at 5 Hz and "
+                                + "matches START / MIDDLE / END arm-motion timing."
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
+                }
+            } else {
+                if let error = action4Sync.errorMessage {
+                    Label(
+                        error,
+                        systemImage: "exclamationmark.triangle.fill"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                } else {
+                    Text(
+                        "Analyze the imported movie locally. MotionOS uses "
+                            + "visible arm motion and the three journal-backed "
+                            + "sync cues; file creation time is never treated "
+                            + "as timing truth."
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+
+                Button {
+                    action4Sync.startAnalysis(
+                        run: run
+                    )
+                } label: {
+                    Label(
+                        "Analyze Action 4 Sync",
+                        systemImage: "waveform.path.ecg"
+                    )
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(
+                    action4Sync.phase == .analyzing
+                )
+            }
+        }
+        .cardStyle()
+    }
+
+    private var action4SyncSubtitle: String {
+        switch action4Sync.phase {
+        case .idle:
+            "Find matching physical landmarks"
+        case .analyzing:
+            "Vision pose pass running locally"
+        case .ready:
+            "Three-point motion proposal ready"
+        case .failed:
+            "More evidence needed"
+        }
+    }
+
+    private func alignmentMetric(
+        _ title: String,
+        _ value: String
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title.uppercased())
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(
+                    .system(
+                        .caption,
+                        design: .monospaced,
+                        weight: .semibold
+                    )
+                )
+                .lineLimit(1)
+        }
+        .padding(9)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            Color.primary.opacity(0.035),
+            in: RoundedRectangle(
+                cornerRadius: 11,
+                style: .continuous
+            )
+        )
+    }
+
+    private func formatPTS(
+        _ value: UInt64
+    ) -> String {
+        let seconds =
+            Double(value) / 1_000_000_000
+        return String(format: "%.3f s", seconds)
+    }
+
     private var layerControls: some View {
         VStack(alignment: .leading, spacing: 12) {
             MotionOSSectionHeader(
@@ -644,7 +870,9 @@ struct ProductRunReplayView: View {
 
             if controller.selectedSource == .action4 {
                 Label(
-                    "Annotation layers unlock after external-video alignment.",
+                    action4Sync.artifact == nil
+                        ? "Annotation layers unlock after external-video alignment."
+                        : "Proposal found; review + seal alignment before layers unlock.",
                     systemImage: "lock.fill"
                 )
                 .font(.caption)

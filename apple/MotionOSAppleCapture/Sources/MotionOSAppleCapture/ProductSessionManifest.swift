@@ -99,17 +99,23 @@ public struct ProductSessionManifest: Codable, Equatable, Sendable {
         public let label: String
         public let acknowledgedAtUTC: String
         public let watchDeviceTimeNS: UInt64
+        /// Nearest iPhone camera PTS observed when the Watch cue
+        /// acknowledgment reached the coordinator. This is a coarse cue-onset
+        /// search anchor, not the visual gesture peak itself.
+        public let iPhoneCameraPTSNS: UInt64?
 
         public init(
             cueID: String,
             label: String,
             acknowledgedAtUTC: String,
-            watchDeviceTimeNS: UInt64
+            watchDeviceTimeNS: UInt64,
+            iPhoneCameraPTSNS: UInt64? = nil
         ) {
             self.cueID = cueID
             self.label = label
             self.acknowledgedAtUTC = acknowledgedAtUTC
             self.watchDeviceTimeNS = watchDeviceTimeNS
+            self.iPhoneCameraPTSNS = iPhoneCameraPTSNS
         }
     }
 
