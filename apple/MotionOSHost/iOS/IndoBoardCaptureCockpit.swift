@@ -120,70 +120,63 @@ struct IndoBoardFramingCard: View {
                 .foregroundStyle(.secondary)
             }
 
-            if let stats = camera.liveStats {
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 8) {
-                        framingMetric(
-                            "FPS",
-                            stats.effectiveDeliveredFPS.map {
-                                String(format: "%.1f", $0)
-                            } ?? "—"
-                        )
-                        framingMetric(
-                            "Written",
-                            "\(stats.writtenFrames)"
-                        )
-                        framingMetric(
-                            "Drops",
-                            "\(stats.droppedFrames)"
-                        )
-                        framingMetric(
-                            "Pose",
-                            stats.poseSuccessFraction.map {
-                                String(format: "%.0f%%", $0 * 100)
-                            } ?? "—"
-                        )
+            VStack(alignment: .leading, spacing: 7) {
+                HStack(spacing: 8) {
+                    Image(
+                        systemName:
+                            camera.framingAssessment.state == .ready
+                                ? "checkmark.circle.fill"
+                                : "viewfinder.circle"
+                    )
+                    .foregroundStyle(
+                        camera.framingAssessment.state == .ready
+                            ? Color.green
+                            : Color.cyan
+                    )
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(camera.framingAssessment.title)
+                            .font(.subheadline.weight(.semibold))
+                        Text(camera.framingAssessment.instruction)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
 
-                    Grid(
-                        alignment: .leading,
-                        horizontalSpacing: 8,
-                        verticalSpacing: 8
-                    ) {
-                        GridRow {
-                            framingMetric(
-                                "FPS",
-                                stats.effectiveDeliveredFPS.map {
-                                    String(format: "%.1f", $0)
-                                } ?? "—"
-                            )
-                            framingMetric(
-                                "Drops",
-                                "\(stats.droppedFrames)"
-                            )
-                        }
-                        GridRow {
-                            framingMetric(
-                                "Written",
-                                "\(stats.writtenFrames)"
-                            )
-                            framingMetric(
-                                "Pose",
-                                stats.poseSuccessFraction.map {
-                                    String(format: "%.0f%%", $0 * 100)
-                                } ?? "—"
-                            )
-                        }
-                    }
+                    Spacer(minLength: 8)
+
+                    Text("\(camera.framingAssessment.score)%")
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                }
+
+                if camera.framingAssessment.state == .ready {
+                    ProgressView(
+                        value: camera.stanceAssessment.progress
+                    )
+                    .tint(
+                        camera.stanceAssessment.state == .stable
+                            ? .green
+                            : .cyan
+                    )
+
+                    Text(camera.stanceAssessment.instruction)
+                        .font(.caption2)
+                        .foregroundStyle(
+                            camera.stanceAssessment.state == .stable
+                                ? Color.green
+                                : Color.secondary
+                        )
                 }
             }
-
-            Text(
-                "The guide is for operator framing only. It does not certify "
-                    + "pose quality, calibration, or board geometry."
+            .padding(10)
+            .background(
+                Color.primary.opacity(0.035),
+                in: RoundedRectangle(
+                    cornerRadius: 12,
+                    style: .continuous
+                )
             )
-            .font(.caption2)
-            .foregroundStyle(.tertiary)
+
         }
         .cardStyle()
     }
@@ -322,29 +315,6 @@ struct IndoBoardFramingCard: View {
         }
     }
 
-    private func framingMetric(
-        _ label: String,
-        _ value: String
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(label.uppercased())
-                .font(.caption2.weight(.bold))
-                .foregroundStyle(.secondary)
-            Text(value)
-                .font(.system(.body, design: .rounded, weight: .semibold))
-                .monospacedDigit()
-                .lineLimit(1)
-        }
-        .padding(9)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            Color.primary.opacity(0.035),
-            in: RoundedRectangle(
-                cornerRadius: 12,
-                style: .continuous
-            )
-        )
-    }
 }
 
 /// The live Watch signal inside the capture workspace. Same model and
