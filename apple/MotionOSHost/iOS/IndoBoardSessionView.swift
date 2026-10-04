@@ -12,6 +12,7 @@ struct IndoBoardSessionView: View {
     @EnvironmentObject private var runLibrary: ProductRunLibrary
     @State private var importingExternalVideo = false
     @State private var selectedExternalVideoItem: PhotosPickerItem?
+    @State private var showMeasurementDetails = false
 
     var body: some View {
         ScrollView {
@@ -1676,31 +1677,32 @@ struct IndoBoardSessionView: View {
     }
 
     private var methodology: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label(
-                "Measurement boundary",
-                systemImage: "scope"
-            )
-            .font(.subheadline.weight(.semibold))
+        DisclosureGroup(
+            "How measurements work",
+            isExpanded: $showMeasurementDetails
+        ) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(
+                    "Raw Watch, camera, and operator evidence stays preserved. "
+                        + "Live movement values are derived signals. Stronger "
+                        + "biomechanics claims remain gated on calibration and "
+                        + "post-session quality checks."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
 
-            Text(
-                "This product session records and preserves raw Watch, "
-                    + "camera, and operator evidence. Live movement values "
-                    + "are derived observability signals. Camera-rich "
-                    + "biomechanics metrics remain gated on calibration and "
-                    + "post-session quality checks."
-            )
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-
-            Label(
-                "Use a clear area and stable support or spotter for early Indo Board runs.",
-                systemImage: "figure.stand"
-            )
-            .font(.caption)
-            .foregroundStyle(.secondary)
+                Label(
+                    "Use a clear area and stable support or spotter for early Indo Board runs.",
+                    systemImage: "figure.stand"
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+            .padding(.top, 8)
         }
+        .font(.subheadline.weight(.semibold))
+        .tint(.secondary)
         .cardStyle()
     }
 
