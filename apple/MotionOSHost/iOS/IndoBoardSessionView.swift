@@ -1,4 +1,5 @@
 import MotionOSAppleCapture
+import PhotosUI
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -10,6 +11,8 @@ struct IndoBoardSessionView: View {
     @EnvironmentObject private var session: IndoBoardSessionCoordinator
     @EnvironmentObject private var runLibrary: ProductRunLibrary
     @State private var importingExternalVideo = false
+    @State private var selectedExternalVideoItem: PhotosPickerItem?
+    @State private var showMeasurementDetails = false
 
     var body: some View {
         ScrollView {
@@ -88,6 +91,40 @@ struct IndoBoardSessionView: View {
                 // cancellation requires no error surface.
             }
         }
+        .onChange(of: selectedExternalVideoItem) { _, item in
+            guard let item else { return }
+            Task {
+                defer { selectedExternalVideoItem = nil }
+                do {
+                    guard let movie = try await item.loadTransferable(
+                        type: ImportedMovie.self
+                    ) else {
+                        return
+                    }
+                    await importExternalMovie(movie.url)
+                    try? FileManager.default.removeItem(at: movie.url)
+                } catch {
+                    // PhotosPicker transfer failures are intentionally kept
+                    // separate from the sealed source evidence. The Files
+                    // importer remains available as a fallback.
+                }
+            }
+        }
+    }
+
+    @MainActor
+    private func importExternalMovie(_ sourceURL: URL) async {
+        guard let bundle = fieldRun.evidenceBundle,
+              let runID = fieldRun.runID
+        else {
+            return
+        }
+        await session.importExternalVideo(
+            from: sourceURL,
+            runDirectory: bundle.directory,
+            runID: runID
+        )
+        runLibrary.refresh()
     }
 
     @ViewBuilder
@@ -244,9 +281,10 @@ struct IndoBoardSessionView: View {
                     Text("Add external calibration camera")
                         .font(.subheadline.weight(.semibold))
                     Text(
-                        "Optional high-fidelity teacher view. For the current "
-                            + "Action 4 workflow, start the camera manually and "
-                            + "import the untouched movie after the session."
+                        "Optional high-fidelity teacher view. Keep the Action 4 "
+                            + "rolling before you mount, say “Start Recording,” "
+                            + "or use DJI's Bluetooth remote while on the board. "
+                            + "MotionOS uses shared sync gestures to align and trim it later."
                     )
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -261,12 +299,35 @@ struct IndoBoardSessionView: View {
             )
 
             if session.requiresExternalCamera {
-                Label(
-                    "Action 4 · 4K 16:9 · 60 fps · EIS off · fixed tripod",
-                    systemImage: "video.fill"
-                )
-                .font(.caption)
-                .foregroundStyle(.purple)
+                VStack(alignment: .leading, spacing: 9) {
+                    Label(
+                        "Action 4 · 4K 16:9 · 60 fps · EIS off · fixed tripod",
+                        systemImage: "video.fill"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.purple)
+
+                    Text(
+                        "Frame the full rider, both feet, deck/roller, and enough "
+                            + "lateral recovery space. A 45–90° viewpoint offset "
+                            + "from the iPhone is preferred for multiview geometry."
+                    )
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+
+                    Toggle(
+                        "Action 4 is recording",
+                        isOn: $session.externalCameraConfirmed
+                    )
+                    .font(.subheadline.weight(.semibold))
+
+                    Text(
+                        "This is an operator confirmation, not a claimed DJI API "
+                            + "connection. Once confirmed, do not move the tripod."
+                    )
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                }
             }
         }
         .cardStyle()
@@ -302,6 +363,17 @@ struct IndoBoardSessionView: View {
             )
 
             boardTrackingRow
+
+            if session.requiresExternalCamera {
+                readinessRow(
+                    title: "Action 4",
+                    detail: session.externalCameraConfirmed
+                        ? "recording confirmed · fixed tripod"
+                        : "roll / voice-start / use DJI remote, then confirm",
+                    ready: session.externalCameraConfirmed,
+                    symbol: "video.fill"
+                )
+            }
 
             readinessRow(
                 title: "Battery",
@@ -1080,21 +1152,35 @@ struct IndoBoardSessionView: View {
                         )
                     }
                 } else {
-                    Button {
-                        importingExternalVideo = true
-                    } label: {
+                    PhotosPicker(
+                        selection: $selectedExternalVideoItem,
+                        matching: .videos
+                    ) {
                         Label(
-                            "Import Original Action 4 Movie",
-                            systemImage: "video.badge.plus"
+                            "Choose Action 4 Movie from Photos",
+                            systemImage: "photo.on.rectangle.angled"
                         )
                         .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
 
+                    Button {
+                        importingExternalVideo = true
+                    } label: {
+                        Label(
+                            "Choose Movie from Files / SD Card",
+                            systemImage: "externaldrive.badge.plus"
+                        )
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+
                     Text(
-                        "MotionOS copies the untouched movie into this run "
-                            + "and records its SHA-256 + byte count. "
-                            + "No transcoding occurs during import."
+                        "Use Photos after transferring through DJI Mimo, or "
+                            + "Files when reading from an SD card / external drive. "
+                            + "MotionOS copies the untouched movie into this run "
+                            + "and records its SHA-256 + byte count. No transcoding "
+                            + "occurs during evidence import."
                     )
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -1591,31 +1677,32 @@ struct IndoBoardSessionView: View {
     }
 
     private var methodology: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label(
-                "Measurement boundary",
-                systemImage: "scope"
-            )
-            .font(.subheadline.weight(.semibold))
+        DisclosureGroup(
+            "How measurements work",
+            isExpanded: $showMeasurementDetails
+        ) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(
+                    "Raw Watch, camera, and operator evidence stays preserved. "
+                        + "Live movement values are derived signals. Stronger "
+                        + "biomechanics claims remain gated on calibration and "
+                        + "post-session quality checks."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
 
-            Text(
-                "This product session records and preserves raw Watch, "
-                    + "camera, and operator evidence. Live movement values "
-                    + "are derived observability signals. Camera-rich "
-                    + "biomechanics metrics remain gated on calibration and "
-                    + "post-session quality checks."
-            )
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-
-            Label(
-                "Use a clear area and stable support or spotter for early Indo Board runs.",
-                systemImage: "figure.stand"
-            )
-            .font(.caption)
-            .foregroundStyle(.secondary)
+                Label(
+                    "Use a clear area and stable support or spotter for early Indo Board runs.",
+                    systemImage: "figure.stand"
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+            .padding(.top, 8)
         }
+        .font(.subheadline.weight(.semibold))
+        .tint(.secondary)
         .cardStyle()
     }
 
@@ -1752,13 +1839,15 @@ struct IndoBoardSessionView: View {
         Binding(
             get: {
                 session.requiresExternalCamera
-                    && session.externalCameraConfirmed
             },
             set: { enabled in
                 session.captureMode = enabled
                     ? .multiviewCalibration
                     : .watchAndPhone
-                session.externalCameraConfirmed = enabled
+                // Selecting the source does not prove it is recording.
+                // Require a separate operator confirmation after the camera
+                // has actually been started.
+                session.externalCameraConfirmed = false
             }
         )
     }

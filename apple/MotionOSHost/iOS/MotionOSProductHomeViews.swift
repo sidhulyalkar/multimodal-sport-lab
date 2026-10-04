@@ -224,19 +224,21 @@ struct CaptureHomeView: View {
                 }
                 .buttonStyle(.plain)
 
-                Divider().padding(.leading, 44)
+                if pod.backendAvailable {
+                    Divider().padding(.leading, 44)
 
-                NavigationLink {
-                    EquipmentPodCard()
-                } label: {
-                    toolRow(
-                        title: "Equipment pod",
-                        subtitle: pod.phase.rawValue.capitalized,
-                        symbol: "sensor.tag.radiowaves.forward",
-                        tint: .secondary
-                    )
+                    NavigationLink {
+                        EquipmentPodCard()
+                    } label: {
+                        toolRow(
+                            title: "Equipment pod",
+                            subtitle: pod.phase.rawValue.capitalized,
+                            symbol: "sensor.tag.radiowaves.forward",
+                            tint: .secondary
+                        )
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
             .padding(.top, 10)
         } label: {
