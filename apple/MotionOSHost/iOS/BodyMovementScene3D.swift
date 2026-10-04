@@ -412,7 +412,7 @@ struct BodyMovementSceneCard: View {
 }
 
 @MainActor
-private struct BodyMovementScene3D: UIViewRepresentable {
+struct BodyMovementScene3D: UIViewRepresentable {
     let frame: BodyMovementFrame
     let viewpoint: BodySceneViewpoint
     let showSupport: Bool
