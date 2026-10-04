@@ -99,6 +99,26 @@ struct Action4SyncAnalysisArtifact:
 struct ArmPoseSample: Sendable {
     let timeNS: UInt64
     let joints: [String: BodyJoint2D]
+    let indoBoardEquipment:
+        IndoBoardEquipmentObservation?
+    let visibleFiducials:
+        [IndoBoardFiducialMarkerID]
+
+    init(
+        timeNS: UInt64,
+        joints: [String: BodyJoint2D],
+        indoBoardEquipment:
+            IndoBoardEquipmentObservation? = nil,
+        visibleFiducials:
+            [IndoBoardFiducialMarkerID] = []
+    ) {
+        self.timeNS = timeNS
+        self.joints = joints
+        self.indoBoardEquipment =
+            indoBoardEquipment
+        self.visibleFiducials =
+            visibleFiducials
+    }
 }
 
 enum ArmMotionTraceBuilder {
@@ -328,6 +348,9 @@ enum Action4VideoPoseExtractor {
         }
 
         let request = VNDetectHumanBodyPoseRequest()
+        let barcodeRequest =
+            VNDetectBarcodesRequest()
+        barcodeRequest.symbologies = [.qr]
         let intervalNS = UInt64(
             (
                 effectiveSampleInterval
@@ -382,7 +405,10 @@ enum Action4VideoPoseExtractor {
                 cvPixelBuffer: pixelBuffer,
                 orientation: orientation
             )
-            try handler.perform([request])
+            try handler.perform([
+                request,
+                barcodeRequest,
+            ])
 
             guard let observation =
                     request.results?.first
@@ -424,10 +450,72 @@ enum Action4VideoPoseExtractor {
                 continue
             }
 
+            let fiducials =
+                (barcodeRequest.results ?? [])
+                    .compactMap {
+                        observation
+                        -> IndoBoardFiducialDetection? in
+                        guard let raw =
+                                observation
+                                    .payloadStringValue,
+                              let marker =
+                                IndoBoardFiducialMarkerID(
+                                    rawValue: raw
+                                )
+                        else {
+                            return nil
+                        }
+
+                        let box =
+                            observation.boundingBox
+                        return IndoBoardFiducialDetection(
+                            marker: marker,
+                            center:
+                                NormalizedImagePoint2D(
+                                    x:
+                                        Double(
+                                            box.midX
+                                        ),
+                                    y:
+                                        Double(
+                                            box.midY
+                                        )
+                                ),
+                            confidence:
+                                Double(
+                                    observation
+                                        .confidence
+                                )
+                        )
+                    }
+
+            let equipment =
+                IndoBoardFiducialEquipmentBuilder
+                    .makeObservation(
+                        detections: fiducials,
+                        sequence:
+                            UInt64(poses.count),
+                        deviceTimeNS: ptsNS
+                    )
+
             poses.append(
                 ArmPoseSample(
                     timeNS: ptsNS,
-                    joints: joints
+                    joints: joints,
+                    indoBoardEquipment:
+                        equipment,
+                    visibleFiducials:
+                        Array(
+                            Set(
+                                fiducials.map(
+                                    \.marker
+                                )
+                            )
+                        )
+                        .sorted {
+                            $0.rawValue
+                                < $1.rawValue
+                        }
                 )
             )
 
