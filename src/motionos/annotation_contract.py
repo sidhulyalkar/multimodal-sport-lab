@@ -158,9 +158,8 @@ def _validate_layer(
                 "measured_muscle_activation requires an EMG source role"
             )
 
-    if semantic == "coaching":
-        if evidence_class != "inferred":
-            raise ValueError("coaching layers must be classified as inferred")
+    if semantic == "coaching" and evidence_class != "inferred":
+        raise ValueError("coaching layers must be classified as inferred")
 
     claim_boundary = raw.get("claim_boundary")
     if claim_boundary is not None:
