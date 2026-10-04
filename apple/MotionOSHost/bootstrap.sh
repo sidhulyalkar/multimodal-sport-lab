@@ -109,28 +109,21 @@ if [[ ! "$XCODE_MAJOR" =~ ^[0-9]+$ ]] || [[ ! "$XCODE_MINOR" =~ ^[0-9]+$ ]]; the
   exit 1
 fi
 
-# The pinned MetaWear revision declares swift-tools-version 6.1. Xcode 16.2
-# ships SwiftPM 6.0 and cannot even resolve the package graph. Keep this
-# check ahead of package resolution so the operator gets the root cause
-# rather than downstream "Missing package product" noise.
-if (( XCODE_MAJOR < 16 || (XCODE_MAJOR == 16 && XCODE_MINOR < 3) )); then
+# The lean product build uses the local Swift 6 MotionOS package and does not
+# resolve the optional MetaWear / NordicDFU graph. Xcode 16+ is sufficient for
+# compile-only work; current physical iOS/watchOS 26 qualification should use
+# Xcode 26 or newer.
+if (( XCODE_MAJOR < 16 )); then
   cat >&2 <<EOF
 
-MotionOS package resolution requires Xcode 16.3 or newer.
+MotionOS requires Xcode 16 or newer.
 Detected: Xcode $XCODE_VERSION
 
-The pinned MetaWear package uses Swift tools 6.1, while Xcode $XCODE_VERSION
-ships an older SwiftPM toolchain.
-
 For current physical MotionOS qualification on iOS/watchOS 26 devices,
-install Xcode 26 or newer rather than stopping at Xcode 16.3.
+install Xcode 26 or newer.
 
 After installing a newer Xcode:
   export MOTIONOS_DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer"
-  bash bootstrap.sh --reset-packages
-
-If the new Xcode has a different app name:
-  export MOTIONOS_DEVELOPER_DIR="/Applications/Xcode-26.app/Contents/Developer"
   bash bootstrap.sh --reset-packages
 EOF
   exit 1
