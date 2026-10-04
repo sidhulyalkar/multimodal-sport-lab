@@ -31,6 +31,81 @@ enum Action4PoseTrackAnalyzer {
     static let sampleIntervalSeconds = 0.10
     static let minimumUsefulFrameCount = 10
 
+    @discardableResult
+    static func persistTrack(
+        run: ProductRunRecord,
+        sourceDigest: FileEvidenceDigest,
+        sourceDurationNS: UInt64,
+        poses: [ArmPoseSample],
+        sampleIntervalSeconds: Double,
+        analyzerVersion: String
+    ) throws -> ExternalVideoPoseTrack {
+        guard poses.count
+                >= minimumUsefulFrameCount
+        else {
+            throw Action4PoseTrackError
+                .insufficientPoseEvidence
+        }
+
+        let frames = poses.map {
+            sample in
+            ExternalVideoPoseFrame(
+                sourcePTSNS: sample.timeNS,
+                joints:
+                    sample.joints.values
+                        .sorted {
+                            $0.id < $1.id
+                        },
+                indoBoardEquipment:
+                    sample.indoBoardEquipment,
+                visibleFiducials:
+                    sample.visibleFiducials
+            )
+        }
+
+        let track = ExternalVideoPoseTrack(
+            runID: run.runID,
+            sourceID: "action4",
+            sourceVideoSHA256:
+                sourceDigest.sha256,
+            sourceVideoByteCount:
+                sourceDigest.byteCount,
+            sourceDurationNS:
+                sourceDurationNS,
+            analyzerID:
+                "apple.vision.VNDetectHumanBodyPoseRequest",
+            analyzerVersion:
+                analyzerVersion,
+            sampleIntervalSeconds:
+                sampleIntervalSeconds,
+            coordinateFrame:
+                "source_image_normalized_origin_lower_left_after_orientation",
+            frames: frames,
+            createdAtUTC:
+                ISO8601DateFormatter()
+                    .string(from: Date())
+        )
+
+        let output = artifactURL(for: run)
+        try FileManager.default.createDirectory(
+            at:
+                output
+                    .deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [
+            .prettyPrinted,
+            .sortedKeys,
+        ]
+        try encoder.encode(track).write(
+            to: output,
+            options: .atomic
+        )
+        return track
+    }
+
     static func artifactURL(
         for run: ProductRunRecord
     ) -> URL {
@@ -160,69 +235,17 @@ enum Action4PoseTrackAnalyzer {
                     )
                 }
 
-        guard result.poses.count
-                >= minimumUsefulFrameCount
-        else {
-            throw Action4PoseTrackError
-                .insufficientPoseEvidence
-        }
-
-        let frames = result.poses.map {
-            sample in
-            ExternalVideoPoseFrame(
-                sourcePTSNS: sample.timeNS,
-                joints:
-                    sample.joints.values
-                        .sorted {
-                            $0.id < $1.id
-                        },
-                indoBoardEquipment:
-                    sample.indoBoardEquipment,
-                visibleFiducials:
-                    sample.visibleFiducials
-            )
-        }
-
-        let track = ExternalVideoPoseTrack(
-            runID: run.runID,
-            sourceID: "action4",
-            sourceVideoSHA256:
-                digest.sha256,
-            sourceVideoByteCount:
-                digest.byteCount,
+        try Task.checkCancellation()
+        let track = try persistTrack(
+            run: run,
+            sourceDigest: digest,
             sourceDurationNS:
                 alignment.sourceVideo.durationNS,
-            analyzerID:
-                "apple.vision.VNDetectHumanBodyPoseRequest",
-            analyzerVersion:
-                "motionos-action4-pose-v1",
+            poses: result.poses,
             sampleIntervalSeconds:
                 sampleIntervalSeconds,
-            coordinateFrame:
-                "source_image_normalized_origin_lower_left_after_orientation",
-            frames: frames,
-            createdAtUTC:
-                ISO8601DateFormatter()
-                    .string(from: Date())
-        )
-
-        try Task.checkCancellation()
-        let output = artifactURL(for: run)
-        try FileManager.default.createDirectory(
-            at:
-                output
-                    .deletingLastPathComponent(),
-            withIntermediateDirectories: true
-        )
-
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [
-            .prettyPrinted,
-            .sortedKeys,
-        ]
-        try encoder.encode(track).write(
-            to: output,
-            options: .atomic
+            analyzerVersion:
+                "motionos-action4-pose-v1"
         )
 
         progress?(1)
