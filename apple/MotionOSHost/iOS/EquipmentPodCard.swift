@@ -70,61 +70,84 @@ struct EquipmentPodCard: View {
         }
     }
 
+    @ViewBuilder
     private var discoveryControls: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Button {
+        if !pod.backendAvailable {
+            VStack(alignment: .leading, spacing: 8) {
+                Label(
+                    "Optional lab sensor is not loaded",
+                    systemImage: "sensor.tag.radiowaves.forward.slash"
+                )
+                .font(.subheadline.weight(.semibold))
+
+                Text(
+                    "The default product build excludes the MetaWear firmware/DFU "
+                        + "package graph so the Watch + iPhone + camera path stays "
+                        + "small and warning-free. Equipment-pod code remains in "
+                        + "the repository for a dedicated sensor-lab build."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Button {
+                        if pod.phase == .scanning {
+                            pod.stopScanning()
+                        } else {
+                            pod.startScanning()
+                        }
+                    } label: {
+                        Label(
+                            pod.phase == .scanning
+                                ? "Stop Scan"
+                                : "Scan for MetaMotionS",
+                            systemImage: pod.phase == .scanning
+                                ? "stop.circle"
+                                : "dot.radiowaves.left.and.right"
+                        )
+                    }
+                    .buttonStyle(.borderedProminent)
+
                     if pod.phase == .scanning {
-                        pod.stopScanning()
-                    } else {
-                        pod.startScanning()
+                        ProgressView()
                     }
-                } label: {
-                    Label(
-                        pod.phase == .scanning ? "Stop Scan" : "Scan for MetaMotionS",
-                        systemImage: pod.phase == .scanning
-                            ? "stop.circle"
-                            : "dot.radiowaves.left.and.right"
-                    )
                 }
-                .buttonStyle(.borderedProminent)
 
-                if pod.phase == .scanning {
-                    ProgressView()
+                if pod.candidates.isEmpty,
+                   pod.phase == .scanning {
+                    Text("Looking for nearby MetaWear devices…")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-            }
 
-            if pod.candidates.isEmpty,
-               pod.phase == .scanning {
-                Text("Looking for nearby MetaWear devices…")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            ForEach(pod.candidates) { candidate in
-                Button {
-                    Task {
-                        await pod.connect(candidate)
-                    }
-                } label: {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(candidate.name)
-                                .font(.subheadline.weight(.medium))
-                            Text(candidate.id.uuidString)
-                                .font(.system(size: 9, design: .monospaced))
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
+                ForEach(pod.candidates) { candidate in
+                    Button {
+                        Task {
+                            await pod.connect(candidate)
                         }
-                        Spacer()
-                        if let rssi = candidate.rssi {
-                            Text("\(rssi) dBm")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
+                    } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(candidate.name)
+                                    .font(.subheadline.weight(.medium))
+                                Text(candidate.id.uuidString)
+                                    .font(.system(size: 9, design: .monospaced))
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                            Spacer()
+                            if let rssi = candidate.rssi {
+                                Text("\(rssi) dBm")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                     }
+                    .buttonStyle(.bordered)
                 }
-                .buttonStyle(.bordered)
             }
         }
     }
