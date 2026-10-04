@@ -213,7 +213,8 @@ public struct VideoAlignmentReceiptV1:
 }
 
 public enum VideoAlignmentReceiptError:
-    LocalizedError {
+    LocalizedError,
+    Equatable {
     case invalidRunID
     case invalidSource
     case invalidDuration
