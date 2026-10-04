@@ -282,9 +282,9 @@ struct IndoBoardSessionView: View {
                         .font(.subheadline.weight(.semibold))
                     Text(
                         "Optional high-fidelity teacher view. Keep the Action 4 "
-                            + "rolling before you mount, or start it from DJI's "
-                            + "Bluetooth remote while on the board. MotionOS "
-                            + "uses shared sync gestures to align and trim it later."
+                            + "rolling before you mount, say “Start Recording,” "
+                            + "or use DJI's Bluetooth remote while on the board. "
+                            + "MotionOS uses shared sync gestures to align and trim it later."
                     )
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -369,7 +369,7 @@ struct IndoBoardSessionView: View {
                     title: "Action 4",
                     detail: session.externalCameraConfirmed
                         ? "recording confirmed · fixed tripod"
-                        : "start recording or use DJI remote, then confirm",
+                        : "roll / voice-start / use DJI remote, then confirm",
                     ready: session.externalCameraConfirmed,
                     symbol: "video.fill"
                 )
