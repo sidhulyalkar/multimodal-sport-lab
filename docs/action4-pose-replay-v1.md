@@ -65,18 +65,26 @@ file alone is not.
 
 ## Build source-camera pose
 
-After temporal alignment is sealed, tap **Build Action 4 Pose Track**.
+The sync analyzer already decodes the Action 4 source at 5 Hz. MotionOS now
+persists those same body + QR observations as the **first usable pose track**
+instead of discarding them. After temporal alignment is sealed, Video mode can
+therefore become useful without immediately decoding the 4K movie a second
+time.
 
-MotionOS:
+Replay then offers **Refine Pose Track to 10 Hz** as an optional quality pass.
+
+The refinement:
 
 - verifies the Action 4 SHA-256 against the sealed alignment;
 - samples the source at 10 Hz;
 - runs Apple Vision human-body pose locally;
 - runs the existing MotionOS QR detector on the same sampled frames;
-- writes `action4-pose-track.json`;
+- atomically replaces the coarser track only when the new track is denser;
 - keeps the original movie unchanged.
 
-For a two-minute protocol the analysis is intentionally offline. It may take
+A later 5 Hz sync rerun never overwrites an existing 10 Hz track.
+
+For a two-minute protocol the refinement is intentionally offline. It may take
 noticeably longer than normal replay loading because Vision is processing a
 4K source. Closing Replay cancels the pass instead of allowing invisible work
 to continue.
