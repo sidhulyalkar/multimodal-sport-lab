@@ -3,6 +3,11 @@ from __future__ import annotations
 import argparse
 import json
 
+from .annotation_contract import (
+    build_annotation_manifest,
+    validate_annotation_manifest,
+    validate_teacher_labels,
+)
 from .body_authoring import (
     build_body_model_from_spec,
     write_body_registration_report,
@@ -259,6 +264,32 @@ def _parser() -> argparse.ArgumentParser:
     )
     video_alignment.add_argument("spec")
     video_alignment.add_argument("output")
+
+    annotation_manifest = sub.add_parser(
+        "build-annotation-manifest",
+        help=(
+            "bind synchronized video, derived evidence, renderer versions, "
+            "and observed/derived/inferred replay layers"
+        ),
+    )
+    annotation_manifest.add_argument("spec")
+    annotation_manifest.add_argument("output")
+
+    annotation_validate = sub.add_parser(
+        "validate-annotation-manifest",
+        help="revalidate all hashes and layer semantics in an annotation manifest",
+    )
+    annotation_validate.add_argument("manifest")
+
+    labels_validate = sub.add_parser(
+        "validate-teacher-labels",
+        help=(
+            "validate time-indexed teacher labels against an annotation "
+            "manifest and its exact video time map"
+        ),
+    )
+    labels_validate.add_argument("labels")
+    labels_validate.add_argument("manifest")
 
     calibration = sub.add_parser(
         "build-calibration-bundle",
@@ -875,6 +906,21 @@ def main(argv: list[str] | None = None) -> int:
         receipt = write_video_alignment(args.spec, args.output)
         print(json.dumps(receipt.to_dict(), indent=2, sort_keys=True))
         return 0 if receipt.coverage.passed else 2
+
+    if args.command == "build-annotation-manifest":
+        manifest = build_annotation_manifest(args.spec, args.output)
+        print(json.dumps(manifest, indent=2, sort_keys=True))
+        return 0
+
+    if args.command == "validate-annotation-manifest":
+        manifest = validate_annotation_manifest(args.manifest)
+        print(json.dumps(manifest, indent=2, sort_keys=True))
+        return 0
+
+    if args.command == "validate-teacher-labels":
+        result = validate_teacher_labels(args.labels, args.manifest)
+        print(json.dumps(result.to_dict(), indent=2, sort_keys=True))
+        return 0 if result.passed else 2
 
     if args.command == "build-calibration-bundle":
         bundle = build_calibration_bundle(args.spec, args.output)
