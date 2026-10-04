@@ -23,6 +23,12 @@ struct ProductRunDetailView: View {
             LazyVStack(spacing: MotionOSDesign.pageSpacing) {
                 hero
                 sourceMap
+
+                if run.cameraVideoURL != nil,
+                   run.cameraJournalURL != nil {
+                    replayEntry
+                }
+
                 protocolEvidence
 
                 if let summary = run.watchSummary {
@@ -227,6 +233,59 @@ struct ProductRunDetailView: View {
             .font(.caption2)
             .foregroundStyle(.secondary)
         }
+        .cardStyle()
+    }
+
+    private var replayEntry: some View {
+        NavigationLink {
+            ProductRunReplayView(run: run)
+        } label: {
+            HStack(spacing: 13) {
+                ZStack {
+                    RoundedRectangle(
+                        cornerRadius: 14,
+                        style: .continuous
+                    )
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.cyan.opacity(0.16),
+                                Color.indigo.opacity(0.10),
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 50, height: 50)
+
+                    Image(systemName: "play.rectangle.fill")
+                        .font(.title3)
+                        .foregroundStyle(.cyan)
+                }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Replay movement")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+
+                    Text(
+                        run.externalVideoURL != nil
+                            ? "iPhone pose replay · Action 4 original available"
+                            : "Video · body · balance · coaching"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+
+                Spacer(minLength: 8)
+
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
         .cardStyle()
     }
 
