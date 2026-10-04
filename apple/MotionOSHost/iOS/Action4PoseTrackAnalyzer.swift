@@ -342,66 +342,62 @@ final class Action4PoseTrackController:
         progress = 0
         errorMessage = nil
 
-        analysisTask = Task {
-            [weak self] in
+        let controller = self
+        analysisTask = Task { @MainActor in
             do {
                 let value =
                     try await Action4PoseTrackAnalyzer
                         .analyze(
                             run: run
                         ) { value in
-                            Task { @MainActor [weak self] in
-                                guard let self,
-                                      self.phase
-                                        == .analyzing
-                                else {
-                                    return
-                                }
-                                self.progress =
-                                    min(
-                                        1,
-                                        max(
-                                            self.progress,
-                                            value
-                                        )
-                                    )
+                            Task { @MainActor in
+                                controller.applyProgress(
+                                    value
+                                )
                             }
                         }
 
-                guard !Task.isCancelled,
-                      let self
-                else {
+                guard !Task.isCancelled else {
                     return
                 }
-                self.track = value
-                self.progress = 1
-                self.phase = .ready
-                self.analysisTask = nil
+                controller.track = value
+                controller.progress = 1
+                controller.phase = .ready
+                controller.analysisTask = nil
             } catch is CancellationError {
-                guard let self else {
-                    return
-                }
-                self.phase =
-                    self.track == nil
+                controller.phase =
+                    controller.track == nil
                         ? .idle
                         : .ready
-                self.progress =
-                    self.track == nil
+                controller.progress =
+                    controller.track == nil
                         ? 0
                         : 1
-                self.analysisTask = nil
+                controller.analysisTask = nil
             } catch {
-                guard let self else {
-                    return
-                }
-                self.track = nil
-                self.progress = 0
-                self.phase = .failed
-                self.errorMessage =
+                controller.track = nil
+                controller.progress = 0
+                controller.phase = .failed
+                controller.errorMessage =
                     error.localizedDescription
-                self.analysisTask = nil
+                controller.analysisTask = nil
             }
         }
+    }
+
+    private func applyProgress(
+        _ value: Double
+    ) {
+        guard phase == .analyzing else {
+            return
+        }
+        progress = min(
+            1,
+            max(
+                progress,
+                value
+            )
+        )
     }
 
     func cancel() {
