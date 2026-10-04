@@ -9,6 +9,7 @@ SOURCE_PACKAGES="$REPO_ROOT/.build/apple-source-packages"
 SCHEME="${MOTIONOS_SCHEME:-MotionOS-iOS}"
 RESET=0
 OPEN_PROJECT=1
+ALLOW_PROTECTED_WORKSPACE=0
 
 usage() {
   cat <<'EOF'
@@ -20,6 +21,9 @@ and resolves all Swift Package Manager dependencies into a repo-local cache.
 Options:
   --reset-packages  Remove only generated MotionOS Xcode/package state before resolving.
   --no-open         Do not open Xcode after a successful bootstrap.
+  --allow-protected-workspace
+                    Continue when the repo lives under Documents/Desktop/Downloads.
+                    This may trigger repeated macOS Files & Folders prompts.
   -h, --help        Show this help.
 EOF
 }
@@ -32,6 +36,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --no-open)
       OPEN_PROJECT=0
+      shift
+      ;;
+    --allow-protected-workspace)
+      ALLOW_PROTECTED_WORKSPACE=1
       shift
       ;;
     -h|--help)
@@ -56,6 +64,60 @@ require() {
 require xcodegen
 require xcodebuild
 require swift
+
+# macOS protects Documents/Desktop/Downloads behind Files & Folders privacy.
+# Xcode, source indexing, SwiftPM helpers, and build subprocesses all need to
+# traverse the workspace repeatedly. Keeping an active Xcode project under one
+# of those locations can therefore produce repeated system permission prompts.
+#
+# MotionOS cannot suppress or pre-authorize macOS TCC prompts. Fail before
+# generation/opening so the developer can either relocate the repository to a
+# normal development root (recommended) or explicitly accept the trade-off.
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  PROTECTED_ROOTS=(
+    "$HOME/Documents"
+    "$HOME/Desktop"
+    "$HOME/Downloads"
+  )
+  PROTECTED_WORKSPACE=""
+  for root in "${PROTECTED_ROOTS[@]}"; do
+    case "$REPO_ROOT" in
+      "$root"|"$root"/*)
+        PROTECTED_WORKSPACE="$root"
+        break
+        ;;
+    esac
+  done
+
+  if [[ -n "$PROTECTED_WORKSPACE" ]]     && [[ "$ALLOW_PROTECTED_WORKSPACE" -ne 1 ]]     && [[ "${MOTIONOS_ALLOW_PROTECTED_WORKSPACE:-0}" != "1" ]]; then
+    cat >&2 <<EOF
+
+MotionOS workspace is inside a macOS protected folder:
+  $REPO_ROOT
+
+Xcode may repeatedly request Files & Folders access while indexing, resolving
+packages, and building from Documents/Desktop/Downloads.
+
+Recommended one-time fix:
+  mkdir -p "$HOME/Developer"
+  cd "$(dirname "$REPO_ROOT")"
+  mv "$(basename "$REPO_ROOT")" "$HOME/Developer/"
+  cd "$HOME/Developer/$(basename "$REPO_ROOT")/apple/MotionOSHost"
+  bash bootstrap.sh --reset-packages
+
+If you intentionally want to keep the repository here, grant Xcode access in
+the macOS prompt and re-run with:
+  bash bootstrap.sh --reset-packages --allow-protected-workspace
+
+or:
+  MOTIONOS_ALLOW_PROTECTED_WORKSPACE=1 bash bootstrap.sh --reset-packages
+
+This guard is about macOS workspace privacy, not MotionOS camera/HealthKit
+permissions and not iOS code signing.
+EOF
+    exit 3
+  fi
+fi
 
 # Xcode's GUI can be installed while xcode-select still points at the smaller
 # CommandLineTools bundle. In that state, xcodebuild exists but refuses to run.
