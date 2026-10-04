@@ -474,11 +474,13 @@ private struct ExternalCameraDetailView: View {
                 )
             }
 
-            Section("Placement") {
+            Section {
                 DiagnosticRow("Tripod", "fixed for the entire run")
                 DiagnosticRow("Rider", "head, hands, hips, knees, feet visible")
                 DiagnosticRow("Equipment", "full deck + roller visible")
                 DiagnosticRow("Second view", "45–90° offset from iPhone")
+            } header: {
+                Text("Placement")
             } footer: {
                 Text(
                     "The second view is teacher/calibration evidence. Exact "
