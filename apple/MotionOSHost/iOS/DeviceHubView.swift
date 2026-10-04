@@ -70,7 +70,7 @@ struct DeviceHubView: View {
                 } label: {
                     DeviceRow(
                         title: "External Camera",
-                        detail: "DJI Osmo Action 4 · start manually, import after",
+                        detail: "DJI Osmo Action 4 · remote/manual roll + post-run import",
                         symbol: "video.fill",
                         status: indoBoard.externalCameraConfirmed
                             ? "ENABLED"
