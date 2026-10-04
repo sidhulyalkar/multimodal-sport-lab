@@ -382,6 +382,7 @@ struct ProductRunReplayView: View {
         }
         .onDisappear {
             controller.stop()
+            action4Sync.cancel()
         }
         .onChange(of: controller.selectedSource) {
             _, source in
@@ -788,11 +789,9 @@ struct ProductRunReplayView: View {
                 }
 
                 Button {
-                    Task {
-                        await action4Sync.analyze(
-                            run: run
-                        )
-                    }
+                    action4Sync.startAnalysis(
+                        run: run
+                    )
                 } label: {
                     Label(
                         "Analyze Action 4 Sync",
