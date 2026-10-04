@@ -139,6 +139,123 @@ final class ExternalVideoPoseTrackTests: XCTestCase {
         XCTAssertEqual(track.frameCount, 2)
     }
 
+    func testCarriesNearbyQREquipmentWithoutInterpolatingGeometry() throws {
+        let equipment =
+            IndoBoardFiducialEquipmentBuilder
+                .makeObservation(
+                    detections: [
+                        .init(
+                            marker: .deckLeft,
+                            center:
+                                NormalizedImagePoint2D(
+                                    x: 0.2,
+                                    y: 0.7
+                                ),
+                            confidence: 0.9
+                        ),
+                        .init(
+                            marker: .deckRight,
+                            center:
+                                NormalizedImagePoint2D(
+                                    x: 0.8,
+                                    y: 0.7
+                                ),
+                            confidence: 0.9
+                        ),
+                        .init(
+                            marker: .rollerCenter,
+                            center:
+                                NormalizedImagePoint2D(
+                                    x: 0.5,
+                                    y: 0.55
+                                ),
+                            confidence: 0.85
+                        ),
+                    ],
+                    sequence: 1,
+                    deviceTimeNS:
+                        1_000_000_000
+                )
+
+        let track = makeTrack(
+            frames: [
+                ExternalVideoPoseFrame(
+                    sourcePTSNS:
+                        1_000_000_000,
+                    joints: [
+                        joint(
+                            "root",
+                            0.5,
+                            0.5,
+                            1
+                        ),
+                    ],
+                    indoBoardEquipment:
+                        equipment,
+                    visibleFiducials: [
+                        .deckLeft,
+                        .deckRight,
+                        .rollerCenter,
+                    ]
+                ),
+                ExternalVideoPoseFrame(
+                    sourcePTSNS:
+                        1_200_000_000,
+                    joints: [
+                        joint(
+                            "root",
+                            0.6,
+                            0.5,
+                            1
+                        ),
+                    ]
+                ),
+            ]
+        )
+
+        XCTAssertEqual(
+            track.equipmentFrameCount,
+            1
+        )
+        XCTAssertEqual(
+            track.equipmentCoverageFraction,
+            0.5,
+            accuracy: 1e-12
+        )
+        XCTAssertEqual(
+            track.fiducialFrameCount,
+            1
+        )
+
+        let near = try XCTUnwrap(
+            track.interpolatedFrame(
+                at: 1_080_000_000
+            )
+        )
+        XCTAssertNotNil(
+            near.indoBoardEquipment
+        )
+        XCTAssertEqual(
+            Set(near.visibleFiducials),
+            Set([
+                .deckLeft,
+                .deckRight,
+                .rollerCenter,
+            ])
+        )
+
+        let farther = try XCTUnwrap(
+            track.interpolatedFrame(
+                at: 1_190_000_000,
+                maximumNearestDistanceNS:
+                    50_000_000
+            )
+        )
+        XCTAssertNil(
+            farther.indoBoardEquipment
+        )
+    }
+
     func testFramesAreSortedAndJointConfidenceClamped() {
         let track = makeTrack(
             frames: [
