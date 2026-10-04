@@ -329,11 +329,12 @@ enum Action4VideoPoseExtractor {
             guard ptsNS >= nextSampleNS else {
                 continue
             }
-            nextSampleNS = ptsNS.addingReportingOverflow(
+            let next = ptsNS.addingReportingOverflow(
                 intervalNS
-            ).overflow
+            )
+            nextSampleNS = next.overflow
                 ? UInt64.max
-                : ptsNS + intervalNS
+                : next.partialValue
 
             guard let pixelBuffer =
                     CMSampleBufferGetImageBuffer(
@@ -493,6 +494,20 @@ enum Action4SyncAnalyzer {
         else {
             return nil
         }
+
+        if let expected =
+                run.productManifest?
+                    .externalCameraSHA256,
+           expected != value.externalVideoSHA256 {
+            return nil
+        }
+        if let expected =
+                run.productManifest?
+                    .cameraVideoSHA256,
+           expected != value.iPhoneVideoSHA256 {
+            return nil
+        }
+
         return value
     }
 
@@ -524,12 +539,16 @@ enum Action4SyncAnalyzer {
             "middle",
             "end",
         ]
-        let receipts = Dictionary(
-            uniqueKeysWithValues:
-                manifest.syncReceipts.map {
-                    ($0.label.lowercased(), $0)
-                }
-        )
+        var receipts:
+            [String: ProductSessionManifest.SyncReceipt] = [:]
+        for receipt in manifest.syncReceipts {
+            let label = receipt.label.lowercased()
+            guard receipts[label] == nil else {
+                throw Action4SyncAnalysisError
+                    .missingCameraCueAnchors
+            }
+            receipts[label] = receipt
+        }
         guard requiredLabels.allSatisfy({
             receipts[$0]?.iPhoneCameraPTSNS != nil
         }) else {
