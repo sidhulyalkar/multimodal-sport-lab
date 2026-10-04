@@ -8,6 +8,10 @@ public struct ExternalVideoPoseFrame:
     public let sourcePTSNS: UInt64
     public let joints: [BodyJoint2D]
     public let meanConfidence: Double
+    public let indoBoardEquipment:
+        IndoBoardEquipmentObservation?
+    public let visibleFiducials:
+        [IndoBoardFiducialMarkerID]
 
     public var id: UInt64 { sourcePTSNS }
 
@@ -15,12 +19,20 @@ public struct ExternalVideoPoseFrame:
         case sourcePTSNS = "source_pts_ns"
         case joints
         case meanConfidence = "mean_confidence"
+        case indoBoardEquipment =
+            "indo_board_equipment"
+        case visibleFiducials =
+            "visible_fiducials"
     }
 
     public init(
         sourcePTSNS: UInt64,
         joints: [BodyJoint2D],
-        meanConfidence: Double? = nil
+        meanConfidence: Double? = nil,
+        indoBoardEquipment:
+            IndoBoardEquipmentObservation? = nil,
+        visibleFiducials:
+            [IndoBoardFiducialMarkerID] = []
     ) {
         let ordered = joints.sorted { $0.id < $1.id }
         self.sourcePTSNS = sourcePTSNS
@@ -39,6 +51,15 @@ public struct ExternalVideoPoseFrame:
                     .reduce(0, +)
                     / Double(ordered.count)
         }
+
+        self.indoBoardEquipment =
+            indoBoardEquipment
+        self.visibleFiducials =
+            Array(Set(visibleFiducials))
+                .sorted {
+                    $0.rawValue
+                        < $1.rawValue
+                }
     }
 
     public var jointMap: [String: BodyJoint2D] {
@@ -126,11 +147,13 @@ public struct ExternalVideoPoseTrack:
         self.createdAtUTC = createdAtUTC
         self.claimBoundary = (
             "This track contains source-camera image-space body pose "
-                + "derived from RGB frames. Coordinates are normalized "
-                + "within the source image after orientation handling. "
-                + "It does not establish metric camera calibration, "
-                + "world geometry, center of mass, force, muscle "
-                + "activation, or medical validity."
+                + "derived from RGB frames and may include QR-backed "
+                + "Indo Board equipment observations when those markers "
+                + "are visible. Coordinates are normalized within the "
+                + "source image after orientation handling. It does not "
+                + "establish metric camera calibration, world geometry, "
+                + "center of mass, force, muscle activation, or medical "
+                + "validity."
         )
     }
 
@@ -146,6 +169,36 @@ public struct ExternalVideoPoseTrack:
             .map(\.meanConfidence)
             .reduce(0, +)
             / Double(frames.count)
+    }
+
+    public var equipmentFrameCount: Int {
+        frames.reduce(0) {
+            $0
+                + (
+                    $1.indoBoardEquipment == nil
+                        ? 0
+                        : 1
+                )
+        }
+    }
+
+    public var equipmentCoverageFraction: Double {
+        guard !frames.isEmpty else {
+            return 0
+        }
+        return Double(equipmentFrameCount)
+            / Double(frames.count)
+    }
+
+    public var fiducialFrameCount: Int {
+        frames.reduce(0) {
+            $0
+                + (
+                    $1.visibleFiducials.isEmpty
+                        ? 0
+                        : 1
+                )
+        }
     }
 
     public var temporalCoverageFraction: Double {
@@ -278,10 +331,32 @@ public struct ExternalVideoPoseTrack:
                     }
 
                 if !joints.isEmpty {
+                    let nearestEvidence:
+                        ExternalVideoPoseFrame? = {
+                            if leftDistance
+                                <= maximumNearestDistanceNS,
+                               leftDistance
+                                <= rightDistance {
+                                return previous
+                            }
+                            if rightDistance
+                                <= maximumNearestDistanceNS {
+                                return next
+                            }
+                            return nil
+                        }()
+
                     return ExternalVideoPoseFrame(
                         sourcePTSNS:
                             sourcePTSNS,
-                        joints: joints
+                        joints: joints,
+                        indoBoardEquipment:
+                            nearestEvidence?
+                                .indoBoardEquipment,
+                        visibleFiducials:
+                            nearestEvidence?
+                                .visibleFiducials
+                                ?? []
                     )
                 }
             }
