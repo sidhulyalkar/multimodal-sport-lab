@@ -452,10 +452,39 @@ private struct ExternalCameraDetailView: View {
                 DiagnosticRow("Profile", "4K · 60 fps")
                 DiagnosticRow("Stabilization", "EIS off")
                 DiagnosticRow("Field of view", "Standard (Dewarp)")
-                DiagnosticRow("Control", "manual start · import after")
-                DiagnosticRow("This session", indoBoard.externalCameraConfirmed ? "enabled" : "not used")
+                DiagnosticRow("Control", "DJI Mimo / Bluetooth remote")
+                DiagnosticRow("Capture", "roll before mount · auto-trim later")
+                DiagnosticRow("Sync", "3 shared Watch motion cues")
+                DiagnosticRow(
+                    "This session",
+                    indoBoard.externalCameraConfirmed
+                        ? "recording confirmed"
+                        : (
+                            indoBoard.requiresExternalCamera
+                                ? "awaiting confirmation"
+                                : "not used"
+                        )
+                )
             } footer: {
-                Text("MotionOS has no live control link to this camera. Start it manually, keep the rig fixed, then import the untouched movie into the session.")
+                Text(
+                    "MotionOS does not claim a direct Action 4 control API. "
+                        + "For reliable capture, start the camera before mounting "
+                        + "or from DJI's Bluetooth remote, leave it rolling, and "
+                        + "import the untouched movie after the run."
+                )
+            }
+
+            Section("Placement") {
+                DiagnosticRow("Tripod", "fixed for the entire run")
+                DiagnosticRow("Rider", "head, hands, hips, knees, feet visible")
+                DiagnosticRow("Equipment", "full deck + roller visible")
+                DiagnosticRow("Second view", "45–90° offset from iPhone")
+            } footer: {
+                Text(
+                    "The second view is teacher/calibration evidence. Exact "
+                        + "camera extrinsics are estimated and verified after import; "
+                        + "the app should never invent geometry from nominal placement."
+                )
             }
 
             Section {
