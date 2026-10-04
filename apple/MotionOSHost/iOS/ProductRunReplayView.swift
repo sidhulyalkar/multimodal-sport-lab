@@ -138,6 +138,10 @@ final class ProductRunReplayController: ObservableObject {
         ProductReplayVideoSource = .iPhone
     @Published private(set) var action4Alignment:
         VideoAlignmentReceiptV1?
+    @Published private(set) var action4PoseTrack:
+        ExternalVideoPoseTrack?
+    @Published private(set) var currentAction4PoseFrame:
+        ExternalVideoPoseFrame?
 
     private var pollTask: Task<Void, Never>?
     private var run: ProductRunRecord?
@@ -174,6 +178,10 @@ final class ProductRunReplayController: ObservableObject {
             action4Alignment =
                 try? Action4AlignmentSealer
                     .loadReceipt(for: run)
+            action4PoseTrack =
+                try? Action4PoseTrackAnalyzer
+                    .loadTrack(for: run)
+            currentAction4PoseFrame = nil
             selectedSource = .iPhone
             player = AVPlayer(url: cameraVideoURL)
             currentFrame = timeline.poseSamples.first?.frame
@@ -208,6 +216,7 @@ final class ProductRunReplayController: ObservableObject {
             }
             player = AVPlayer(url: cameraVideoURL)
             currentFrame = timeline?.poseSamples.first?.frame
+            currentAction4PoseFrame = nil
 
         case .action4:
             guard let externalVideoURL = run.externalVideoURL else {
@@ -230,6 +239,19 @@ final class ProductRunReplayController: ObservableObject {
         action4Alignment =
             try? Action4AlignmentSealer
                 .loadReceipt(for: run)
+        updateCurrentFrame()
+    }
+
+    func reloadAction4PoseTrack() {
+        guard let run else {
+            action4PoseTrack = nil
+            currentAction4PoseFrame = nil
+            return
+        }
+
+        action4PoseTrack =
+            try? Action4PoseTrackAnalyzer
+                .loadTrack(for: run)
         updateCurrentFrame()
     }
 
@@ -261,6 +283,7 @@ final class ProductRunReplayController: ObservableObject {
               !timeline.poseSamples.isEmpty
         else {
             currentFrame = nil
+            currentAction4PoseFrame = nil
             return
         }
 
@@ -280,6 +303,16 @@ final class ProductRunReplayController: ObservableObject {
             )
             .rounded(.toNearestOrEven)
         )
+
+        if selectedSource == .action4 {
+            currentAction4PoseFrame =
+                action4PoseTrack?
+                    .interpolatedFrame(
+                        at: elapsedNS
+                    )
+        } else {
+            currentAction4PoseFrame = nil
+        }
 
         let referenceElapsedNS: UInt64
         switch selectedSource {
