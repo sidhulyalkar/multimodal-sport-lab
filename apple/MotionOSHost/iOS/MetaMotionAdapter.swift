@@ -1,3 +1,4 @@
+#if canImport(MetaWear)
 import Foundation
 import MetaWear
 import MotionOSAppleCapture
@@ -611,3 +612,5 @@ extension MetaWearDevice {
         onUnexpectedDisconnect = handler
     }
 }
+
+#endif
