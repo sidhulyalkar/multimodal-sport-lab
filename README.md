@@ -48,6 +48,7 @@ Participant/video/body-scan handling and public-export rules are in [`docs/priva
 M1 weighted timing uncertainty and extrapolation diagnostics are documented in [`docs/m1-clock-uncertainty.md`](docs/m1-clock-uncertainty.md).
 Deterministic IMU/video, pressure/video, and geometry residual benchmarking is documented in [`docs/m1-cross-modal-residuals.md`](docs/m1-cross-modal-residuals.md).
 Metric world-frame, multi-camera rig qualification, and triangulation are documented in [`docs/m1-world-geometry.md`](docs/m1-world-geometry.md).
+Action 4 reviewed timing, source-camera pose replay, and the first physical beta flow are documented in [`docs/action4-pose-replay-v1.md`](docs/action4-pose-replay-v1.md).
 
 ## Quick start
 
