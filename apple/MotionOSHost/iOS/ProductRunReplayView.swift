@@ -719,12 +719,58 @@ struct ProductRunReplayView: View {
                 subtitle: action4SyncSubtitle,
                 systemImage: "waveform.path.ecg.rectangle",
                 accent:
-                    action4Sync.phase == .ready
+                    controller.action4Alignment != nil
                         ? .green
-                        : .purple
+                        : (
+                            action4Sync.phase == .ready
+                                ? .cyan
+                                : .purple
+                        )
             )
 
-            if let artifact = action4Sync.artifact {
+            if let receipt =
+                    controller.action4Alignment {
+                HStack(spacing: 8) {
+                    alignmentMetric(
+                        "Status",
+                        "SEALED"
+                    )
+                    alignmentMetric(
+                        "Fit RMS",
+                        String(
+                            format:
+                                "%.1f ms",
+                            receipt.clockModel
+                                .residualRMSMS
+                        )
+                    )
+                    alignmentMetric(
+                        "Drift",
+                        String(
+                            format:
+                                "%.1f ppm",
+                            receipt.clockModel
+                                .driftPPM
+                        )
+                    )
+                }
+
+                Label(
+                    "Reviewed three-point timing authority",
+                    systemImage: "checkmark.seal.fill"
+                )
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.green)
+
+                Text(
+                    "Temporal fusion is available. Action 4 image-space "
+                        + "pose/equipment overlays remain a separate "
+                        + "qualification problem."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            } else if let artifact = action4Sync.artifact {
                 let proposal = artifact.proposal
 
                 HStack(spacing: 8) {
@@ -820,6 +866,20 @@ struct ProductRunReplayView: View {
                 Text(artifact.claimBoundary)
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
+
+                NavigationLink {
+                    Action4AlignmentReviewView(
+                        run: run,
+                        artifact: artifact
+                    )
+                } label: {
+                    Label(
+                        "Review Three Landmarks",
+                        systemImage: "checkmark.shield"
+                    )
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
             } else if action4Sync.phase == .analyzing {
                 HStack(spacing: 10) {
                     ProgressView()
@@ -874,15 +934,19 @@ struct ProductRunReplayView: View {
     }
 
     private var action4SyncSubtitle: String {
+        if controller.action4Alignment != nil {
+            return "Reviewed timing authority available"
+        }
+
         switch action4Sync.phase {
         case .idle:
-            "Find matching physical landmarks"
+            return "Find matching physical landmarks"
         case .analyzing:
-            "Vision pose pass running locally"
+            return "Vision pose pass running locally"
         case .ready:
-            "Three-point motion proposal ready"
+            return "Three-point motion proposal ready"
         case .failed:
-            "More evidence needed"
+            return "More evidence needed"
         }
     }
 
