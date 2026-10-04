@@ -273,7 +273,11 @@ enum Action4VideoPoseExtractor {
     static let minimumJointConfidence: Float = 0.25
 
     static func extract(
-        from videoURL: URL
+        from videoURL: URL,
+        sampleIntervalSeconds:
+            Double = Self.sampleIntervalSeconds,
+        progress:
+            (@Sendable (Double) -> Void)? = nil
     ) async throws -> Result {
         let asset = AVURLAsset(url: videoURL)
         let tracks = try await asset.loadTracks(
@@ -290,6 +294,17 @@ enum Action4VideoPoseExtractor {
         let orientation = cgOrientation(
             for: transform
         )
+        let duration = try await asset.load(
+            .duration
+        )
+        let durationNS = presentationTimeNS(
+            duration
+        )
+        let effectiveSampleInterval =
+            max(
+                0.05,
+                sampleIntervalSeconds
+            )
 
         let reader = try AVAssetReader(asset: asset)
         let output = AVAssetReaderTrackOutput(
@@ -314,7 +329,11 @@ enum Action4VideoPoseExtractor {
 
         let request = VNDetectHumanBodyPoseRequest()
         let intervalNS = UInt64(
-            sampleIntervalSeconds * 1_000_000_000
+            (
+                effectiveSampleInterval
+                    * 1_000_000_000
+            )
+            .rounded(.toNearestOrEven)
         )
         var firstSourcePTSNS: UInt64?
         var nextSampleNS: UInt64 = 0
@@ -411,6 +430,16 @@ enum Action4VideoPoseExtractor {
                     joints: joints
                 )
             )
+
+            if durationNS > 0 {
+                progress?(
+                    min(
+                        1,
+                        Double(ptsNS)
+                            / Double(durationNS)
+                    )
+                )
+            }
         }
 
         guard reader.status == .completed
@@ -424,10 +453,7 @@ enum Action4VideoPoseExtractor {
         let trace = ArmMotionTraceBuilder.trace(
             from: poses
         )
-        guard trace.count >= 20 else {
-            throw Action4SyncAnalysisError
-                .insufficientExternalMotion
-        }
+        progress?(1)
 
         return Result(
             poses: poses,
@@ -619,6 +645,10 @@ enum Action4SyncAnalyzer {
         let externalResult =
             try await Action4VideoPoseExtractor
                 .extract(from: externalVideoURL)
+        guard externalResult.motionTrace.count >= 20 else {
+            throw Action4SyncAnalysisError
+                .insufficientExternalMotion
+        }
 
         let iPhonePoseSamples =
             ArmMotionTraceBuilder.samples(
