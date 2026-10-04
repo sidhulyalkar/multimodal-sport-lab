@@ -35,18 +35,18 @@ receipts.
 ## Apple toolchain baseline
 
 The shared `MotionOSAppleCapture` package declares
-`swift-tools-version: 6.0`, so its targets compile in Swift 6 language mode
-rather than inheriting the older Swift 5 package default. The current package
-graph also pins MetaWear at a revision that declares `swift-tools-version: 6.1`.
-Xcode 16.2 ships an older SwiftPM toolchain and cannot resolve that graph.
+`swift-tools-version: 6.0`. The default product build is intentionally lean:
+it uses the local MotionOS package and does **not** resolve the optional
+MetaWear/NordicDFU/ZIPFoundation sensor-lab graph.
 
-- **Absolute package-resolution minimum:** Xcode 16.3.
+- **Compile/package minimum:** Xcode 16 or newer.
 - **Recommended physical MotionOS toolchain in 2026:** Xcode 26 or newer.
-- For current iOS/watchOS 26 devices, use the Xcode 26 family rather than
-  upgrading only far enough to satisfy SwiftPM.
+- For current iOS/watchOS 26 devices, use the Xcode 26 family for physical
+  qualification rather than treating an older compile-only toolchain as
+  equivalent evidence.
 
-The bootstrap script checks this before touching the package graph and reports
-the detected Xcode version explicitly.
+The bootstrap script checks the active developer toolchain before generation
+and reports the detected Xcode version explicitly.
 
 If multiple Xcode installations coexist, select one per-run without changing
 global system state:
@@ -57,6 +57,36 @@ bash bootstrap.sh --reset-packages
 ```
 
 Or point the system default at the desired installation with `xcode-select`.
+
+## macOS protected-folder workspace policy
+
+Do not keep an actively built MotionOS checkout under
+`~/Documents`, `~/Desktop`, or `~/Downloads` unless you intentionally
+grant Xcode Files & Folders access. Those locations are protected by macOS
+privacy controls; Xcode, SwiftPM, source indexing, and build helpers may each
+need repeated workspace access and can produce a stream of system permission
+prompts.
+
+The recommended development location is a normal code root such as:
+
+```bash
+mkdir -p "$HOME/Developer"
+mv "$HOME/Documents/Projects/multimodal-sport-lab" "$HOME/Developer/"
+cd "$HOME/Developer/multimodal-sport-lab/apple/MotionOSHost"
+bash bootstrap.sh --reset-packages
+```
+
+The bootstrap script now fails early when it detects a protected workspace
+rather than opening Xcode into a permission loop. If the location is
+intentional, first grant Xcode access in the macOS prompt and then bypass the
+guard explicitly:
+
+```bash
+bash bootstrap.sh --reset-packages --allow-protected-workspace
+```
+
+This is a macOS developer-workspace permission. It is unrelated to the
+MotionOS app's Camera, HealthKit, or iOS signing permissions.
 
 ## Generate the Xcode project
 
