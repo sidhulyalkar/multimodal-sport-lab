@@ -260,8 +260,13 @@ final class ProductRunReplayController: ObservableObject {
             )
             .rounded()
         )
-        let targetPTS = timeline.firstFramePTSNS
-            &+ offsetNS
+        let addition = timeline.firstFramePTSNS
+            .addingReportingOverflow(offsetNS)
+        guard !addition.overflow else {
+            currentFrame = nil
+            return
+        }
+        let targetPTS = addition.partialValue
 
         guard targetPTS <= timeline.lastFramePTSNS
         else {
@@ -645,7 +650,16 @@ struct ProductRunReplayView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
             } else {
-                FlowLayout(spacing: 7) {
+                LazyVGrid(
+                    columns: [
+                        GridItem(
+                            .adaptive(minimum: 108),
+                            spacing: 7
+                        ),
+                    ],
+                    alignment: .leading,
+                    spacing: 7
+                ) {
                     layerToggle(
                         "Body",
                         symbol: "figure.stand",
