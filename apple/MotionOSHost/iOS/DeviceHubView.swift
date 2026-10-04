@@ -454,7 +454,7 @@ private struct ExternalCameraDetailView: View {
                 DiagnosticRow("Profile", "4K · 60 fps")
                 DiagnosticRow("Stabilization", "EIS off")
                 DiagnosticRow("Field of view", "Standard (Dewarp)")
-                DiagnosticRow("Control", "DJI Mimo / Bluetooth remote")
+                DiagnosticRow("Control", "voice / DJI Mimo / Bluetooth remote")
                 DiagnosticRow("Capture", "roll before mount · auto-trim later")
                 DiagnosticRow("Sync", "3 shared Watch motion cues")
                 DiagnosticRow(
@@ -470,9 +470,10 @@ private struct ExternalCameraDetailView: View {
             } footer: {
                 Text(
                     "MotionOS does not claim a direct Action 4 control API. "
-                        + "For reliable capture, start the camera before mounting "
-                        + "or from DJI's Bluetooth remote, leave it rolling, and "
-                        + "import the untouched movie after the run."
+                        + "For reliable capture, roll before mounting, use the "
+                        + "camera’s “Start Recording” voice command, or use DJI's "
+                        + "Bluetooth remote. Leave it rolling, then import the "
+                        + "untouched movie after the run."
                 )
             }
 
