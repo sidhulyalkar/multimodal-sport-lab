@@ -157,6 +157,50 @@ final class ActionCameraSyncProposalTests: XCTestCase {
         )
     }
 
+    func testProductProtocolV2ConditionsThreePointClockFit() throws {
+        XCTAssertEqual(
+            IndoBoardProductProtocol.protocolID,
+            "motionos.indo-board-product-session.v2"
+        )
+
+        let windows = Dictionary(
+            uniqueKeysWithValues:
+                IndoBoardProductProtocol
+                    .syncWindows
+                    .map { ($0.label, $0) }
+        )
+        let duration =
+            IndoBoardProductProtocol
+                .targetDurationSeconds
+
+        let start = try XCTUnwrap(
+            windows["start"]
+        )
+        let middle = try XCTUnwrap(
+            windows["middle"]
+        )
+        let end = try XCTUnwrap(
+            windows["end"]
+        )
+
+        XCTAssertLessThanOrEqual(
+            start.preferredSeconds / duration,
+            0.20
+        )
+        XCTAssertGreaterThanOrEqual(
+            middle.preferredSeconds / duration,
+            0.30
+        )
+        XCTAssertLessThanOrEqual(
+            middle.preferredSeconds / duration,
+            0.70
+        )
+        XCTAssertGreaterThanOrEqual(
+            end.preferredSeconds / duration,
+            0.80
+        )
+    }
+
     func testRequiresStartMiddleEndReferences() {
         XCTAssertNil(
             ActionCameraSyncMatcher.propose(
