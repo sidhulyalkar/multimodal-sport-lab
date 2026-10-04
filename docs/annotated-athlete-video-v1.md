@@ -102,6 +102,36 @@ timeline. This is enough to synchronize view-independent products such as the
 2D skeleton or board coordinates onto Action 4 pixels; that still requires
 Action 4-specific pose/equipment tracking or calibrated cross-view projection.
 
+### Action 4 source-pose track
+
+After temporal alignment is sealed, Replay can run a separate local Vision
+pass over the unchanged Action 4 original and write:
+
+`external/action4/action4-pose-track.json`
+
+using schema:
+
+`motionos.external-video-pose-track.v1`
+
+The track is bound to the exact source-video SHA-256 and byte count and stores
+normalized Action 4 image-space joints at 10 Hz. Playback may interpolate only
+across short adjacent pose gaps; it must disappear across longer evidence gaps
+rather than freezing an old skeleton.
+
+This produces two intentionally different body representations during Action 4
+replay:
+
+- **Action 4 Video mode:** the cyan 2D skeleton is derived from Action 4's own
+  RGB pixels and is valid only in that source image coordinate system.
+- **3D Body mode:** the body scene is still derived from the temporally aligned
+  iPhone body timeline.
+
+The existence of both views is useful for inspection and teacher-data
+generation, but it does **not** establish a calibrated transform between the
+two cameras. Board/equipment pixels, world coordinates, metric
+triangulation, and cross-view projection remain locked behind their own
+qualification chain.
+
 ## Geometry
 
 There are two geometry modes.
@@ -323,6 +353,7 @@ artifacts as user data, not automatically anonymous data.
 - reliable Action-camera import;
 - source hashing;
 - sync/trim manifest;
+- source-specific Action-camera 2D pose track;
 - observed 2D/3D pose overlay;
 - board/roller overlay;
 - event timeline;
