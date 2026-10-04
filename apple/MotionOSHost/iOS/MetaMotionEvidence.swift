@@ -7,6 +7,7 @@ struct MetaMotionEvidenceBundle: Sendable {
     let metadataURL: URL
 }
 
+#if canImport(MetaWear)
 extension MetaMotionRecoveredSession {
     func writeEvidenceBundle(
         sessionID: String,
@@ -202,3 +203,4 @@ extension MetaMotionRecoveredSession {
         )
     }
 }
+#endif
