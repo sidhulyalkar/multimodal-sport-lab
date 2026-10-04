@@ -1485,6 +1485,187 @@ struct ProductRunReplayView: View {
     }
 }
 
+private struct ExternalVideoPoseOverlay: View {
+    let frame: ExternalVideoPoseFrame
+    let showConfidence: Bool
+
+    private static let connections:
+        [(String, String)] = [
+        ("root", "neck"),
+        ("neck", "nose"),
+        ("neck", "leftShoulder"),
+        ("leftShoulder", "leftElbow"),
+        ("leftElbow", "leftWrist"),
+        ("neck", "rightShoulder"),
+        ("rightShoulder", "rightElbow"),
+        ("rightElbow", "rightWrist"),
+        ("root", "leftHip"),
+        ("leftHip", "leftKnee"),
+        ("leftKnee", "leftAnkle"),
+        ("root", "rightHip"),
+        ("rightHip", "rightKnee"),
+        ("rightKnee", "rightAnkle"),
+        ("nose", "leftEye"),
+        ("leftEye", "leftEar"),
+        ("nose", "rightEye"),
+        ("rightEye", "rightEar"),
+    ]
+
+    var body: some View {
+        Canvas { context, size in
+            let joints = normalizedJointMap
+
+            for connection in Self.connections {
+                guard let first =
+                        joints[
+                            normalize(
+                                connection.0
+                            )
+                        ],
+                      let second =
+                        joints[
+                            normalize(
+                                connection.1
+                            )
+                        ]
+                else {
+                    continue
+                }
+
+                let confidence = min(
+                    first.confidence,
+                    second.confidence
+                )
+                var path = Path()
+                path.move(
+                    to: point(
+                        first,
+                        size: size
+                    )
+                )
+                path.addLine(
+                    to: point(
+                        second,
+                        size: size
+                    )
+                )
+                context.stroke(
+                    path,
+                    with: .color(
+                        Color.cyan.opacity(
+                            showConfidence
+                                ? 0.20
+                                    + 0.80
+                                        * confidence
+                                : 0.90
+                        )
+                    ),
+                    lineWidth: 2.6
+                )
+            }
+
+            for joint in frame.joints {
+                let center = point(
+                    joint,
+                    size: size
+                )
+                let radius =
+                    showConfidence
+                        ? 2.3
+                            + 3.8
+                                * joint.confidence
+                        : 4.3
+                context.fill(
+                    Path(
+                        ellipseIn: CGRect(
+                            x:
+                                center.x
+                                    - radius,
+                            y:
+                                center.y
+                                    - radius,
+                            width:
+                                radius * 2,
+                            height:
+                                radius * 2
+                        )
+                    ),
+                    with: .color(
+                        Color.white.opacity(
+                            showConfidence
+                                ? 0.25
+                                    + 0.75
+                                        * joint.confidence
+                                : 0.92
+                        )
+                    )
+                )
+            }
+
+            let badge = Text(
+                "ACTION 4 · SOURCE POSE"
+            )
+            .font(
+                .caption2.weight(.bold)
+            )
+            .foregroundStyle(.white)
+
+            context.draw(
+                badge,
+                at: CGPoint(
+                    x: 92,
+                    y: size.height - 18
+                )
+            )
+        }
+        .accessibilityLabel(
+            "Action 4 source-camera body pose overlay"
+        )
+    }
+
+    private var normalizedJointMap:
+        [String: BodyJoint2D] {
+        Dictionary(
+            uniqueKeysWithValues:
+                frame.joints.map {
+                    (
+                        normalize($0.id),
+                        $0
+                    )
+                }
+        )
+    }
+
+    private func normalize(
+        _ value: String
+    ) -> String {
+        value.lowercased().filter {
+            $0.isLetter || $0.isNumber
+        }
+    }
+
+    private func point(
+        _ joint: BodyJoint2D,
+        size: CGSize
+    ) -> CGPoint {
+        CGPoint(
+            x:
+                min(
+                    1,
+                    max(0, joint.x)
+                ) * size.width,
+            y:
+                (
+                    1
+                        - min(
+                            1,
+                            max(0, joint.y)
+                        )
+                ) * size.height
+        )
+    }
+}
+
 private struct ReplayPoseOverlay: View {
     let frame: BodyMovementFrame
     let showBody: Bool
