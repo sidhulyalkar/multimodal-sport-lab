@@ -48,6 +48,31 @@ External footage is aligned to the MotionOS run using, in order:
 
 The aligned clip is a derived artifact. The original remains intact.
 
+### Action 4 proposal path
+
+Product protocol v2 deliberately places its three sharp-arm landmarks near
+10 s, 63 s, and 114 s so the clock fit is conditioned by an early, true-middle,
+and late correspondence.
+
+For a new multiview run:
+
+1. the Watch journals cue receipt time;
+2. the iPhone product manifest records the nearest camera PTS at that cue;
+3. post-session iPhone replay finds the actual visual arm-motion peak near
+   each cue;
+4. the imported Action 4 original is sampled with Vision body pose at 5 Hz;
+5. MotionOS searches external arm-motion peak triples whose intervals match
+   the three iPhone visual landmarks;
+6. the app writes `action4-sync-proposal.json` with confidence and residuals.
+
+The proposal is intentionally **not** synchronization authority. It must be
+reviewed and converted into the existing hash-bound
+`motionos.video-alignment.v1` receipt before cross-view overlays or metric
+fusion are unlocked.
+
+File creation time may be used only as a coarse debugging clue and is never a
+clock correspondence.
+
 ## Geometry
 
 There are two geometry modes.
