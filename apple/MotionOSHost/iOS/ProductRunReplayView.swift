@@ -466,11 +466,25 @@ struct ProductRunReplayView: View {
         .onAppear {
             controller.reloadAction4Alignment()
             controller.reloadAction4PoseTrack()
+            action4Pose.loadExisting(run: run)
         }
         .onDisappear {
             controller.stop()
             action4Sync.cancel()
             action4Pose.cancel()
+        }
+        .onChange(of: action4Sync.phase) {
+            _, phase in
+            if phase == .ready {
+                // Sync analysis also caches its already-computed 5 Hz source
+                // pose pass, so expose that evidence immediately rather than
+                // asking for another full Action 4 decode.
+                action4Pose.loadExisting(
+                    run: run
+                )
+                controller
+                    .reloadAction4PoseTrack()
+            }
         }
         .onChange(of: action4Pose.phase) {
             _, phase in
