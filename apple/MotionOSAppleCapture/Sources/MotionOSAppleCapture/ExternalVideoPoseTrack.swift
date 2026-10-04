@@ -201,7 +201,40 @@ public struct ExternalVideoPoseTrack:
         }
     }
 
-    public var temporalCoverageFraction: Double {
+    /// Fraction of nominal analysis sample slots with a detected body pose.
+    /// This is intentionally different from first-to-last temporal span:
+    /// two distant detections must not imply continuous evidence between them.
+    public var observationCoverageFraction: Double {
+        guard sourceDurationNS > 0,
+              sampleIntervalSeconds > 0,
+              sampleIntervalSeconds.isFinite
+        else {
+            return 0
+        }
+
+        let durationSeconds =
+            Double(sourceDurationNS)
+                / 1_000_000_000
+        let expectedSlots = max(
+            1,
+            Int(
+                floor(
+                    durationSeconds
+                        / sampleIntervalSeconds
+                )
+            ) + 1
+        )
+        return min(
+            1,
+            Double(frames.count)
+                / Double(expectedSlots)
+        )
+    }
+
+    /// Fraction of source duration between the first and last detected pose.
+    /// Useful for diagnosing clipped beginnings/endings, but not an
+    /// observation-coverage metric.
+    public var temporalSpanFraction: Double {
         guard sourceDurationNS > 0,
               let first = frames.first,
               let last = frames.last,
@@ -210,18 +243,37 @@ public struct ExternalVideoPoseTrack:
         else {
             return 0
         }
-        let span = Double(
-            last.sourcePTSNS
-                - first.sourcePTSNS
-        )
         return min(
             1,
-            max(
-                0,
-                span
-                    / Double(sourceDurationNS)
-            )
+            Double(
+                last.sourcePTSNS
+                    - first.sourcePTSNS
+            ) / Double(sourceDurationNS)
         )
+    }
+
+    public var maximumPoseGapSeconds: Double? {
+        guard frames.count >= 2 else {
+            return nil
+        }
+        var maximumGapNS: UInt64 = 0
+        for (first, second) in zip(
+            frames,
+            frames.dropFirst()
+        ) {
+            guard second.sourcePTSNS
+                    >= first.sourcePTSNS
+            else {
+                continue
+            }
+            maximumGapNS = max(
+                maximumGapNS,
+                second.sourcePTSNS
+                    - first.sourcePTSNS
+            )
+        }
+        return Double(maximumGapNS)
+            / 1_000_000_000
     }
 
     public func interpolatedFrame(
