@@ -315,6 +315,7 @@ enum Action4VideoPoseExtractor {
         let intervalNS = UInt64(
             sampleIntervalSeconds * 1_000_000_000
         )
+        var firstSourcePTSNS: UInt64?
         var nextSampleNS: UInt64 = 0
         var poses: [ArmPoseSample] = []
 
@@ -325,7 +326,20 @@ enum Action4VideoPoseExtractor {
             let pts = CMSampleBufferGetPresentationTimeStamp(
                 sampleBuffer
             )
-            let ptsNS = presentationTimeNS(pts)
+            let sourcePTSNS = presentationTimeNS(pts)
+            if firstSourcePTSNS == nil {
+                firstSourcePTSNS = sourcePTSNS
+            }
+            guard let firstSourcePTSNS,
+                  sourcePTSNS >= firstSourcePTSNS
+            else {
+                continue
+            }
+
+            // Normalize the camera's native sample timestamps to source-video
+            // elapsed PTS. The alignment contract uses 0...duration rather
+            // than relying on a container-specific non-zero media start time.
+            let ptsNS = sourcePTSNS - firstSourcePTSNS
             guard ptsNS >= nextSampleNS else {
                 continue
             }
