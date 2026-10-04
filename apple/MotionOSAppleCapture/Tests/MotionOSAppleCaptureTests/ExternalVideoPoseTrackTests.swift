@@ -105,7 +105,7 @@ final class ExternalVideoPoseTrackTests: XCTestCase {
         )
     }
 
-    func testCoverageAndMeanConfidenceAreDerived() {
+    func testCoverageSpanGapAndMeanConfidenceAreDerived() {
         let track = makeTrack(
             durationNS: 10_000_000_000,
             frames: [
@@ -127,9 +127,18 @@ final class ExternalVideoPoseTrackTests: XCTestCase {
         )
 
         XCTAssertEqual(
-            track.temporalCoverageFraction,
+            track.observationCoverageFraction,
+            2.0 / 101.0,
+            accuracy: 1e-12
+        )
+        XCTAssertEqual(
+            track.temporalSpanFraction,
             0.8,
             accuracy: 1e-12
+        )
+        XCTAssertEqual(
+            track.maximumPoseGapSeconds,
+            8.0
         )
         XCTAssertEqual(
             track.meanConfidence,
