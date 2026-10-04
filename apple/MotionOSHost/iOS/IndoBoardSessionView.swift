@@ -244,9 +244,10 @@ struct IndoBoardSessionView: View {
                     Text("Add external calibration camera")
                         .font(.subheadline.weight(.semibold))
                     Text(
-                        "Optional high-fidelity teacher view. For the current "
-                            + "Action 4 workflow, start the camera manually and "
-                            + "import the untouched movie after the session."
+                        "Optional high-fidelity teacher view. Keep the Action 4 "
+                            + "rolling before you mount, or start it from DJI's "
+                            + "Bluetooth remote while on the board. MotionOS "
+                            + "uses shared sync gestures to align and trim it later."
                     )
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -261,12 +262,35 @@ struct IndoBoardSessionView: View {
             )
 
             if session.requiresExternalCamera {
-                Label(
-                    "Action 4 · 4K 16:9 · 60 fps · EIS off · fixed tripod",
-                    systemImage: "video.fill"
-                )
-                .font(.caption)
-                .foregroundStyle(.purple)
+                VStack(alignment: .leading, spacing: 9) {
+                    Label(
+                        "Action 4 · 4K 16:9 · 60 fps · EIS off · fixed tripod",
+                        systemImage: "video.fill"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.purple)
+
+                    Text(
+                        "Frame the full rider, both feet, deck/roller, and enough "
+                            + "lateral recovery space. A 45–90° viewpoint offset "
+                            + "from the iPhone is preferred for multiview geometry."
+                    )
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+
+                    Toggle(
+                        "Action 4 is recording",
+                        isOn: $session.externalCameraConfirmed
+                    )
+                    .font(.subheadline.weight(.semibold))
+
+                    Text(
+                        "This is an operator confirmation, not a claimed DJI API "
+                            + "connection. Once confirmed, do not move the tripod."
+                    )
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                }
             }
         }
         .cardStyle()
@@ -302,6 +326,17 @@ struct IndoBoardSessionView: View {
             )
 
             boardTrackingRow
+
+            if session.requiresExternalCamera {
+                readinessRow(
+                    title: "Action 4",
+                    detail: session.externalCameraConfirmed
+                        ? "recording confirmed · fixed tripod"
+                        : "start recording or use DJI remote, then confirm",
+                    ready: session.externalCameraConfirmed,
+                    symbol: "video.fill"
+                )
+            }
 
             readinessRow(
                 title: "Battery",
@@ -1758,7 +1793,10 @@ struct IndoBoardSessionView: View {
                 session.captureMode = enabled
                     ? .multiviewCalibration
                     : .watchAndPhone
-                session.externalCameraConfirmed = enabled
+                // Selecting the source does not prove it is recording.
+                // Require a separate operator confirmation after the camera
+                // has actually been started.
+                session.externalCameraConfirmed = false
             }
         )
     }
