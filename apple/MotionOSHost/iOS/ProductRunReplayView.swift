@@ -421,13 +421,17 @@ struct ProductRunReplayView: View {
             action4Sync.loadExisting(run: run)
             await controller.load(run)
         }
+        .onAppear {
+            controller.reloadAction4Alignment()
+        }
         .onDisappear {
             controller.stop()
             action4Sync.cancel()
         }
         .onChange(of: controller.selectedSource) {
             _, source in
-            if source == .action4 {
+            if source == .action4,
+               controller.action4Alignment == nil {
                 bodyMode = .video
             }
         }
@@ -510,7 +514,8 @@ struct ProductRunReplayView: View {
     @ViewBuilder
     private var replayStage: some View {
         VStack(alignment: .leading, spacing: 10) {
-            if controller.selectedSource == .iPhone {
+            if controller.selectedSource == .iPhone
+                || controller.action4Alignment != nil {
                 Picker("Replay mode", selection: $bodyMode) {
                     ForEach(ProductReplayBodyMode.allCases) {
                         Text($0.rawValue).tag($0)
@@ -535,7 +540,8 @@ struct ProductRunReplayView: View {
                             .foregroundStyle(.white.opacity(0.75))
                     }
                 } else if bodyMode == .body,
-                          controller.selectedSource == .iPhone {
+                          controller.selectedSource == .iPhone
+                            || controller.action4Alignment != nil {
                     bodyStage
                 } else if let player = controller.player {
                     VideoPlayer(player: player)
@@ -587,16 +593,26 @@ struct ProductRunReplayView: View {
 
             if controller.selectedSource == .action4 {
                 Label(
-                    action4Sync.artifact == nil
-                        ? "Original preserved. Analyze the three sync gestures "
-                            + "before enabling cross-view overlays."
-                        : "A motion-based alignment proposal exists. Overlays "
-                            + "remain locked until that proposal is reviewed "
-                            + "and sealed as synchronization evidence.",
+                    controller.action4Alignment != nil
+                        ? "Temporal alignment is sealed. 3D Body mode follows "
+                            + "the synchronized iPhone-derived body timeline; "
+                            + "Action 4 pixel overlays still require Action 4 "
+                            + "pose/calibration evidence."
+                        : (
+                            action4Sync.artifact == nil
+                                ? "Original preserved. Analyze the three sync gestures "
+                                    + "before temporal fusion."
+                                : "A motion-based alignment proposal exists. Review "
+                                    + "all three paired gestures before sealing."
+                        ),
                     systemImage:
-                        action4Sync.artifact == nil
-                            ? "clock.badge.exclamationmark"
-                            : "waveform.path.ecg.rectangle"
+                        controller.action4Alignment != nil
+                            ? "checkmark.seal.fill"
+                            : (
+                                action4Sync.artifact == nil
+                                    ? "clock.badge.exclamationmark"
+                                    : "waveform.path.ecg.rectangle"
+                            )
                 )
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -672,11 +688,19 @@ struct ProductRunReplayView: View {
         Label(
             controller.selectedSource == .iPhone
                 ? "IPHONE · POSE TIMELOCK"
-                : "ACTION 4 · UNALIGNED",
+                : (
+                    controller.action4Alignment != nil
+                        ? "ACTION 4 · TIME ALIGNED"
+                        : "ACTION 4 · UNALIGNED"
+                ),
             systemImage:
                 controller.selectedSource == .iPhone
                     ? "camera.fill"
-                    : "video.fill"
+                    : (
+                        controller.action4Alignment != nil
+                            ? "checkmark.seal.fill"
+                            : "video.fill"
+                    )
         )
         .font(.caption2.weight(.bold))
         .foregroundStyle(.white)
@@ -910,14 +934,53 @@ struct ProductRunReplayView: View {
             )
 
             if controller.selectedSource == .action4 {
-                Label(
-                    action4Sync.artifact == nil
-                        ? "Annotation layers unlock after external-video alignment."
-                        : "Proposal found; review + seal alignment before layers unlock.",
-                    systemImage: "lock.fill"
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                if controller.action4Alignment != nil {
+                    VStack(alignment: .leading, spacing: 9) {
+                        Label(
+                            "Temporal fusion available",
+                            systemImage: "checkmark.seal.fill"
+                        )
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.green)
+
+                        Text(
+                            "Use 3D Body to inspect the iPhone-derived body state "
+                                + "at the Action 4 playback time. Image-space "
+                                + "skeleton, board, and mechanics overlays stay "
+                                + "disabled on Action 4 until that camera has its "
+                                + "own qualified pose/equipment geometry."
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                        if bodyMode == .body {
+                            Picker("3D viewpoint", selection: $viewpoint) {
+                                ForEach(BodySceneViewpoint.allCases) {
+                                    Text($0.rawValue).tag($0)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+
+                            Toggle(
+                                "Estimated muscle demand",
+                                isOn: $showMuscles
+                            )
+                            .disabled(
+                                controller.currentFrame?
+                                    .hasModelEstimatedMuscleActivity != true
+                            )
+                        }
+                    }
+                } else {
+                    Label(
+                        action4Sync.artifact == nil
+                            ? "Temporal layers unlock after external-video alignment."
+                            : "Proposal found; review + seal alignment before temporal fusion.",
+                        systemImage: "lock.fill"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
             } else {
                 LazyVGrid(
                     columns: [
@@ -1020,10 +1083,17 @@ struct ProductRunReplayView: View {
             replayStatusRow(
                 "Body",
                 value:
-                    controller.selectedSource == .iPhone
-                        && controller.currentFrame != nil
-                        ? "derived · Vision pose"
-                        : "not active"
+                    controller.currentFrame == nil
+                        ? "not active"
+                        : (
+                            controller.selectedSource == .iPhone
+                                ? "derived · Vision pose"
+                                : (
+                                    controller.action4Alignment != nil
+                                        ? "derived · iPhone 3D pose · time-aligned"
+                                        : "not active"
+                                )
+                        )
             )
 
             replayStatusRow(
