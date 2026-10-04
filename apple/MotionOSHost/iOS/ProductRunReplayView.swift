@@ -419,6 +419,7 @@ struct ProductRunReplayView: View {
     @State private var showCoaching = true
     @State private var showConfidence = false
     @State private var showAction4Pose = true
+    @State private var showAction4Equipment = true
     @State private var viewpoint:
         BodySceneViewpoint = .orbit
 
@@ -611,7 +612,9 @@ struct ProductRunReplayView: View {
                                 controller.currentAction4PoseFrame {
                         ExternalVideoPoseOverlay(
                             frame: frame,
-                            showConfidence: showConfidence
+                            showConfidence: showConfidence,
+                            showEquipment:
+                                showAction4Equipment
                         )
                         .allowsHitTesting(false)
                     }
@@ -1041,6 +1044,30 @@ struct ProductRunReplayView: View {
                     )
                 }
 
+                if track.equipmentFrameCount > 0 {
+                    Label(
+                        String(
+                            format:
+                                "QR board evidence · %d frames · %.0f%% pose-frame coverage",
+                            track.equipmentFrameCount,
+                            track.equipmentCoverageFraction
+                                * 100
+                        ),
+                        systemImage:
+                            "qrcode.viewfinder"
+                    )
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.green)
+                } else {
+                    Label(
+                        "No MotionOS board QR triplet detected in this Action 4 view",
+                        systemImage:
+                            "qrcode.viewfinder"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+
                 Label(
                     "Source-camera 2D pose ready",
                     systemImage:
@@ -1247,6 +1274,15 @@ struct ProductRunReplayView: View {
                                 "Action 4 2D pose",
                                 isOn: $showAction4Pose
                             )
+
+                            if controller.action4PoseTrack?
+                                .equipmentFrameCount ?? 0 > 0 {
+                                Toggle(
+                                    "QR board / roller",
+                                    isOn:
+                                        $showAction4Equipment
+                                )
+                            }
 
                             Toggle(
                                 "Pose confidence",
@@ -1508,6 +1544,7 @@ struct ProductRunReplayView: View {
 private struct ExternalVideoPoseOverlay: View {
     let frame: ExternalVideoPoseFrame
     let showConfidence: Bool
+    let showEquipment: Bool
 
     private static let connections:
         [(String, String)] = [
@@ -1581,6 +1618,16 @@ private struct ExternalVideoPoseOverlay: View {
                         )
                     ),
                     lineWidth: 2.6
+                )
+            }
+
+            if showEquipment,
+               let equipment =
+                    frame.indoBoardEquipment {
+                drawEquipment(
+                    equipment,
+                    context: &context,
+                    size: size
                 )
             }
 
@@ -1662,6 +1709,117 @@ private struct ExternalVideoPoseOverlay: View {
         value.lowercased().filter {
             $0.isLetter || $0.isNumber
         }
+    }
+
+    private func drawEquipment(
+        _ equipment:
+            IndoBoardEquipmentObservation,
+        context: inout GraphicsContext,
+        size: CGSize
+    ) {
+        if let deck = equipment.deck {
+            var deckPath = Path()
+            deckPath.move(
+                to: point(
+                    deck.leftEnd,
+                    size: size
+                )
+            )
+            deckPath.addLine(
+                to: point(
+                    deck.rightEnd,
+                    size: size
+                )
+            )
+            context.stroke(
+                deckPath,
+                with: .color(
+                    Color.green.opacity(
+                        0.35
+                            + 0.65
+                                * deck.confidence
+                    )
+                ),
+                lineWidth: 4
+            )
+        }
+
+        if let roller = equipment.roller {
+            let center = point(
+                roller.center,
+                size: size
+            )
+            let radius = 7.0
+            context.fill(
+                Path(
+                    ellipseIn: CGRect(
+                        x:
+                            center.x - radius,
+                        y:
+                            center.y - radius,
+                        width:
+                            radius * 2,
+                        height:
+                            radius * 2
+                    )
+                ),
+                with: .color(
+                    Color.green.opacity(
+                        0.35
+                            + 0.65
+                                * roller.confidence
+                    )
+                )
+            )
+
+            if let axisStart =
+                    roller.axisStart,
+               let axisEnd =
+                    roller.axisEnd {
+                var axis = Path()
+                axis.move(
+                    to: point(
+                        axisStart,
+                        size: size
+                    )
+                )
+                axis.addLine(
+                    to: point(
+                        axisEnd,
+                        size: size
+                    )
+                )
+                context.stroke(
+                    axis,
+                    with: .color(
+                        Color.green
+                            .opacity(0.82)
+                    ),
+                    lineWidth: 2.5
+                )
+            }
+        }
+    }
+
+    private func point(
+        _ value: NormalizedImagePoint2D,
+        size: CGSize
+    ) -> CGPoint {
+        CGPoint(
+            x:
+                min(
+                    1,
+                    max(0, value.x)
+                ) * size.width,
+            y:
+                (
+                    1
+                        - min(
+                            1,
+                            max(0, value.y)
+                        )
+                ) * size.height
+        )
     }
 
     private func point(
