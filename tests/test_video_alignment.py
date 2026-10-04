@@ -65,13 +65,19 @@ def test_video_alignment_recovers_affine_map_and_trim(tmp_path):
     assert receipt.coverage.anchor_count == 3
     assert receipt.clock_model.drift_ppm == pytest.approx(20.0, abs=0.03)
     assert receipt.clock_model.residual_rms_ns < 2.0
+    expected_trim_start = round(
+        8_000_000_000 / (1.0 + 20e-6)
+    )
+    expected_trim_end = round(
+        128_000_000_000 / (1.0 + 20e-6)
+    )
     assert receipt.trim_video_start_ns == pytest.approx(
-        8_000_000_000,
-        abs=10_000,
+        expected_trim_start,
+        abs=2,
     )
     assert receipt.trim_video_end_ns == pytest.approx(
-        127_997_440_000,
-        abs=20_000,
+        expected_trim_end,
+        abs=2,
     )
     assert receipt.source_metadata["nominal_fps"] == 60
 
