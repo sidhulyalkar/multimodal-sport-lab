@@ -287,6 +287,7 @@ enum Action4VideoPoseExtractor {
     struct Result: Sendable {
         let poses: [ArmPoseSample]
         let motionTrace: [MotionEnergySample]
+        let sourceDurationNS: UInt64
     }
 
     static let sampleIntervalSeconds = 0.20
@@ -545,7 +546,8 @@ enum Action4VideoPoseExtractor {
 
         return Result(
             poses: poses,
-            motionTrace: trace
+            motionTrace: trace,
+            sourceDurationNS: durationNS
         )
     }
 
@@ -846,6 +848,23 @@ enum Action4SyncAnalyzer {
         try encoder.encode(artifact).write(
             to: output,
             options: .atomic
+        )
+
+        // Reuse the already-computed 5 Hz Vision pass as the first Action 4
+        // source-pose track. This avoids forcing a second full 4K decode just
+        // to make replay useful. A later explicit refinement can replace this
+        // with a denser 10 Hz track after timing review.
+        _ = try Action4PoseTrackAnalyzer.persistTrack(
+            run: run,
+            sourceDigest: externalDigest,
+            sourceDurationNS:
+                externalResult.sourceDurationNS,
+            poses: externalResult.poses,
+            sampleIntervalSeconds:
+                Action4VideoPoseExtractor
+                    .sampleIntervalSeconds,
+            analyzerVersion:
+                "motionos-action4-sync-pose-v1"
         )
 
         return artifact
