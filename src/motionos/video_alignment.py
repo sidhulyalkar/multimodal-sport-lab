@@ -5,7 +5,6 @@ import json
 import math
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any
 
 from .clock import ClockModel, ClockObservation, estimate_clock_model
 
