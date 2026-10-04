@@ -335,8 +335,12 @@ def write_video_alignment(
     if not isinstance(metadata, dict):
         raise TypeError("source_metadata must be a JSON object")
 
+    source_path = Path(source_video)
+    if not source_path.is_absolute():
+        source_path = Path(spec_path).parent / source_path
+
     receipt = build_video_alignment(
-        source_video,
+        source_path,
         run_id=str(raw["run_id"]),
         video_duration_ns=int(raw["video_duration_ns"]),
         reference_start_ns=int(raw["reference_start_ns"]),
@@ -483,6 +487,23 @@ def validate_video_alignment(
     ):
         raise ValueError("video alignment affine model does not recompute")
 
+    recomputed_residuals = tuple(
+        anchor.reference_time_ns - model.map(anchor.video_pts_ns)
+        for anchor in ordered
+    )
+    if recomputed_residuals != receipt.anchor_residuals_ns:
+        raise ValueError("video alignment anchor residuals do not recompute")
+
+    def inverse(reference_ns: int) -> int:
+        mapped = round((reference_ns - model.intercept_ns) / model.slope)
+        return max(0, min(receipt.video_duration_ns, mapped))
+
+    expected_trim_start = inverse(receipt.reference_start_ns)
+    expected_trim_end = inverse(receipt.reference_end_ns)
+    if receipt.trim_video_start_ns != expected_trim_start:
+        raise ValueError("video alignment trim start does not recompute")
+    if receipt.trim_video_end_ns != expected_trim_end:
+        raise ValueError("video alignment trim end does not recompute")
     if receipt.trim_video_start_ns < 0:
         raise ValueError("video alignment trim start is negative")
     if receipt.trim_video_end_ns > receipt.video_duration_ns:
