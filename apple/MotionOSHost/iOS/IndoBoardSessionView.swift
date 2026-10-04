@@ -1837,7 +1837,6 @@ struct IndoBoardSessionView: View {
         Binding(
             get: {
                 session.requiresExternalCamera
-                    && session.externalCameraConfirmed
             },
             set: { enabled in
                 session.captureMode = enabled
