@@ -113,6 +113,7 @@ from .replay import replay_frames
 from .session import SessionReader
 from .simulate import simulate_session
 from .validate import validate_m0_session
+from .video_alignment import write_video_alignment
 from .world_geometry import (
     build_camera_rig_receipt,
     triangulate_multiview,
@@ -248,6 +249,16 @@ def _parser() -> argparse.ArgumentParser:
         default=("ax", "ay", "az"),
         help="comma-separated payload keys used for target peak magnitude",
     )
+
+    video_alignment = sub.add_parser(
+        "build-video-alignment",
+        help=(
+            "fit a hash-bound external-video PTS to MotionOS reference-time "
+            "mapping from explicit sync anchors"
+        ),
+    )
+    video_alignment.add_argument("spec")
+    video_alignment.add_argument("output")
 
     calibration = sub.add_parser(
         "build-calibration-bundle",
@@ -857,6 +868,11 @@ def main(argv: list[str] | None = None) -> int:
             reference_peak_keys=args.reference_keys,
             target_peak_keys=args.target_keys,
         )
+        print(json.dumps(receipt.to_dict(), indent=2, sort_keys=True))
+        return 0 if receipt.coverage.passed else 2
+
+    if args.command == "build-video-alignment":
+        receipt = write_video_alignment(args.spec, args.output)
         print(json.dumps(receipt.to_dict(), indent=2, sort_keys=True))
         return 0 if receipt.coverage.passed else 2
 
