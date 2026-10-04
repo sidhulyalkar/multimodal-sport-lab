@@ -81,16 +81,18 @@ struct DeviceHubView: View {
                     )
                 }
 
-                NavigationLink {
-                    PodDeviceDetailView()
-                } label: {
-                    DeviceRow(
-                        title: "Equipment Pod",
-                        detail: podStatus.detail,
-                        symbol: "sensor.tag.radiowaves.forward",
-                        status: podStatus.badge,
-                        tint: podStatus.tint
-                    )
+                if pod.backendAvailable {
+                    NavigationLink {
+                        PodDeviceDetailView()
+                    } label: {
+                        DeviceRow(
+                            title: "Equipment Pod",
+                            detail: podStatus.detail,
+                            symbol: "sensor.tag.radiowaves.forward",
+                            status: podStatus.badge,
+                            tint: podStatus.tint
+                        )
+                    }
                 }
             }
         }
