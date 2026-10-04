@@ -175,7 +175,11 @@ enum Action4PoseTrackAnalyzer {
                     sample.joints.values
                         .sorted {
                             $0.id < $1.id
-                        }
+                        },
+                indoBoardEquipment:
+                    sample.indoBoardEquipment,
+                visibleFiducials:
+                    sample.visibleFiducials
             )
         }
 
