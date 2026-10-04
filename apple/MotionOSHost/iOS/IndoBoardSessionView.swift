@@ -1,4 +1,5 @@
 import MotionOSAppleCapture
+import PhotosUI
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -10,6 +11,7 @@ struct IndoBoardSessionView: View {
     @EnvironmentObject private var session: IndoBoardSessionCoordinator
     @EnvironmentObject private var runLibrary: ProductRunLibrary
     @State private var importingExternalVideo = false
+    @State private var selectedExternalVideoItem: PhotosPickerItem?
 
     var body: some View {
         ScrollView {
@@ -88,6 +90,40 @@ struct IndoBoardSessionView: View {
                 // cancellation requires no error surface.
             }
         }
+        .onChange(of: selectedExternalVideoItem) { _, item in
+            guard let item else { return }
+            Task {
+                defer { selectedExternalVideoItem = nil }
+                do {
+                    guard let movie = try await item.loadTransferable(
+                        type: ImportedMovie.self
+                    ) else {
+                        return
+                    }
+                    await importExternalMovie(movie.url)
+                    try? FileManager.default.removeItem(at: movie.url)
+                } catch {
+                    // PhotosPicker transfer failures are intentionally kept
+                    // separate from the sealed source evidence. The Files
+                    // importer remains available as a fallback.
+                }
+            }
+        }
+    }
+
+    @MainActor
+    private func importExternalMovie(_ sourceURL: URL) async {
+        guard let bundle = fieldRun.evidenceBundle,
+              let runID = fieldRun.runID
+        else {
+            return
+        }
+        await session.importExternalVideo(
+            from: sourceURL,
+            runDirectory: bundle.directory,
+            runID: runID
+        )
+        runLibrary.refresh()
     }
 
     @ViewBuilder
@@ -1115,21 +1151,35 @@ struct IndoBoardSessionView: View {
                         )
                     }
                 } else {
-                    Button {
-                        importingExternalVideo = true
-                    } label: {
+                    PhotosPicker(
+                        selection: $selectedExternalVideoItem,
+                        matching: .videos
+                    ) {
                         Label(
-                            "Import Original Action 4 Movie",
-                            systemImage: "video.badge.plus"
+                            "Choose Action 4 Movie from Photos",
+                            systemImage: "photo.on.rectangle.angled"
                         )
                         .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
 
+                    Button {
+                        importingExternalVideo = true
+                    } label: {
+                        Label(
+                            "Choose Movie from Files / SD Card",
+                            systemImage: "externaldrive.badge.plus"
+                        )
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+
                     Text(
-                        "MotionOS copies the untouched movie into this run "
-                            + "and records its SHA-256 + byte count. "
-                            + "No transcoding occurs during import."
+                        "Use Photos after transferring through DJI Mimo, or "
+                            + "Files when reading from an SD card / external drive. "
+                            + "MotionOS copies the untouched movie into this run "
+                            + "and records its SHA-256 + byte count. No transcoding "
+                            + "occurs during evidence import."
                     )
                     .font(.caption2)
                     .foregroundStyle(.secondary)
