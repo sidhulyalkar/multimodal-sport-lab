@@ -1060,6 +1060,16 @@ struct ProductRunReplayView: View {
 
                 HStack(spacing: 8) {
                     alignmentMetric(
+                        "Rate",
+                        String(
+                            format:
+                                "%.0f Hz",
+                            1
+                                / track
+                                    .sampleIntervalSeconds
+                        )
+                    )
+                    alignmentMetric(
                         "Span",
                         String(
                             format:
@@ -1113,11 +1123,12 @@ struct ProductRunReplayView: View {
                 .foregroundStyle(.green)
 
                 Text(
-                    "Coverage counts detected 10 Hz sample slots; span only "
-                        + "shows how much of the clip lies between the first "
-                        + "and last detection. The skeleton interpolates only "
-                        + "across short pose gaps and remains Action 4 image-space "
-                        + "evidence, not metric world geometry."
+                    "Coverage counts detected analysis sample slots at the "
+                        + "track's recorded rate; span only shows how much of "
+                        + "the clip lies between the first and last detection. "
+                        + "The skeleton interpolates only across short gaps and "
+                        + "remains Action 4 image-space evidence, not metric "
+                        + "world geometry."
                 )
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -1132,9 +1143,13 @@ struct ProductRunReplayView: View {
                     )
                 } label: {
                     Label(
-                        "Rebuild Pose Track",
+                        track.sampleIntervalSeconds > 0.11
+                            ? "Refine Pose Track to 10 Hz"
+                            : "Rebuild 10 Hz Pose Track",
                         systemImage:
-                            "arrow.clockwise"
+                            track.sampleIntervalSeconds > 0.11
+                                ? "sparkles"
+                                : "arrow.clockwise"
                     )
                     .frame(maxWidth: .infinity)
                 }
