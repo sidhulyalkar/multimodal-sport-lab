@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import replace
 
 import pytest
 
@@ -169,6 +170,60 @@ def test_video_alignment_round_trip_and_hash_validation(tmp_path):
     video.write_bytes(video.read_bytes() + b"changed")
     with pytest.raises(ValueError, match="source hash mismatch"):
         validate_video_alignment(loaded, video)
+
+
+def test_video_alignment_validation_rejects_tampered_trim(tmp_path):
+    video = _video(tmp_path)
+    receipt = build_video_alignment(
+        video,
+        run_id="indo-tamper",
+        video_duration_ns=140_000_000_000,
+        reference_start_ns=0,
+        reference_end_ns=120_000_000_000,
+        anchors=_anchors(),
+    )
+
+    tampered = replace(
+        receipt,
+        trim_video_start_ns=receipt.trim_video_start_ns + 1_000_000,
+    )
+    with pytest.raises(ValueError, match="trim start does not recompute"):
+        validate_video_alignment(tampered, video)
+
+
+def test_video_alignment_spec_resolves_video_relative_to_spec(tmp_path):
+    media = tmp_path / "media"
+    media.mkdir()
+    video = media / "action4.mov"
+    video.write_bytes(b"relative-video" * 32)
+
+    spec = tmp_path / "spec.json"
+    output = tmp_path / "alignment.json"
+    spec.write_text(
+        json.dumps(
+            {
+                "run_id": "indo-relative",
+                "source_video": "media/action4.mov",
+                "video_duration_ns": 140_000_000_000,
+                "reference_start_ns": 0,
+                "reference_end_ns": 120_000_000_000,
+                "anchors": [
+                    {
+                        "label": anchor.label,
+                        "video_pts_ns": anchor.video_pts_ns,
+                        "reference_time_ns": anchor.reference_time_ns,
+                        "uncertainty_ns": anchor.uncertainty_ns,
+                    }
+                    for anchor in _anchors()
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    receipt = write_video_alignment(spec, output)
+    assert receipt.source_video_filename == "action4.mov"
+    assert receipt.source_video_byte_count == video.stat().st_size
 
 
 def test_video_alignment_requires_three_unique_anchors(tmp_path):
