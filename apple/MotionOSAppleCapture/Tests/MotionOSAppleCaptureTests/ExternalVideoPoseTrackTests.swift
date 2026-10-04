@@ -28,24 +28,30 @@ final class ExternalVideoPoseTrackTests: XCTestCase {
             )
         )
         let joints = value.jointMap
+        let left = try XCTUnwrap(
+            joints["leftWrist"]
+        )
+        let right = try XCTUnwrap(
+            joints["rightWrist"]
+        )
 
         XCTAssertEqual(
-            joints["leftWrist"]?.x,
+            left.x,
             0.30,
             accuracy: 1e-12
         )
         XCTAssertEqual(
-            joints["leftWrist"]?.y,
+            left.y,
             0.50,
             accuracy: 1e-12
         )
         XCTAssertEqual(
-            joints["leftWrist"]?.confidence,
+            left.confidence,
             0.90,
             accuracy: 1e-12
         )
         XCTAssertEqual(
-            joints["rightWrist"]?.x,
+            right.x,
             0.70,
             accuracy: 1e-12
         )
