@@ -144,8 +144,16 @@ No agent should collapse those into one state.
 
 ## Dependency cleanup strategy
 
-The Xcode 27 warnings currently visible from NordicDFU and ZIPFoundation originate in transitive package manifests, not in MotionOS's watchOS deployment target.
+The default MotionOS product build intentionally excludes the optional MetaWear
+package graph. Watch + iPhone + camera capture therefore does not resolve
+NordicDFU or ZIPFoundation and stays focused on the beta product path.
 
-The preferred cleanup is to remove unused firmware/DFU dependencies from the MotionOS package graph, either through an upstream MetaWear package split or an exact-revision core-only fork. Do not hide the warnings with global compiler-warning suppression and do not raise MotionOS deployment targets merely to silence a transitive manifest.
+The MetaMotion adapter source remains isolated behind `canImport(MetaWear)` for
+a future dedicated sensor-lab build. When that build is restored, prefer a
+core-only MetaWear dependency that does not resolve firmware/DFU packages.
+Do not hide third-party manifest warnings with global compiler-warning
+suppression and do not raise MotionOS deployment targets merely to silence a
+transitive manifest.
 
-Treat that cleanup as a Sensors-lane task with Apple-lane verification.
+Treat sensor-lab dependency work as a Sensors-lane task with Apple-lane
+verification.
