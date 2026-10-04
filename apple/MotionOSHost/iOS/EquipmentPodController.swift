@@ -1,6 +1,7 @@
 import Combine
 import Foundation
 
+#if canImport(MetaWear)
 @MainActor
 final class EquipmentPodController: ObservableObject {
     enum Phase: String {
@@ -25,6 +26,7 @@ final class EquipmentPodController: ObservableObject {
     @Published private(set) var downloadProgress = 0.0
     @Published private(set) var evidenceBundle: MetaMotionEvidenceBundle?
     @Published private(set) var errorMessage: String?
+    let backendAvailable = true
 
     private let discovery = MetaMotionDiscovery()
     private var engine: MetaMotionCaptureEngine?
@@ -241,3 +243,72 @@ final class EquipmentPodController: ObservableObject {
         return "p1-pod-\(stamp)-\(UUID().uuidString.prefix(8).lowercased())"
     }
 }
+
+
+#else
+
+@MainActor
+final class EquipmentPodController: ObservableObject {
+    enum Phase: String {
+        case idle
+        case scanning
+        case connecting
+        case ready
+        case previewing
+        case recording
+        case linkLost = "link lost"
+        case recovering
+        case downloading
+        case evidenceReady = "evidence ready"
+        case failed
+    }
+
+    @Published private(set) var phase: Phase = .idle
+    @Published private(set) var candidates: [MetaMotionCandidate] = []
+    @Published private(set) var deviceMetadata: MetaMotionDeviceMetadata?
+    @Published private(set) var latestAccel: MetaMotionVector?
+    @Published private(set) var latestGyro: MetaMotionVector?
+    @Published private(set) var downloadProgress = 0.0
+    @Published private(set) var evidenceBundle: MetaMotionEvidenceBundle?
+    @Published private(set) var errorMessage: String?
+
+    let backendAvailable = false
+
+    func startScanning() {
+        errorMessage = unavailableMessage
+    }
+
+    func stopScanning() {}
+
+    func connect(_ candidate: MetaMotionCandidate) async {
+        errorMessage = unavailableMessage
+    }
+
+    func startPreview() async {
+        errorMessage = unavailableMessage
+    }
+
+    func stopPreview() async {}
+
+    func armRecording(clearExistingFlash: Bool) async {
+        errorMessage = unavailableMessage
+    }
+
+    func reconnectForRecovery() async {
+        errorMessage = unavailableMessage
+    }
+
+    func stopRecoverAndExport() async {
+        errorMessage = unavailableMessage
+    }
+
+    func disconnect() async {
+        errorMessage = nil
+        phase = .idle
+    }
+
+    private var unavailableMessage: String {
+        "Equipment-pod support is not loaded in the lean MotionOS product build. Watch + iPhone + external-camera capture remains fully available."
+    }
+}
+#endif
