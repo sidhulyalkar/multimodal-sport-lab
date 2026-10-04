@@ -73,6 +73,35 @@ fusion are unlocked.
 File creation time may be used only as a coarse debugging clue and is never a
 clock correspondence.
 
+### Proposal review and sealing
+
+A synchronization proposal is not promoted automatically.
+
+The operator reviews START, MIDDLE, and END in paired iPhone/Action 4 video
+players and explicitly confirms that each pair shows the same sharp-arm event.
+Only after all three events are accepted may MotionOS write
+`video-alignment.json`.
+
+Sealing performs a fresh least-squares fit using **all three reviewed anchors**,
+rather than reusing the proposal's endpoint fit. The final receipt recomputes:
+
+- affine slope and intercept;
+- clock drift in ppm;
+- per-anchor residuals and RMS residual;
+- early/middle/late coverage;
+- source-video trim bounds;
+- exact Action 4 SHA-256 and byte count.
+
+The receipt uses the same `motionos.video-alignment.v1` schema as the Python
+tooling. The reviewed proposal's SHA-256, confidence, protocol version, and
+review state are preserved as source metadata.
+
+Once sealed, Action 4 playback can be mapped onto the iPhone reference
+timeline. This is enough to synchronize view-independent products such as the
+3D body scene and coaching/event timing. It is **not** enough to paint iPhone
+2D skeleton or board coordinates onto Action 4 pixels; that still requires
+Action 4-specific pose/equipment tracking or calibrated cross-view projection.
+
 ## Geometry
 
 There are two geometry modes.

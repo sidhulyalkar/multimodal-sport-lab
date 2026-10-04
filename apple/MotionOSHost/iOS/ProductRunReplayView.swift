@@ -136,6 +136,8 @@ final class ProductRunReplayController: ObservableObject {
     @Published private(set) var errorMessage: String?
     @Published private(set) var selectedSource:
         ProductReplayVideoSource = .iPhone
+    @Published private(set) var action4Alignment:
+        VideoAlignmentReceiptV1?
 
     private var pollTask: Task<Void, Never>?
     private var run: ProductRunRecord?
@@ -169,6 +171,9 @@ final class ProductRunReplayController: ObservableObject {
             .value
 
             self.timeline = timeline
+            action4Alignment =
+                try? Action4AlignmentSealer
+                    .loadReceipt(for: run)
             selectedSource = .iPhone
             player = AVPlayer(url: cameraVideoURL)
             currentFrame = timeline.poseSamples.first?.frame
@@ -210,8 +215,22 @@ final class ProductRunReplayController: ObservableObject {
                 return
             }
             player = AVPlayer(url: externalVideoURL)
-            currentFrame = nil
+            currentFrame =
+                action4Alignment == nil
+                    ? nil
+                    : timeline?.poseSamples.first?.frame
         }
+    }
+
+    func reloadAction4Alignment() {
+        guard let run else {
+            action4Alignment = nil
+            return
+        }
+        action4Alignment =
+            try? Action4AlignmentSealer
+                .loadReceipt(for: run)
+        updateCurrentFrame()
     }
 
     func stop() {
@@ -237,39 +256,61 @@ final class ProductRunReplayController: ObservableObject {
     }
 
     private func updateCurrentFrame() {
-        guard selectedSource == .iPhone,
-              let player,
+        guard let player,
               let timeline,
               !timeline.poseSamples.isEmpty
         else {
-            if selectedSource == .action4 {
-                currentFrame = nil
-            }
+            currentFrame = nil
             return
         }
 
-        let elapsed = CMTimeGetSeconds(player.currentTime())
-        guard elapsed.isFinite, elapsed >= 0 else {
+        let elapsed = CMTimeGetSeconds(
+            player.currentTime()
+        )
+        guard elapsed.isFinite,
+              elapsed >= 0
+        else {
             return
         }
 
-        let offsetNS = UInt64(
+        let elapsedNS = UInt64(
             min(
                 Double(UInt64.max),
                 elapsed * 1_000_000_000
             )
-            .rounded()
+            .rounded(.toNearestOrEven)
         )
+
+        let referenceElapsedNS: UInt64
+        switch selectedSource {
+        case .iPhone:
+            referenceElapsedNS = elapsedNS
+
+        case .action4:
+            guard let action4Alignment else {
+                currentFrame = nil
+                return
+            }
+            referenceElapsedNS =
+                action4Alignment.mapVideoPTS(
+                    elapsedNS
+                )
+        }
+
         let addition = timeline.firstFramePTSNS
-            .addingReportingOverflow(offsetNS)
+            .addingReportingOverflow(
+                referenceElapsedNS
+            )
         guard !addition.overflow else {
             currentFrame = nil
             return
         }
         let targetPTS = addition.partialValue
 
-        guard targetPTS <= timeline.lastFramePTSNS
+        guard targetPTS
+                <= timeline.lastFramePTSNS
         else {
+            currentFrame = nil
             return
         }
 
@@ -380,13 +421,17 @@ struct ProductRunReplayView: View {
             action4Sync.loadExisting(run: run)
             await controller.load(run)
         }
+        .onAppear {
+            controller.reloadAction4Alignment()
+        }
         .onDisappear {
             controller.stop()
             action4Sync.cancel()
         }
         .onChange(of: controller.selectedSource) {
             _, source in
-            if source == .action4 {
+            if source == .action4,
+               controller.action4Alignment == nil {
                 bodyMode = .video
             }
         }
@@ -469,7 +514,8 @@ struct ProductRunReplayView: View {
     @ViewBuilder
     private var replayStage: some View {
         VStack(alignment: .leading, spacing: 10) {
-            if controller.selectedSource == .iPhone {
+            if controller.selectedSource == .iPhone
+                || controller.action4Alignment != nil {
                 Picker("Replay mode", selection: $bodyMode) {
                     ForEach(ProductReplayBodyMode.allCases) {
                         Text($0.rawValue).tag($0)
@@ -494,7 +540,8 @@ struct ProductRunReplayView: View {
                             .foregroundStyle(.white.opacity(0.75))
                     }
                 } else if bodyMode == .body,
-                          controller.selectedSource == .iPhone {
+                          controller.selectedSource == .iPhone
+                            || controller.action4Alignment != nil {
                     bodyStage
                 } else if let player = controller.player {
                     VideoPlayer(player: player)
@@ -546,16 +593,26 @@ struct ProductRunReplayView: View {
 
             if controller.selectedSource == .action4 {
                 Label(
-                    action4Sync.artifact == nil
-                        ? "Original preserved. Analyze the three sync gestures "
-                            + "before enabling cross-view overlays."
-                        : "A motion-based alignment proposal exists. Overlays "
-                            + "remain locked until that proposal is reviewed "
-                            + "and sealed as synchronization evidence.",
+                    controller.action4Alignment != nil
+                        ? "Temporal alignment is sealed. 3D Body mode follows "
+                            + "the synchronized iPhone-derived body timeline; "
+                            + "Action 4 pixel overlays still require Action 4 "
+                            + "pose/calibration evidence."
+                        : (
+                            action4Sync.artifact == nil
+                                ? "Original preserved. Analyze the three sync gestures "
+                                    + "before temporal fusion."
+                                : "A motion-based alignment proposal exists. Review "
+                                    + "all three paired gestures before sealing."
+                        ),
                     systemImage:
-                        action4Sync.artifact == nil
-                            ? "clock.badge.exclamationmark"
-                            : "waveform.path.ecg.rectangle"
+                        controller.action4Alignment != nil
+                            ? "checkmark.seal.fill"
+                            : (
+                                action4Sync.artifact == nil
+                                    ? "clock.badge.exclamationmark"
+                                    : "waveform.path.ecg.rectangle"
+                            )
                 )
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -631,11 +688,19 @@ struct ProductRunReplayView: View {
         Label(
             controller.selectedSource == .iPhone
                 ? "IPHONE · POSE TIMELOCK"
-                : "ACTION 4 · UNALIGNED",
+                : (
+                    controller.action4Alignment != nil
+                        ? "ACTION 4 · TIME ALIGNED"
+                        : "ACTION 4 · UNALIGNED"
+                ),
             systemImage:
                 controller.selectedSource == .iPhone
                     ? "camera.fill"
-                    : "video.fill"
+                    : (
+                        controller.action4Alignment != nil
+                            ? "checkmark.seal.fill"
+                            : "video.fill"
+                    )
         )
         .font(.caption2.weight(.bold))
         .foregroundStyle(.white)
@@ -654,12 +719,58 @@ struct ProductRunReplayView: View {
                 subtitle: action4SyncSubtitle,
                 systemImage: "waveform.path.ecg.rectangle",
                 accent:
-                    action4Sync.phase == .ready
+                    controller.action4Alignment != nil
                         ? .green
-                        : .purple
+                        : (
+                            action4Sync.phase == .ready
+                                ? .cyan
+                                : .purple
+                        )
             )
 
-            if let artifact = action4Sync.artifact {
+            if let receipt =
+                    controller.action4Alignment {
+                HStack(spacing: 8) {
+                    alignmentMetric(
+                        "Status",
+                        "SEALED"
+                    )
+                    alignmentMetric(
+                        "Fit RMS",
+                        String(
+                            format:
+                                "%.1f ms",
+                            receipt.clockModel
+                                .residualRMSMS
+                        )
+                    )
+                    alignmentMetric(
+                        "Drift",
+                        String(
+                            format:
+                                "%.1f ppm",
+                            receipt.clockModel
+                                .driftPPM
+                        )
+                    )
+                }
+
+                Label(
+                    "Reviewed three-point timing authority",
+                    systemImage: "checkmark.seal.fill"
+                )
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.green)
+
+                Text(
+                    "Temporal fusion is available. Action 4 image-space "
+                        + "pose/equipment overlays remain a separate "
+                        + "qualification problem."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            } else if let artifact = action4Sync.artifact {
                 let proposal = artifact.proposal
 
                 HStack(spacing: 8) {
@@ -755,6 +866,20 @@ struct ProductRunReplayView: View {
                 Text(artifact.claimBoundary)
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
+
+                NavigationLink {
+                    Action4AlignmentReviewView(
+                        run: run,
+                        artifact: artifact
+                    )
+                } label: {
+                    Label(
+                        "Review Three Landmarks",
+                        systemImage: "checkmark.shield"
+                    )
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
             } else if action4Sync.phase == .analyzing {
                 HStack(spacing: 10) {
                     ProgressView()
@@ -809,15 +934,19 @@ struct ProductRunReplayView: View {
     }
 
     private var action4SyncSubtitle: String {
+        if controller.action4Alignment != nil {
+            return "Reviewed timing authority available"
+        }
+
         switch action4Sync.phase {
         case .idle:
-            "Find matching physical landmarks"
+            return "Find matching physical landmarks"
         case .analyzing:
-            "Vision pose pass running locally"
+            return "Vision pose pass running locally"
         case .ready:
-            "Three-point motion proposal ready"
+            return "Three-point motion proposal ready"
         case .failed:
-            "More evidence needed"
+            return "More evidence needed"
         }
     }
 
@@ -869,14 +998,53 @@ struct ProductRunReplayView: View {
             )
 
             if controller.selectedSource == .action4 {
-                Label(
-                    action4Sync.artifact == nil
-                        ? "Annotation layers unlock after external-video alignment."
-                        : "Proposal found; review + seal alignment before layers unlock.",
-                    systemImage: "lock.fill"
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                if controller.action4Alignment != nil {
+                    VStack(alignment: .leading, spacing: 9) {
+                        Label(
+                            "Temporal fusion available",
+                            systemImage: "checkmark.seal.fill"
+                        )
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.green)
+
+                        Text(
+                            "Use 3D Body to inspect the iPhone-derived body state "
+                                + "at the Action 4 playback time. Image-space "
+                                + "skeleton, board, and mechanics overlays stay "
+                                + "disabled on Action 4 until that camera has its "
+                                + "own qualified pose/equipment geometry."
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                        if bodyMode == .body {
+                            Picker("3D viewpoint", selection: $viewpoint) {
+                                ForEach(BodySceneViewpoint.allCases) {
+                                    Text($0.rawValue).tag($0)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+
+                            Toggle(
+                                "Estimated muscle demand",
+                                isOn: $showMuscles
+                            )
+                            .disabled(
+                                controller.currentFrame?
+                                    .hasModelEstimatedMuscleActivity != true
+                            )
+                        }
+                    }
+                } else {
+                    Label(
+                        action4Sync.artifact == nil
+                            ? "Temporal layers unlock after external-video alignment."
+                            : "Proposal found; review + seal alignment before temporal fusion.",
+                        systemImage: "lock.fill"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
             } else {
                 LazyVGrid(
                     columns: [
@@ -979,10 +1147,17 @@ struct ProductRunReplayView: View {
             replayStatusRow(
                 "Body",
                 value:
-                    controller.selectedSource == .iPhone
-                        && controller.currentFrame != nil
-                        ? "derived · Vision pose"
-                        : "not active"
+                    controller.currentFrame == nil
+                        ? "not active"
+                        : (
+                            controller.selectedSource == .iPhone
+                                ? "derived · Vision pose"
+                                : (
+                                    controller.action4Alignment != nil
+                                        ? "derived · iPhone 3D pose · time-aligned"
+                                        : "not active"
+                                )
+                        )
             )
 
             replayStatusRow(

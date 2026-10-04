@@ -29,6 +29,8 @@ struct ProductRunRecord: Identifiable, Equatable, Sendable {
     let cameraMetadataURL: URL?
     let externalVideoURL: URL?
     let externalMetadataURL: URL?
+    let externalSyncProposalURL: URL?
+    let externalAlignmentURL: URL?
     let feedbackURL: URL?
 
     var sourceCount: Int {
@@ -297,6 +299,18 @@ final class ProductRunLibrary: ObservableObject {
                 in: externalDirectory,
                 manager: manager
             )
+            let externalSyncProposal = existingURL(
+                externalDirectory.appendingPathComponent(
+                    "action4-sync-proposal.json"
+                ),
+                manager: manager
+            )
+            let externalAlignment = existingURL(
+                externalDirectory.appendingPathComponent(
+                    "video-alignment.json"
+                ),
+                manager: manager
+            )
 
             let completed = metadata["completed_block_ids"]
                 as? [String] ?? []
@@ -351,6 +365,10 @@ final class ProductRunLibrary: ObservableObject {
                 cameraMetadataURL: cameraMetadata,
                 externalVideoURL: externalVideo,
                 externalMetadataURL: externalMetadata,
+                externalSyncProposalURL:
+                    externalSyncProposal,
+                externalAlignmentURL:
+                    externalAlignment,
                 feedbackURL: existingURL(
                     directory.appendingPathComponent(
                         "product-feedback.json"

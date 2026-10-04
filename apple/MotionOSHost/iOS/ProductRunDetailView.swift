@@ -218,7 +218,15 @@ struct ProductRunDetailView: View {
                 symbol: "video.fill",
                 ready: run.externalVideoURL != nil,
                 detail: run.externalVideoURL != nil
-                    ? "original hash-bound"
+                    ? (
+                        run.externalAlignmentURL != nil
+                            ? "original + reviewed alignment"
+                            : (
+                                run.externalSyncProposalURL != nil
+                                    ? "original + sync proposal"
+                                    : "original hash-bound"
+                            )
+                    )
                     : (
                         run.productManifest?.externalCameraExpected == true
                             ? "required · awaiting import"
@@ -269,9 +277,13 @@ struct ProductRunDetailView: View {
                         .foregroundStyle(.primary)
 
                     Text(
-                        run.externalVideoURL != nil
-                            ? "iPhone pose replay · Action 4 original available"
-                            : "Video · body · balance · coaching"
+                        run.externalAlignmentURL != nil
+                            ? "iPhone + reviewed Action 4 timing · 3D body"
+                            : (
+                                run.externalVideoURL != nil
+                                    ? "iPhone pose replay · Action 4 original available"
+                                    : "Video · body · balance · coaching"
+                            )
                     )
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -1033,6 +1045,8 @@ struct ProductRunDetailView: View {
             run.cameraMetadataURL,
             run.externalVideoURL,
             run.externalMetadataURL,
+            run.externalSyncProposalURL,
+            run.externalAlignmentURL,
             run.feedbackURL,
         ]
         .compactMap { $0 }
