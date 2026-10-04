@@ -63,6 +63,33 @@ enum Action4PoseTrackAnalyzer {
             )
         }
 
+        let output = artifactURL(for: run)
+        if FileManager.default.fileExists(
+            atPath: output.path
+        ),
+        let data = try? Data(
+            contentsOf: output
+        ),
+        let existing = try? JSONDecoder().decode(
+            ExternalVideoPoseTrack.self,
+            from: data
+        ),
+        existing.schemaVersion
+            == ExternalVideoPoseTrack.schemaVersion,
+        existing.runID == run.runID,
+        existing.sourceVideoSHA256
+            == sourceDigest.sha256,
+        existing.sourceVideoByteCount
+            == sourceDigest.byteCount,
+        existing.frameCount
+            >= minimumUsefulFrameCount,
+        existing.sampleIntervalSeconds
+            <= sampleIntervalSeconds {
+            // Never let a coarser reuse pass overwrite a denser source track.
+            // Sync runs at 5 Hz; an explicit refinement runs at 10 Hz.
+            return existing
+        }
+
         let track = ExternalVideoPoseTrack(
             runID: run.runID,
             sourceID: "action4",
@@ -86,7 +113,6 @@ enum Action4PoseTrackAnalyzer {
                     .string(from: Date())
         )
 
-        let output = artifactURL(for: run)
         try FileManager.default.createDirectory(
             at:
                 output
