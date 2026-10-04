@@ -231,7 +231,9 @@ struct CaptureHomeView: View {
                 } label: {
                     toolRow(
                         title: "Equipment pod",
-                        subtitle: pod.phase.rawValue.capitalized,
+                        subtitle: pod.backendAvailable
+                            ? pod.phase.rawValue.capitalized
+                            : "Optional lab sensor · not loaded",
                         symbol: "sensor.tag.radiowaves.forward",
                         tint: .secondary
                     )
