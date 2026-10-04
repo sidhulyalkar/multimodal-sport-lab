@@ -537,17 +537,18 @@ enum Action4SyncAnalyzer {
                 .missingCameraCueAnchors
         }
 
-        async let cameraDigestTask =
+        // Hash first, then decode. Running a full-file SHA pass and a
+        // 4K video decoder over the same Action 4 movie concurrently creates
+        // avoidable storage pressure and heat on iPhone.
+        async let digestPairTask =
             Task.detached(priority: .utility) {
-                try FileEvidence.digest(
+                let camera = try FileEvidence.digest(
                     cameraVideoURL
                 )
-            }.value
-        async let externalDigestTask =
-            Task.detached(priority: .utility) {
-                try FileEvidence.digest(
+                let external = try FileEvidence.digest(
                     externalVideoURL
                 )
+                return (camera, external)
             }.value
         async let timelineTask =
             Task.detached(priority: .utility) {
@@ -556,22 +557,16 @@ enum Action4SyncAnalyzer {
                         cameraJournalURL
                     )
             }.value
-        async let externalTask =
-            Action4VideoPoseExtractor.extract(
-                from: externalVideoURL
-            )
 
         let (
-            cameraDigest,
-            externalDigest,
-            timeline,
-            externalResult
+            digestPair,
+            timeline
         ) = try await (
-            cameraDigestTask,
-            externalDigestTask,
-            timelineTask,
-            externalTask
+            digestPairTask,
+            timelineTask
         )
+        let cameraDigest = digestPair.0
+        let externalDigest = digestPair.1
 
         if let expected =
                 manifest.cameraVideoSHA256,
@@ -585,6 +580,11 @@ enum Action4SyncAnalyzer {
             throw Action4SyncAnalysisError
                 .externalSourceHashMismatch
         }
+
+        try Task.checkCancellation()
+        let externalResult =
+            try await Action4VideoPoseExtractor
+                .extract(from: externalVideoURL)
 
         let iPhonePoseSamples =
             ArmMotionTraceBuilder.samples(
@@ -732,9 +732,14 @@ final class Action4SyncAnalysisController:
     @Published private(set) var errorMessage:
         String?
 
+    private var analysisTask: Task<Void, Never>?
+
     func loadExisting(
         run: ProductRunRecord
     ) {
+        guard phase != .analyzing else {
+            return
+        }
         do {
             artifact = try Action4SyncAnalyzer
                 .loadArtifact(for: run)
@@ -751,23 +756,53 @@ final class Action4SyncAnalysisController:
         }
     }
 
-    func analyze(
+    func startAnalysis(
         run: ProductRunRecord
-    ) async {
+    ) {
         guard phase != .analyzing else {
             return
         }
+
+        analysisTask?.cancel()
         phase = .analyzing
         errorMessage = nil
 
-        do {
-            artifact = try await Action4SyncAnalyzer
-                .analyze(run: run)
-            phase = .ready
-        } catch {
-            artifact = nil
-            phase = .failed
-            errorMessage = error.localizedDescription
+        analysisTask = Task { @MainActor [weak self] in
+            do {
+                let value = try await Action4SyncAnalyzer
+                    .analyze(run: run)
+                guard !Task.isCancelled,
+                      let self
+                else {
+                    return
+                }
+                self.artifact = value
+                self.phase = .ready
+                self.analysisTask = nil
+            } catch is CancellationError {
+                guard let self else { return }
+                self.phase = self.artifact == nil
+                    ? .idle
+                    : .ready
+                self.analysisTask = nil
+            } catch {
+                guard let self else { return }
+                self.artifact = nil
+                self.phase = .failed
+                self.errorMessage =
+                    error.localizedDescription
+                self.analysisTask = nil
+            }
+        }
+    }
+
+    func cancel() {
+        analysisTask?.cancel()
+        analysisTask = nil
+        if phase == .analyzing {
+            phase = artifact == nil
+                ? .idle
+                : .ready
         }
     }
 }
