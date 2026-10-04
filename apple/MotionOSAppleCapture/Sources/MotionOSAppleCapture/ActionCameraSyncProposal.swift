@@ -355,11 +355,14 @@ public enum ActionCameraSyncMatcher {
         _ references: [SyncReferenceGesture]
     ) -> [SyncReferenceGesture] {
         let required = ["start", "middle", "end"]
-        let byLabel = Dictionary(
-            uniqueKeysWithValues: references.map {
-                ($0.label.lowercased(), $0)
+        var byLabel: [String: SyncReferenceGesture] = [:]
+        for reference in references {
+            let key = reference.label.lowercased()
+            guard byLabel[key] == nil else {
+                return []
             }
-        )
+            byLabel[key] = reference
+        }
 
         return required.compactMap { label in
             guard let value = byLabel[label]
