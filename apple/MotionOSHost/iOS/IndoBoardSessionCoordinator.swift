@@ -225,8 +225,8 @@ final class IndoBoardSessionCoordinator: ObservableObject {
 
         if requiresExternalCamera && !externalCameraConfirmed {
             errorMessage = (
-                "The external camera must be started "
-                    + "and its fixed capture profile confirmed before recording."
+                "Start the Action 4 (or use the DJI Bluetooth remote), keep "
+                    + "the tripod fixed, then confirm that it is recording."
             )
             phase = .idle
             return
