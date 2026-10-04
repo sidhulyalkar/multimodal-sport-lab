@@ -1275,8 +1275,11 @@ struct ProductRunReplayView: View {
                                 isOn: $showAction4Pose
                             )
 
-                            if controller.action4PoseTrack?
-                                .equipmentFrameCount ?? 0 > 0 {
+                            if (
+                                controller.action4PoseTrack?
+                                    .equipmentFrameCount
+                                    ?? 0
+                            ) > 0 {
                                 Toggle(
                                     "QR board / roller",
                                     isOn:
