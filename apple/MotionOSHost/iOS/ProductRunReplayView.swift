@@ -1029,7 +1029,7 @@ struct ProductRunReplayView: View {
                         String(
                             format:
                                 "%.0f%%",
-                            track.temporalCoverageFraction
+                            track.observationCoverageFraction
                                 * 100
                         )
                     )
@@ -1041,6 +1041,28 @@ struct ProductRunReplayView: View {
                             track.meanConfidence
                                 * 100
                         )
+                    )
+                }
+
+                HStack(spacing: 8) {
+                    alignmentMetric(
+                        "Span",
+                        String(
+                            format:
+                                "%.0f%%",
+                            track.temporalSpanFraction
+                                * 100
+                        )
+                    )
+                    alignmentMetric(
+                        "Max gap",
+                        track.maximumPoseGapSeconds.map {
+                            String(
+                                format:
+                                    "%.2f s",
+                                $0
+                            )
+                        } ?? "—"
                     )
                 }
 
@@ -1077,10 +1099,11 @@ struct ProductRunReplayView: View {
                 .foregroundStyle(.green)
 
                 Text(
-                    "This skeleton is derived directly from Action 4 RGB "
-                        + "frames at 10 Hz and interpolated only across short "
-                        + "pose gaps. It is valid in Action 4 image space, "
-                        + "not metric world space."
+                    "Coverage counts detected 10 Hz sample slots; span only "
+                        + "shows how much of the clip lies between the first "
+                        + "and last detection. The skeleton interpolates only "
+                        + "across short pose gaps and remains Action 4 image-space "
+                        + "evidence, not metric world geometry."
                 )
                 .font(.caption)
                 .foregroundStyle(.secondary)
