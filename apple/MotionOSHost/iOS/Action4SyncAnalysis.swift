@@ -679,6 +679,8 @@ enum Action4SyncAnalyzer {
             ]
         )
 
+        try Task.checkCancellation()
+
         let output = artifactURL(for: run)
         try FileManager.default.createDirectory(
             at: output.deletingLastPathComponent(),
