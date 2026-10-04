@@ -1415,6 +1415,20 @@ struct ProductRunReplayView: View {
                         )
             )
 
+            if controller.selectedSource == .action4 {
+                replayStatusRow(
+                    "Action 4 pose",
+                    value:
+                        controller.currentAction4PoseFrame != nil
+                            ? "derived · source-camera 2D Vision pose"
+                            : (
+                                controller.action4PoseTrack != nil
+                                    ? "track available · no nearby pose frame"
+                                    : "not analyzed"
+                            )
+                )
+            }
+
             replayStatusRow(
                 "Muscles",
                 value:
@@ -1425,9 +1439,15 @@ struct ProductRunReplayView: View {
             )
 
             Text(
-                "The 3D body is a derived representation of detected pose. "
-                    + "An anatomical-looking render is not automatically an "
-                    + "anatomical measurement."
+                controller.selectedSource == .action4
+                    && controller.action4PoseTrack != nil
+                    ? "Action 4 skeleton pixels come from Action 4 itself. "
+                        + "The 3D body remains a synchronized, derived iPhone "
+                        + "representation. Neither implies metric multiview "
+                        + "geometry without camera calibration."
+                    : "The 3D body is a derived representation of detected pose. "
+                        + "An anatomical-looking render is not automatically an "
+                        + "anatomical measurement."
             )
             .font(.caption2)
             .foregroundStyle(.tertiary)
