@@ -13,8 +13,8 @@ final class ActionCameraSyncProposalTests: XCTestCase {
             ),
             SyncReferenceGesture(
                 label: "middle",
-                referenceTimeNS: 85_000_000_000,
-                cueTimeNS: 84_700_000_000,
+                referenceTimeNS: 63_000_000_000,
+                cueTimeNS: 62_700_000_000,
                 energy: 1.4,
                 confidence: 0.96
             ),
@@ -28,10 +28,10 @@ final class ActionCameraSyncProposalTests: XCTestCase {
         ]
 
         // Action camera started 7 s earlier than the reference timeline.
-        // The actual gesture peaks therefore land at 17, 92 and 121 s.
+        // The actual gesture peaks therefore land at 17, 70 and 121 s.
         let gestureTimes: Set<UInt64> = [
             17_000_000_000,
-            92_000_000_000,
+            70_000_000_000,
             121_000_000_000,
         ]
         var trace: [MotionEnergySample] = []
@@ -70,7 +70,7 @@ final class ActionCameraSyncProposalTests: XCTestCase {
             proposal.anchors.map(\.externalPTSNS),
             [
                 17_000_000_000,
-                92_000_000_000,
+                70_000_000_000,
                 121_000_000_000,
             ]
         )
@@ -178,7 +178,7 @@ final class ActionCameraSyncProposalTests: XCTestCase {
             ),
             .init(
                 label: "middle",
-                referenceTimeNS: 85_000_000_000,
+                referenceTimeNS: 63_000_000_000,
                 energy: 1,
                 confidence: 1
             ),
