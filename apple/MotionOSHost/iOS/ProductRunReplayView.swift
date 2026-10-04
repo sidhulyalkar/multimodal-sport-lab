@@ -1003,6 +1003,166 @@ struct ProductRunReplayView: View {
         .cardStyle()
     }
 
+    private var action4PoseCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            MotionOSSectionHeader(
+                title: "Action 4 body track",
+                subtitle: action4PoseSubtitle,
+                systemImage: "figure.arms.open",
+                accent:
+                    action4Pose.phase == .ready
+                        ? .green
+                        : .cyan
+            )
+
+            if let track = action4Pose.track {
+                HStack(spacing: 8) {
+                    alignmentMetric(
+                        "Frames",
+                        "\(track.frameCount)"
+                    )
+                    alignmentMetric(
+                        "Coverage",
+                        String(
+                            format:
+                                "%.0f%%",
+                            track.temporalCoverageFraction
+                                * 100
+                        )
+                    )
+                    alignmentMetric(
+                        "Confidence",
+                        String(
+                            format:
+                                "%.0f%%",
+                            track.meanConfidence
+                                * 100
+                        )
+                    )
+                }
+
+                Label(
+                    "Source-camera 2D pose ready",
+                    systemImage:
+                        "checkmark.circle.fill"
+                )
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.green)
+
+                Text(
+                    "This skeleton is derived directly from Action 4 RGB "
+                        + "frames at 10 Hz and interpolated only across short "
+                        + "pose gaps. It is valid in Action 4 image space, "
+                        + "not metric world space."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+                Text(track.claimBoundary)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+
+                Button {
+                    action4Pose.startAnalysis(
+                        run: run
+                    )
+                } label: {
+                    Label(
+                        "Rebuild Pose Track",
+                        systemImage:
+                            "arrow.clockwise"
+                    )
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+            } else if action4Pose.phase
+                        == .analyzing {
+                VStack(alignment: .leading, spacing: 9) {
+                    HStack {
+                        ProgressView()
+                        Text(
+                            "Analyzing Action 4 body pose…"
+                        )
+                        .font(.subheadline.weight(.semibold))
+                    }
+
+                    ProgressView(
+                        value: action4Pose.progress
+                    )
+
+                    Text(
+                        String(
+                            format:
+                                "%.0f%% · local Vision pass · 10 Hz",
+                            action4Pose.progress
+                                * 100
+                        )
+                    )
+                    .font(
+                        .system(
+                            .caption,
+                            design: .monospaced
+                        )
+                    )
+                    .foregroundStyle(.secondary)
+
+                    Button("Cancel Analysis") {
+                        action4Pose.cancel()
+                    }
+                    .buttonStyle(.bordered)
+                }
+            } else {
+                if let error =
+                        action4Pose.errorMessage {
+                    Label(
+                        error,
+                        systemImage:
+                            "exclamationmark.triangle.fill"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                } else {
+                    Text(
+                        "Temporal alignment is already sealed. Run one "
+                            + "higher-rate local Vision pass to create a "
+                            + "hash-bound Action 4 image-space pose track "
+                            + "for replay and later teacher-data generation."
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+
+                Button {
+                    action4Pose.startAnalysis(
+                        run: run
+                    )
+                } label: {
+                    Label(
+                        "Build Action 4 Pose Track",
+                        systemImage:
+                            "figure.arms.open"
+                    )
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        }
+        .cardStyle()
+    }
+
+    private var action4PoseSubtitle: String {
+        switch action4Pose.phase {
+        case .idle:
+            "Create source-specific image-space evidence"
+        case .analyzing:
+            "Vision body-pose extraction running locally"
+        case .ready:
+            "Hash-bound source pose is replayable"
+        case .failed:
+            "Pose evidence needs attention"
+        }
+    }
+
     private var action4SyncSubtitle: String {
         if controller.action4Alignment != nil {
             return "Reviewed timing authority available"
@@ -1071,21 +1231,46 @@ struct ProductRunReplayView: View {
                 if controller.action4Alignment != nil {
                     VStack(alignment: .leading, spacing: 9) {
                         Label(
-                            "Temporal fusion available",
-                            systemImage: "checkmark.seal.fill"
+                            controller.action4PoseTrack != nil
+                                ? "Temporal + source-pose evidence available"
+                                : "Temporal fusion available",
+                            systemImage:
+                                controller.action4PoseTrack != nil
+                                    ? "figure.arms.open"
+                                    : "checkmark.seal.fill"
                         )
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.green)
 
-                        Text(
-                            "Use 3D Body to inspect the iPhone-derived body state "
-                                + "at the Action 4 playback time. Image-space "
-                                + "skeleton, board, and mechanics overlays stay "
-                                + "disabled on Action 4 until that camera has its "
-                                + "own qualified pose/equipment geometry."
-                        )
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        if controller.action4PoseTrack != nil {
+                            Toggle(
+                                "Action 4 2D pose",
+                                isOn: $showAction4Pose
+                            )
+
+                            Toggle(
+                                "Pose confidence",
+                                isOn: $showConfidence
+                            )
+
+                            Text(
+                                "The cyan skeleton belongs to Action 4's own "
+                                    + "image coordinates. Board/equipment pixels "
+                                    + "remain off until Action 4 has separately "
+                                    + "qualified equipment tracking."
+                            )
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        } else {
+                            Text(
+                                "Use 3D Body to inspect the synchronized "
+                                    + "iPhone-derived body state. Build the "
+                                    + "Action 4 pose track above to add its own "
+                                    + "image-space skeleton."
+                            )
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        }
 
                         if bodyMode == .body {
                             Picker("3D viewpoint", selection: $viewpoint) {
