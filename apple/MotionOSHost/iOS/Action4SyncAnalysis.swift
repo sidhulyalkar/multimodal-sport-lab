@@ -99,6 +99,26 @@ struct Action4SyncAnalysisArtifact:
 struct ArmPoseSample: Sendable {
     let timeNS: UInt64
     let joints: [String: BodyJoint2D]
+    let indoBoardEquipment:
+        IndoBoardEquipmentObservation?
+    let visibleFiducials:
+        [IndoBoardFiducialMarkerID]
+
+    init(
+        timeNS: UInt64,
+        joints: [String: BodyJoint2D],
+        indoBoardEquipment:
+            IndoBoardEquipmentObservation? = nil,
+        visibleFiducials:
+            [IndoBoardFiducialMarkerID] = []
+    ) {
+        self.timeNS = timeNS
+        self.joints = joints
+        self.indoBoardEquipment =
+            indoBoardEquipment
+        self.visibleFiducials =
+            visibleFiducials
+    }
 }
 
 enum ArmMotionTraceBuilder {
@@ -267,13 +287,18 @@ enum Action4VideoPoseExtractor {
     struct Result: Sendable {
         let poses: [ArmPoseSample]
         let motionTrace: [MotionEnergySample]
+        let sourceDurationNS: UInt64
     }
 
     static let sampleIntervalSeconds = 0.20
     static let minimumJointConfidence: Float = 0.25
 
     static func extract(
-        from videoURL: URL
+        from videoURL: URL,
+        sampleIntervalSeconds:
+            Double = Self.sampleIntervalSeconds,
+        progress:
+            (@Sendable (Double) -> Void)? = nil
     ) async throws -> Result {
         let asset = AVURLAsset(url: videoURL)
         let tracks = try await asset.loadTracks(
@@ -290,6 +315,17 @@ enum Action4VideoPoseExtractor {
         let orientation = cgOrientation(
             for: transform
         )
+        let duration = try await asset.load(
+            .duration
+        )
+        let durationNS = presentationTimeNS(
+            duration
+        )
+        let effectiveSampleInterval =
+            max(
+                0.05,
+                sampleIntervalSeconds
+            )
 
         let reader = try AVAssetReader(asset: asset)
         let output = AVAssetReaderTrackOutput(
@@ -313,8 +349,15 @@ enum Action4VideoPoseExtractor {
         }
 
         let request = VNDetectHumanBodyPoseRequest()
+        let barcodeRequest =
+            VNDetectBarcodesRequest()
+        barcodeRequest.symbologies = [.qr]
         let intervalNS = UInt64(
-            sampleIntervalSeconds * 1_000_000_000
+            (
+                effectiveSampleInterval
+                    * 1_000_000_000
+            )
+            .rounded(.toNearestOrEven)
         )
         var firstSourcePTSNS: UInt64?
         var nextSampleNS: UInt64 = 0
@@ -363,7 +406,10 @@ enum Action4VideoPoseExtractor {
                 cvPixelBuffer: pixelBuffer,
                 orientation: orientation
             )
-            try handler.perform([request])
+            try handler.perform([
+                request,
+                barcodeRequest,
+            ])
 
             guard let observation =
                     request.results?.first
@@ -405,12 +451,84 @@ enum Action4VideoPoseExtractor {
                 continue
             }
 
+            let fiducials =
+                (barcodeRequest.results ?? [])
+                    .compactMap {
+                        observation
+                        -> IndoBoardFiducialDetection? in
+                        guard let raw =
+                                observation
+                                    .payloadStringValue,
+                              let marker =
+                                IndoBoardFiducialMarkerID(
+                                    rawValue: raw
+                                )
+                        else {
+                            return nil
+                        }
+
+                        let box =
+                            observation.boundingBox
+                        return IndoBoardFiducialDetection(
+                            marker: marker,
+                            center:
+                                NormalizedImagePoint2D(
+                                    x:
+                                        Double(
+                                            box.midX
+                                        ),
+                                    y:
+                                        Double(
+                                            box.midY
+                                        )
+                                ),
+                            confidence:
+                                Double(
+                                    observation
+                                        .confidence
+                                )
+                        )
+                    }
+
+            let equipment =
+                IndoBoardFiducialEquipmentBuilder
+                    .makeObservation(
+                        detections: fiducials,
+                        sequence:
+                            UInt64(poses.count),
+                        deviceTimeNS: ptsNS
+                    )
+
             poses.append(
                 ArmPoseSample(
                     timeNS: ptsNS,
-                    joints: joints
+                    joints: joints,
+                    indoBoardEquipment:
+                        equipment,
+                    visibleFiducials:
+                        Array(
+                            Set(
+                                fiducials.map(
+                                    \.marker
+                                )
+                            )
+                        )
+                        .sorted {
+                            $0.rawValue
+                                < $1.rawValue
+                        }
                 )
             )
+
+            if durationNS > 0 {
+                progress?(
+                    min(
+                        1,
+                        Double(ptsNS)
+                            / Double(durationNS)
+                    )
+                )
+            }
         }
 
         guard reader.status == .completed
@@ -424,14 +542,12 @@ enum Action4VideoPoseExtractor {
         let trace = ArmMotionTraceBuilder.trace(
             from: poses
         )
-        guard trace.count >= 20 else {
-            throw Action4SyncAnalysisError
-                .insufficientExternalMotion
-        }
+        progress?(1)
 
         return Result(
             poses: poses,
-            motionTrace: trace
+            motionTrace: trace,
+            sourceDurationNS: durationNS
         )
     }
 
@@ -619,6 +735,10 @@ enum Action4SyncAnalyzer {
         let externalResult =
             try await Action4VideoPoseExtractor
                 .extract(from: externalVideoURL)
+        guard externalResult.motionTrace.count >= 20 else {
+            throw Action4SyncAnalysisError
+                .insufficientExternalMotion
+        }
 
         let iPhonePoseSamples =
             ArmMotionTraceBuilder.samples(
@@ -728,6 +848,23 @@ enum Action4SyncAnalyzer {
         try encoder.encode(artifact).write(
             to: output,
             options: .atomic
+        )
+
+        // Reuse the already-computed 5 Hz Vision pass as the first Action 4
+        // source-pose track. This avoids forcing a second full 4K decode just
+        // to make replay useful. A later explicit refinement can replace this
+        // with a denser 10 Hz track after timing review.
+        _ = try Action4PoseTrackAnalyzer.persistTrack(
+            run: run,
+            sourceDigest: externalDigest,
+            sourceDurationNS:
+                externalResult.sourceDurationNS,
+            poses: externalResult.poses,
+            sampleIntervalSeconds:
+                Action4VideoPoseExtractor
+                    .sampleIntervalSeconds,
+            analyzerVersion:
+                "motionos-action4-sync-pose-v1"
         )
 
         return artifact

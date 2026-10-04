@@ -219,12 +219,16 @@ struct ProductRunDetailView: View {
                 ready: run.externalVideoURL != nil,
                 detail: run.externalVideoURL != nil
                     ? (
-                        run.externalAlignmentURL != nil
-                            ? "original + reviewed alignment"
+                        run.externalPoseTrackURL != nil
+                            ? "original + reviewed alignment + source pose"
                             : (
-                                run.externalSyncProposalURL != nil
-                                    ? "original + sync proposal"
-                                    : "original hash-bound"
+                                run.externalAlignmentURL != nil
+                                    ? "original + reviewed alignment"
+                                    : (
+                                    run.externalSyncProposalURL != nil
+                                        ? "original + sync proposal"
+                                        : "original hash-bound"
+                                )
                             )
                     )
                     : (
@@ -277,12 +281,16 @@ struct ProductRunDetailView: View {
                         .foregroundStyle(.primary)
 
                     Text(
-                        run.externalAlignmentURL != nil
-                            ? "iPhone + reviewed Action 4 timing · 3D body"
+                        run.externalPoseTrackURL != nil
+                            ? "Action 4 source pose · synchronized 3D body"
                             : (
-                                run.externalVideoURL != nil
-                                    ? "iPhone pose replay · Action 4 original available"
-                                    : "Video · body · balance · coaching"
+                                run.externalAlignmentURL != nil
+                                    ? "iPhone + reviewed Action 4 timing · 3D body"
+                                    : (
+                                    run.externalVideoURL != nil
+                                        ? "iPhone pose replay · Action 4 original available"
+                                        : "Video · body · balance · coaching"
+                                )
                             )
                     )
                     .font(.caption)
@@ -1047,6 +1055,7 @@ struct ProductRunDetailView: View {
             run.externalMetadataURL,
             run.externalSyncProposalURL,
             run.externalAlignmentURL,
+            run.externalPoseTrackURL,
             run.feedbackURL,
         ]
         .compactMap { $0 }

@@ -31,6 +31,7 @@ struct ProductRunRecord: Identifiable, Equatable, Sendable {
     let externalMetadataURL: URL?
     let externalSyncProposalURL: URL?
     let externalAlignmentURL: URL?
+    let externalPoseTrackURL: URL?
     let feedbackURL: URL?
 
     var sourceCount: Int {
@@ -311,6 +312,12 @@ final class ProductRunLibrary: ObservableObject {
                 ),
                 manager: manager
             )
+            let externalPoseTrack = existingURL(
+                externalDirectory.appendingPathComponent(
+                    "action4-pose-track.json"
+                ),
+                manager: manager
+            )
 
             let completed = metadata["completed_block_ids"]
                 as? [String] ?? []
@@ -369,6 +376,8 @@ final class ProductRunLibrary: ObservableObject {
                     externalSyncProposal,
                 externalAlignmentURL:
                     externalAlignment,
+                externalPoseTrackURL:
+                    externalPoseTrack,
                 feedbackURL: existingURL(
                     directory.appendingPathComponent(
                         "product-feedback.json"

@@ -95,6 +95,9 @@ MotionOSRuns/<run-id>/
     action4/
       original-*.mp4
       external-camera-metadata.json
+      action4-sync-proposal.json
+      video-alignment.json
+      action4-pose-track.json
   operator/
     protocol.jsonl
     metadata.json
