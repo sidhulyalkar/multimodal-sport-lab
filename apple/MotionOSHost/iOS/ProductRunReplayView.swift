@@ -407,6 +407,8 @@ struct ProductRunReplayView: View {
         ProductRunReplayController()
     @StateObject private var action4Sync =
         Action4SyncAnalysisController()
+    @StateObject private var action4Pose =
+        Action4PoseTrackController()
 
     @State private var bodyMode:
         ProductReplayBodyMode = .video
@@ -416,6 +418,7 @@ struct ProductRunReplayView: View {
     @State private var showMuscles = true
     @State private var showCoaching = true
     @State private var showConfidence = false
+    @State private var showAction4Pose = true
     @State private var viewpoint:
         BodySceneViewpoint = .orbit
 
@@ -428,6 +431,10 @@ struct ProductRunReplayView: View {
 
                 if controller.selectedSource == .action4 {
                     action4SyncCard
+
+                    if controller.action4Alignment != nil {
+                        action4PoseCard
+                    }
                 }
 
                 layerControls
@@ -452,14 +459,23 @@ struct ProductRunReplayView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task(id: run.runID) {
             action4Sync.loadExisting(run: run)
+            action4Pose.loadExisting(run: run)
             await controller.load(run)
         }
         .onAppear {
             controller.reloadAction4Alignment()
+            controller.reloadAction4PoseTrack()
         }
         .onDisappear {
             controller.stop()
             action4Sync.cancel()
+            action4Pose.cancel()
+        }
+        .onChange(of: action4Pose.phase) {
+            _, phase in
+            if phase == .ready {
+                controller.reloadAction4PoseTrack()
+            }
         }
         .onChange(of: controller.selectedSource) {
             _, source in
@@ -589,6 +605,15 @@ struct ProductRunReplayView: View {
                             showConfidence: showConfidence
                         )
                         .allowsHitTesting(false)
+                    } else if controller.selectedSource == .action4,
+                              showAction4Pose,
+                              let frame =
+                                controller.currentAction4PoseFrame {
+                        ExternalVideoPoseOverlay(
+                            frame: frame,
+                            showConfidence: showConfidence
+                        )
+                        .allowsHitTesting(false)
                     }
 
                     VStack {
@@ -627,10 +652,18 @@ struct ProductRunReplayView: View {
             if controller.selectedSource == .action4 {
                 Label(
                     controller.action4Alignment != nil
-                        ? "Temporal alignment is sealed. 3D Body mode follows "
-                            + "the synchronized iPhone-derived body timeline; "
-                            + "Action 4 pixel overlays still require Action 4 "
-                            + "pose/calibration evidence."
+                        ? (
+                            controller.action4PoseTrack != nil
+                                ? "Temporal alignment and Action 4 source-pose "
+                                    + "evidence are ready. Video mode can show "
+                                    + "Action 4's own image-space skeleton; 3D "
+                                    + "Body follows the synchronized iPhone-derived "
+                                    + "body timeline."
+                                : "Temporal alignment is sealed. Build Action 4 "
+                                    + "source-pose evidence to unlock its own "
+                                    + "image-space skeleton while 3D Body follows "
+                                    + "the synchronized iPhone-derived timeline."
+                        )
                         : (
                             action4Sync.artifact == nil
                                 ? "Original preserved. Analyze the three sync gestures "
@@ -722,9 +755,13 @@ struct ProductRunReplayView: View {
             controller.selectedSource == .iPhone
                 ? "IPHONE · POSE TIMELOCK"
                 : (
-                    controller.action4Alignment != nil
-                        ? "ACTION 4 · TIME ALIGNED"
-                        : "ACTION 4 · UNALIGNED"
+                    controller.action4PoseTrack != nil
+                        ? "ACTION 4 · POSE + TIME"
+                        : (
+                            controller.action4Alignment != nil
+                                ? "ACTION 4 · TIME ALIGNED"
+                                : "ACTION 4 · UNALIGNED"
+                        )
                 ),
             systemImage:
                 controller.selectedSource == .iPhone
