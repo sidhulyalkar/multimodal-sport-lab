@@ -136,6 +136,8 @@ final class ProductRunReplayController: ObservableObject {
     @Published private(set) var errorMessage: String?
     @Published private(set) var selectedSource:
         ProductReplayVideoSource = .iPhone
+    @Published private(set) var action4Alignment:
+        VideoAlignmentReceiptV1?
 
     private var pollTask: Task<Void, Never>?
     private var run: ProductRunRecord?
@@ -169,6 +171,9 @@ final class ProductRunReplayController: ObservableObject {
             .value
 
             self.timeline = timeline
+            action4Alignment =
+                try? Action4AlignmentSealer
+                    .loadReceipt(for: run)
             selectedSource = .iPhone
             player = AVPlayer(url: cameraVideoURL)
             currentFrame = timeline.poseSamples.first?.frame
@@ -210,8 +215,22 @@ final class ProductRunReplayController: ObservableObject {
                 return
             }
             player = AVPlayer(url: externalVideoURL)
-            currentFrame = nil
+            currentFrame =
+                action4Alignment == nil
+                    ? nil
+                    : timeline?.poseSamples.first?.frame
         }
+    }
+
+    func reloadAction4Alignment() {
+        guard let run else {
+            action4Alignment = nil
+            return
+        }
+        action4Alignment =
+            try? Action4AlignmentSealer
+                .loadReceipt(for: run)
+        updateCurrentFrame()
     }
 
     func stop() {
@@ -237,39 +256,61 @@ final class ProductRunReplayController: ObservableObject {
     }
 
     private func updateCurrentFrame() {
-        guard selectedSource == .iPhone,
-              let player,
+        guard let player,
               let timeline,
               !timeline.poseSamples.isEmpty
         else {
-            if selectedSource == .action4 {
-                currentFrame = nil
-            }
+            currentFrame = nil
             return
         }
 
-        let elapsed = CMTimeGetSeconds(player.currentTime())
-        guard elapsed.isFinite, elapsed >= 0 else {
+        let elapsed = CMTimeGetSeconds(
+            player.currentTime()
+        )
+        guard elapsed.isFinite,
+              elapsed >= 0
+        else {
             return
         }
 
-        let offsetNS = UInt64(
+        let elapsedNS = UInt64(
             min(
                 Double(UInt64.max),
                 elapsed * 1_000_000_000
             )
-            .rounded()
+            .rounded(.toNearestOrEven)
         )
+
+        let referenceElapsedNS: UInt64
+        switch selectedSource {
+        case .iPhone:
+            referenceElapsedNS = elapsedNS
+
+        case .action4:
+            guard let action4Alignment else {
+                currentFrame = nil
+                return
+            }
+            referenceElapsedNS =
+                action4Alignment.mapVideoPTS(
+                    elapsedNS
+                )
+        }
+
         let addition = timeline.firstFramePTSNS
-            .addingReportingOverflow(offsetNS)
+            .addingReportingOverflow(
+                referenceElapsedNS
+            )
         guard !addition.overflow else {
             currentFrame = nil
             return
         }
         let targetPTS = addition.partialValue
 
-        guard targetPTS <= timeline.lastFramePTSNS
+        guard targetPTS
+                <= timeline.lastFramePTSNS
         else {
+            currentFrame = nil
             return
         }
 
