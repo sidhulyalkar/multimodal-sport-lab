@@ -114,15 +114,20 @@ using schema:
 `motionos.external-video-pose-track.v1`
 
 The track is bound to the exact source-video SHA-256 and byte count and stores
-normalized Action 4 image-space joints at 10 Hz. Playback may interpolate only
-across short adjacent pose gaps; it must disappear across longer evidence gaps
-rather than freezing an old skeleton.
+normalized Action 4 image-space joints at 10 Hz. The same sampled frames also
+run the existing Vision QR detector. When the MotionOS deck-left, deck-right,
+and roller marker set is visible, the track carries the QR-backed
+`IndoBoardEquipmentObservation` for that Action 4 frame. Playback may
+interpolate body joints only across short adjacent pose gaps; QR equipment
+geometry is never interpolated across a long dropout.
 
 This produces two intentionally different body representations during Action 4
 replay:
 
 - **Action 4 Video mode:** the cyan 2D skeleton is derived from Action 4's own
-  RGB pixels and is valid only in that source image coordinate system.
+  RGB pixels and is valid only in that source image coordinate system. When
+  the known MotionOS QR markers are visible, green deck/roller geometry is
+  also Action 4-local image-space evidence.
 - **3D Body mode:** the body scene is still derived from the temporally aligned
   iPhone body timeline.
 
