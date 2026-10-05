@@ -1124,19 +1124,25 @@ struct SynchronizedDualViewReplayView: View {
         .cardStyle()
     }
 
+    private var scrubRange:
+        ClosedRange<Double> {
+        let lower =
+            controller
+                .overlapStartSeconds
+        let upper =
+            max(
+                lower + 0.01,
+                controller
+                    .overlapEndSeconds
+            )
+        return lower...upper
+    }
+
     private var transportControls: some View {
         VStack(spacing: 12) {
             Slider(
                 value: $sliderSeconds,
-                in:
-                    controller.overlapStartSeconds
-                        ...max(
-                            controller
-                                .overlapStartSeconds
-                                + 0.01,
-                            controller
-                                .overlapEndSeconds
-                        ),
+                in: scrubRange,
                 onEditingChanged: {
                     editing in
                     if editing {
