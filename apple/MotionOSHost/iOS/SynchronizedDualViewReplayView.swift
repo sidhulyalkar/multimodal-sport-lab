@@ -1366,6 +1366,415 @@ struct SynchronizedDualViewReplayView: View {
         .cardStyle()
     }
 
+    @ViewBuilder
+    private func reviewMenuButton(
+        _ title: String,
+        systemImage: String,
+        scope: ReplayReviewScopeV1,
+        verdict: ReplayReviewVerdictV1
+    ) -> some View {
+        Button {
+            saveReviewFlag(
+                scope: scope,
+                verdict: verdict
+            )
+        } label: {
+            Label(
+                title,
+                systemImage: systemImage
+            )
+        }
+    }
+
+    private var reviewMarkersCard:
+        some View {
+        VStack(
+            alignment: .leading,
+            spacing: 10
+        ) {
+            MotionOSSectionHeader(
+                title: "Review markers",
+                subtitle:
+                    "Timestamped QA and training anchors",
+                systemImage:
+                    "flag.checkered",
+                accent: .orange
+            )
+
+            if let reviewError {
+                Label(
+                    reviewError,
+                    systemImage:
+                        "exclamationmark.triangle.fill"
+                )
+                .font(.caption)
+                .foregroundStyle(.red)
+            }
+
+            let flags =
+                reviewLedger?.flags
+                    ?? []
+
+            if flags.isEmpty {
+                Text(
+                    "Use the flag control while replaying to mark a timing, "
+                        + "pose, equipment, or behavior moment. Each marker "
+                        + "is bound to the run and preserved source hashes."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            } else {
+                HStack(spacing: 8) {
+                    metric(
+                        "Flags",
+                        "\(flags.count)"
+                    )
+                    metric(
+                        "Latest",
+                        formatTime(
+                            Double(
+                                flags.last?
+                                    .referenceTimeNS
+                                    ?? 0
+                            )
+                                / 1_000_000_000
+                        )
+                    )
+                }
+
+                ForEach(
+                    Array(
+                        flags
+                            .suffix(8)
+                            .reversed()
+                    )
+                ) { flag in
+                    Button {
+                        controller.seek(
+                            toReferenceSeconds:
+                                Double(
+                                    flag.referenceTimeNS
+                                )
+                                / 1_000_000_000
+                        )
+                    } label: {
+                        HStack(
+                            spacing: 9
+                        ) {
+                            Image(
+                                systemName:
+                                    reviewVerdictSymbol(
+                                        flag.verdict
+                                    )
+                            )
+                            .foregroundStyle(
+                                reviewVerdictColor(
+                                    flag.verdict
+                                )
+                            )
+                            .frame(width: 20)
+
+                            VStack(
+                                alignment: .leading,
+                                spacing: 2
+                            ) {
+                                Text(
+                                    reviewScopeLabel(
+                                        flag.scope
+                                    )
+                                )
+                                .font(
+                                    .caption
+                                        .weight(
+                                            .semibold
+                                        )
+                                )
+                                Text(
+                                    reviewVerdictLabel(
+                                        flag.verdict
+                                    )
+                                )
+                                .font(.caption2)
+                                .foregroundStyle(
+                                    .secondary
+                                )
+                            }
+
+                            Spacer()
+
+                            Text(
+                                formatTime(
+                                    Double(
+                                        flag
+                                            .referenceTimeNS
+                                    )
+                                        / 1_000_000_000
+                                )
+                            )
+                            .font(
+                                .system(
+                                    .caption,
+                                    design:
+                                        .monospaced,
+                                    weight:
+                                        .semibold
+                                )
+                            )
+
+                            Image(
+                                systemName:
+                                    "arrow.right"
+                            )
+                            .font(.caption2)
+                            .foregroundStyle(
+                                .tertiary
+                            )
+                        }
+                        .padding(9)
+                        .background(
+                            (
+                                lastSavedReviewID
+                                    == flag.id
+                                    ? Color.green
+                                    : Color.primary
+                            )
+                            .opacity(
+                                lastSavedReviewID
+                                    == flag.id
+                                    ? 0.08
+                                    : 0.035
+                            ),
+                            in:
+                                RoundedRectangle(
+                                    cornerRadius: 11,
+                                    style:
+                                        .continuous
+                                )
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                let ledgerURL =
+                    ReplayReviewLedgerStore
+                        .url(for: run)
+                if FileManager.default
+                    .fileExists(
+                        atPath:
+                            ledgerURL.path
+                    ) {
+                    ShareLink(item: ledgerURL) {
+                        Label(
+                            "Export Review Ledger",
+                            systemImage:
+                                "square.and.arrow.up"
+                        )
+                        .font(
+                            .caption.weight(
+                                .semibold
+                            )
+                        )
+                    }
+                }
+            }
+
+            Text(
+                "A flag captures human review intent at a synchronized "
+                    + "reference-time window. It does not promote the "
+                    + "current overlay into metric ground truth."
+            )
+            .font(.caption2)
+            .foregroundStyle(.tertiary)
+        }
+        .cardStyle()
+    }
+
+    private func saveReviewFlag(
+        scope: ReplayReviewScopeV1,
+        verdict: ReplayReviewVerdictV1
+    ) {
+        guard !isSavingReview,
+              controller.alignment != nil
+        else {
+            return
+        }
+
+        let referenceTimeNS =
+            controller
+                .currentReferenceTimeNS
+        let action4PTSNS =
+            controller
+                .currentMappedAction4PTSNS
+        let iPhonePoseAvailable =
+            controller.iPhoneFrame != nil
+        let action4PoseAvailable =
+            controller
+                .action4PoseFrame != nil
+        let equipmentAvailable =
+            controller
+                .action4PoseFrame?
+                .indoBoardEquipment
+                != nil
+        let playbackDriftMS =
+            controller.playbackDriftMS
+        let alignment =
+            controller.alignment
+        let runSnapshot = run
+
+        isSavingReview = true
+        reviewError = nil
+
+        Task { @MainActor in
+            do {
+                let result =
+                    try await Task.detached(
+                        priority: .utility
+                    ) {
+                        let bindings =
+                            ReplayReviewLedgerStore
+                                .artifactBindings(
+                                    for:
+                                        runSnapshot,
+                                    alignment:
+                                        alignment
+                                )
+                        let flag =
+                            ReplayReviewFlagV1(
+                                runID:
+                                    runSnapshot
+                                        .runID,
+                                referenceTimeNS:
+                                    referenceTimeNS,
+                                action4VideoPTSNS:
+                                    action4PTSNS,
+                                scope: scope,
+                                verdict: verdict,
+                                iPhonePoseAvailable:
+                                    iPhonePoseAvailable,
+                                action4PoseAvailable:
+                                    action4PoseAvailable,
+                                equipmentAvailable:
+                                    equipmentAvailable,
+                                observedPlaybackDriftMS:
+                                    playbackDriftMS,
+                                artifactBindings:
+                                    bindings
+                            )
+                        let ledger =
+                            try ReplayReviewLedgerStore
+                                .append(
+                                    flag,
+                                    to:
+                                        runSnapshot
+                                )
+                        return (
+                            ledger,
+                            flag.id
+                        )
+                    }
+                    .value
+
+                reviewLedger =
+                    result.0
+                lastSavedReviewID =
+                    result.1
+                isSavingReview = false
+            } catch {
+                isSavingReview = false
+                reviewError =
+                    "Review marker could not be saved: "
+                        + error
+                            .localizedDescription
+            }
+        }
+    }
+
+    private func loadReviewLedger() {
+        do {
+            reviewLedger =
+                try ReplayReviewLedgerStore
+                    .load(for: run)
+            reviewError = nil
+        } catch {
+            reviewLedger =
+                ReplayReviewLedgerV1(
+                    runID: run.runID
+                )
+            reviewError =
+                "Existing review markers could not be loaded: "
+                    + error.localizedDescription
+        }
+    }
+
+    private func reviewScopeLabel(
+        _ scope: ReplayReviewScopeV1
+    ) -> String {
+        switch scope {
+        case .timing:
+            "Timing"
+        case .iPhonePose:
+            "iPhone pose"
+        case .action4Pose:
+            "Action 4 pose"
+        case .equipment:
+            "Board / roller"
+        case .behavior:
+            "Behavior"
+        case .coaching:
+            "Coaching"
+        case .other:
+            "General review"
+        }
+    }
+
+    private func reviewVerdictLabel(
+        _ verdict:
+            ReplayReviewVerdictV1
+    ) -> String {
+        switch verdict {
+        case .inspect:
+            "Needs review"
+        case .wrong:
+            "Human-marked issue"
+        case .goodExample:
+            "Human-marked good example"
+        case .occluded:
+            "Occluded / unsupported"
+        }
+    }
+
+    private func reviewVerdictSymbol(
+        _ verdict:
+            ReplayReviewVerdictV1
+    ) -> String {
+        switch verdict {
+        case .inspect:
+            "flag.fill"
+        case .wrong:
+            "xmark.circle.fill"
+        case .goodExample:
+            "star.fill"
+        case .occluded:
+            "eye.slash.fill"
+        }
+    }
+
+    private func reviewVerdictColor(
+        _ verdict:
+            ReplayReviewVerdictV1
+    ) -> Color {
+        switch verdict {
+        case .inspect:
+            .orange
+        case .wrong:
+            .red
+        case .goodExample:
+            .green
+        case .occluded:
+            .secondary
+        }
+    }
+
     private func reviewedLandmarks(
         _ alignment:
             VideoAlignmentReceiptV1
