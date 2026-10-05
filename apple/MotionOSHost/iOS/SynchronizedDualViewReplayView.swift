@@ -1,8 +1,8 @@
 import AVFoundation
-import AVKit
 import Foundation
 import MotionOSAppleCapture
 import SwiftUI
+import UIKit
 
 enum SynchronizedDualViewReplayError: LocalizedError {
     case missingIPhoneEvidence
@@ -723,6 +723,54 @@ final class SynchronizedDualViewReplayController:
     }
 }
 
+private struct SynchronizedVideoSurface:
+    UIViewRepresentable {
+    let player: AVPlayer
+
+    func makeUIView(
+        context: Context
+    ) -> SynchronizedPlayerLayerView {
+        let view =
+            SynchronizedPlayerLayerView()
+        view.player = player
+        return view
+    }
+
+    func updateUIView(
+        _ uiView:
+            SynchronizedPlayerLayerView,
+        context: Context
+    ) {
+        uiView.player = player
+    }
+}
+
+private final class SynchronizedPlayerLayerView:
+    UIView {
+    override class var layerClass:
+        AnyClass {
+        AVPlayerLayer.self
+    }
+
+    private var playerLayer:
+        AVPlayerLayer {
+        layer as! AVPlayerLayer
+    }
+
+    var player: AVPlayer? {
+        get {
+            playerLayer.player
+        }
+        set {
+            playerLayer.player =
+                newValue
+            playerLayer.videoGravity =
+                .resizeAspect
+            backgroundColor = .black
+        }
+    }
+}
+
 struct SynchronizedDualViewReplayView: View {
     let run: ProductRunRecord
 
@@ -1010,7 +1058,7 @@ struct SynchronizedDualViewReplayView: View {
                     ProgressView()
                         .tint(.white)
                 } else if let player {
-                    VideoPlayer(
+                    SynchronizedVideoSurface(
                         player: player
                     )
                     .allowsHitTesting(false)
