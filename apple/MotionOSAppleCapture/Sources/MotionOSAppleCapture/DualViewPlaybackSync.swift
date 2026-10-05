@@ -119,6 +119,42 @@ public enum DualViewPlaybackSyncPolicy {
         ) / 1_000_000
     }
 
+    public static func evaluateMappedReference(
+        referencePTSNS: UInt64,
+        observedSourcePTSNS: UInt64,
+        slope: Double,
+        interceptNS: Double,
+        correctionThresholdMS: Double = 90,
+        correctionAllowed: Bool
+    ) -> DualViewPlaybackSyncDecision? {
+        guard let driftMS =
+                referenceDriftMS(
+                    referencePTSNS:
+                        referencePTSNS,
+                    observedSourcePTSNS:
+                        observedSourcePTSNS,
+                    slope: slope,
+                    interceptNS:
+                        interceptNS
+                )
+        else {
+            return nil
+        }
+
+        let threshold =
+            max(
+                0,
+                correctionThresholdMS
+            )
+        return DualViewPlaybackSyncDecision(
+            driftMS: driftMS,
+            shouldCorrect:
+                correctionAllowed
+                    && abs(driftMS)
+                        > threshold
+        )
+    }
+
     public static func evaluate(
         expectedSourcePTSNS: UInt64,
         observedSourcePTSNS: UInt64,
