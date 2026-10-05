@@ -430,6 +430,11 @@ struct ProductRunReplayView: View {
                 sourceSelector
                 replayStage
 
+                if controller.action4Alignment != nil,
+                   run.externalVideoURL != nil {
+                    synchronizedComparisonEntry
+                }
+
                 if controller.selectedSource == .action4 {
                     action4SyncCard
 
@@ -796,6 +801,80 @@ struct ProductRunReplayView: View {
         .background(
             .black.opacity(0.55),
             in: Capsule()
+        )
+    }
+
+    private var synchronizedComparisonEntry: some View {
+        NavigationLink {
+            SynchronizedDualViewReplayView(
+                run: run
+            )
+        } label: {
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(
+                        cornerRadius: 14,
+                        style: .continuous
+                    )
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.cyan.opacity(0.86),
+                                Color.purple.opacity(0.82),
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(
+                        width: 48,
+                        height: 48
+                    )
+
+                    Image(
+                        systemName:
+                            "rectangle.on.rectangle"
+                    )
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(.white)
+                }
+
+                VStack(
+                    alignment: .leading,
+                    spacing: 3
+                ) {
+                    Text("Compare Both Cameras")
+                        .font(
+                            .subheadline.weight(
+                                .semibold
+                            )
+                        )
+                        .foregroundStyle(.primary)
+
+                    Text(
+                        "One scrubber · reviewed time map · live playback drift"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(
+                        .leading
+                    )
+                }
+
+                Spacer()
+
+                Image(
+                    systemName:
+                        "chevron.right"
+                )
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.secondary)
+            }
+            .cardStyle()
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(
+            "Compare synchronized iPhone and Action 4 videos"
         )
     }
 
@@ -1596,7 +1675,7 @@ struct ProductRunReplayView: View {
     }
 }
 
-private struct ExternalVideoPoseOverlay: View {
+struct ExternalVideoPoseOverlay: View {
     let frame: ExternalVideoPoseFrame
     let showConfidence: Bool
     let showEquipment: Bool
@@ -1899,7 +1978,7 @@ private struct ExternalVideoPoseOverlay: View {
     }
 }
 
-private struct ReplayPoseOverlay: View {
+struct ReplayPoseOverlay: View {
     let frame: BodyMovementFrame
     let showBody: Bool
     let showBalance: Bool
