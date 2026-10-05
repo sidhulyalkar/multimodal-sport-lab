@@ -49,6 +49,10 @@ final class SynchronizedDualViewReplayController:
         Double = 0
     @Published private(set) var action4Seconds:
         Double = 0
+    @Published private(set) var iPhoneAspectRatio:
+        Double = 16.0 / 9.0
+    @Published private(set) var action4AspectRatio:
+        Double = 16.0 / 9.0
     @Published private(set) var playbackDriftMS:
         Double?
     @Published private(set) var isPlaying = false
@@ -113,16 +117,32 @@ final class SynchronizedDualViewReplayController:
                     .missingAlignment
             }
 
-            let timeline =
-                try await Task.detached(
+            async let timelineTask =
+                Task.detached(
                     priority: .utility
                 ) {
                     try ProductReplayEvidenceLoader
                         .loadCameraTimeline(
                             journalURL
                         )
-                }
-                .value
+                }.value
+            async let iPhoneAspectTask =
+                Self.displayAspectRatio(
+                    for: iPhoneURL
+                )
+            async let action4AspectTask =
+                Self.displayAspectRatio(
+                    for: actionURL
+                )
+
+            let timeline =
+                try await timelineTask
+            let loadedIPhoneAspect =
+                (try? await iPhoneAspectTask)
+                    ?? 16.0 / 9.0
+            let loadedAction4Aspect =
+                (try? await action4AspectTask)
+                    ?? 16.0 / 9.0
 
             let iPhonePlayer =
                 AVPlayer(url: iPhoneURL)
@@ -161,6 +181,10 @@ final class SynchronizedDualViewReplayController:
                     .loadTrack(for: run)
             self.iPhonePlayer = iPhonePlayer
             self.action4Player = action4Player
+            iPhoneAspectRatio =
+                loadedIPhoneAspect
+            action4AspectRatio =
+                loadedAction4Aspect
             overlapStartSeconds =
                 overlap.startSeconds
             overlapEndSeconds =
@@ -316,6 +340,10 @@ final class SynchronizedDualViewReplayController:
         iPhoneFrame = nil
         action4PoseFrame = nil
         playbackDriftMS = nil
+        iPhoneAspectRatio =
+            16.0 / 9.0
+        action4AspectRatio =
+            16.0 / 9.0
         overlapStartSeconds = 0
         overlapEndSeconds = 0
         correctionCount = 0
@@ -713,6 +741,51 @@ final class SynchronizedDualViewReplayController:
         )
     }
 
+    nonisolated private static func displayAspectRatio(
+        for url: URL
+    ) async throws -> Double {
+        let asset =
+            AVURLAsset(url: url)
+        guard let track =
+                try await asset
+                    .loadTracks(
+                        withMediaType:
+                            .video
+                    )
+                    .first
+        else {
+            return 16.0 / 9.0
+        }
+
+        let naturalSize =
+            try await track.load(
+                .naturalSize
+            )
+        let transform =
+            try await track.load(
+                .preferredTransform
+            )
+        let transformed =
+            CGRect(
+                origin: .zero,
+                size: naturalSize
+            )
+            .applying(transform)
+        let width =
+            abs(transformed.width)
+        let height =
+            abs(transformed.height)
+
+        guard width.isFinite,
+              height.isFinite,
+              width > 0,
+              height > 0
+        else {
+            return 16.0 / 9.0
+        }
+        return width / height
+    }
+
     private func fail(
         _ error: Error
     ) {
@@ -938,6 +1011,9 @@ struct SynchronizedDualViewReplayView: View {
                 player:
                     controller
                         .iPhonePlayer,
+                aspectRatio:
+                    controller
+                        .iPhoneAspectRatio,
                 accent: .cyan
             ) {
                 if showIPhonePose,
@@ -992,6 +1068,9 @@ struct SynchronizedDualViewReplayView: View {
                 player:
                     controller
                         .action4Player,
+                aspectRatio:
+                    controller
+                        .action4AspectRatio,
                 accent: .purple
             ) {
                 if showAction4Pose,
@@ -1015,6 +1094,7 @@ struct SynchronizedDualViewReplayView: View {
         title: String,
         subtitle: String,
         player: AVPlayer?,
+        aspectRatio: Double,
         accent: Color,
         @ViewBuilder overlay:
             () -> Overlay
@@ -1081,7 +1161,7 @@ struct SynchronizedDualViewReplayView: View {
                 }
             }
             .aspectRatio(
-                16 / 9,
+                aspectRatio,
                 contentMode: .fit
             )
             .clipShape(
