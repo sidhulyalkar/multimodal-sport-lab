@@ -748,6 +748,14 @@ struct SynchronizedDualViewReplayView: View {
                 hero
                 comparisonStage
                 transportControls
+
+                if let alignment =
+                        controller.alignment {
+                    reviewedLandmarks(
+                        alignment
+                    )
+                }
+
                 evidenceCard
             }
             .motionOSPageWidth()
@@ -836,6 +844,32 @@ struct SynchronizedDualViewReplayView: View {
                     metric(
                         "Corrections",
                         "\(controller.correctionCount)"
+                    )
+                }
+
+                HStack(spacing: 8) {
+                    metric(
+                        "Shared window",
+                        String(
+                            format:
+                                "%.1f s",
+                            controller
+                                .playableDurationSeconds
+                        )
+                    )
+                    metric(
+                        "Starts",
+                        formatTime(
+                            controller
+                                .overlapStartSeconds
+                        )
+                    )
+                    metric(
+                        "Ends",
+                        formatTime(
+                            controller
+                                .overlapEndSeconds
+                        )
                     )
                 }
             }
@@ -1017,10 +1051,14 @@ struct SynchronizedDualViewReplayView: View {
             Slider(
                 value: $sliderSeconds,
                 in:
-                    0...max(
-                        0.01,
+                    controller
+                        .overlapStartSeconds
+                    ...max(
                         controller
-                            .durationSeconds
+                            .overlapStartSeconds
+                            + 0.01,
+                        controller
+                            .overlapEndSeconds
                     ),
                 onEditingChanged: {
                     editing in
@@ -1047,7 +1085,8 @@ struct SynchronizedDualViewReplayView: View {
                 }
             )
             .disabled(
-                controller.durationSeconds
+                controller
+                    .playableDurationSeconds
                     <= 0
             )
 
@@ -1061,7 +1100,7 @@ struct SynchronizedDualViewReplayView: View {
                 Text(
                     formatTime(
                         controller
-                            .durationSeconds
+                            .overlapEndSeconds
                     )
                 )
             }
@@ -1152,6 +1191,93 @@ struct SynchronizedDualViewReplayView: View {
                 "Pose confidence",
                 isOn: $showConfidence
             )
+        }
+        .cardStyle()
+    }
+
+    private func reviewedLandmarks(
+        _ alignment:
+            VideoAlignmentReceiptV1
+    ) -> some View {
+        VStack(
+            alignment: .leading,
+            spacing: 10
+        ) {
+            MotionOSSectionHeader(
+                title:
+                    "Reviewed landmarks",
+                subtitle:
+                    "Jump both videos to the accepted physical sync events",
+                systemImage:
+                    "scope",
+                accent: .green
+            )
+
+            HStack(spacing: 8) {
+                ForEach(
+                    alignment.anchors,
+                    id: \.label
+                ) { anchor in
+                    let seconds =
+                        Double(
+                            anchor
+                                .referenceTimeNS
+                        )
+                        / 1_000_000_000
+                    Button {
+                        controller.seek(
+                            toReferenceSeconds:
+                                seconds
+                        )
+                    } label: {
+                        VStack(spacing: 3) {
+                            Text(
+                                anchor.label
+                                    .uppercased()
+                            )
+                            .font(
+                                .caption2
+                                    .weight(
+                                        .bold
+                                    )
+                            )
+                            Text(
+                                formatTime(
+                                    seconds
+                                )
+                            )
+                            .font(
+                                .system(
+                                    .caption2,
+                                    design:
+                                        .monospaced
+                                )
+                            )
+                        }
+                        .frame(
+                            maxWidth:
+                                .infinity
+                        )
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(
+                        seconds
+                            < controller
+                                .overlapStartSeconds
+                            || seconds
+                                > controller
+                                    .overlapEndSeconds
+                    )
+                }
+            }
+
+            Text(
+                "These buttons use the sealed reviewed anchors directly. "
+                    + "A disabled landmark lies outside the shared playable "
+                    + "interval and is never synthesized by clamping."
+            )
+            .font(.caption2)
+            .foregroundStyle(.tertiary)
         }
         .cardStyle()
     }
