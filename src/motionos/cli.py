@@ -115,6 +115,7 @@ from .public_data import index_totalcapture
 from .public_video import build_public_video_catalog
 from .qc import session_qc
 from .replay import replay_frames
+from .replay_review import build_replay_review_queue
 from .session import SessionReader
 from .simulate import simulate_session
 from .validate import validate_m0_session
@@ -290,6 +291,17 @@ def _parser() -> argparse.ArgumentParser:
     )
     labels_validate.add_argument("labels")
     labels_validate.add_argument("manifest")
+
+    replay_review_queue = sub.add_parser(
+        "build-replay-review-queue",
+        help=(
+            "convert evidence-bound replay flags into exact synchronized "
+            "QA/annotation windows"
+        ),
+    )
+    replay_review_queue.add_argument("ledger")
+    replay_review_queue.add_argument("alignment")
+    replay_review_queue.add_argument("output")
 
     calibration = sub.add_parser(
         "build-calibration-bundle",
@@ -921,6 +933,26 @@ def main(argv: list[str] | None = None) -> int:
         result = validate_teacher_labels(args.labels, args.manifest)
         print(json.dumps(result.to_dict(), indent=2, sort_keys=True))
         return 0 if result.passed else 2
+
+    if args.command == "build-replay-review-queue":
+        payload = build_replay_review_queue(
+            args.ledger,
+            args.alignment,
+            args.output,
+        )
+        print(
+            json.dumps(
+                {
+                    "schema_version": payload["schema_version"],
+                    "run_id": payload["run_id"],
+                    "task_count": payload["task_count"],
+                    "output": args.output,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
 
     if args.command == "build-calibration-bundle":
         bundle = build_calibration_bundle(args.spec, args.output)
