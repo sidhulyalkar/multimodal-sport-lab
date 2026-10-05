@@ -351,12 +351,26 @@ final class SynchronizedDualViewReplayController:
 
         action4Seconds =
             usableActionSeconds
-        let drift =
-            (
-                usableActionSeconds
-                    - expectedActionSeconds
-            ) * 1_000
-        playbackDriftMS = drift
+
+        let correctionAllowed =
+            isPlaying && canCorrectNow()
+        let syncDecision =
+            DualViewPlaybackSyncPolicy
+                .evaluate(
+                    expectedSourcePTSNS:
+                        expectedActionNS,
+                    observedSourcePTSNS:
+                        nanoseconds(
+                            usableActionSeconds
+                        ),
+                    correctionThresholdMS:
+                        Self
+                            .correctionThresholdMS,
+                    correctionAllowed:
+                        correctionAllowed
+                )
+        playbackDriftMS =
+            syncDecision.driftMS
 
         updateEvidenceFrames(
             referenceSeconds:
@@ -365,10 +379,7 @@ final class SynchronizedDualViewReplayController:
                 usableActionSeconds
         )
 
-        if isPlaying,
-           abs(drift)
-                > Self.correctionThresholdMS,
-           canCorrectNow() {
+        if syncDecision.shouldCorrect {
             let tolerance = CMTime(
                 seconds:
                     Self.seekToleranceSeconds,
