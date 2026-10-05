@@ -2,6 +2,71 @@ import XCTest
 @testable import MotionOSAppleCapture
 
 final class DualViewPlaybackSyncTests: XCTestCase {
+    func testOverlapWindowClipsToSharedReferenceInterval() throws {
+        let window = try XCTUnwrap(
+            DualViewPlaybackSyncPolicy
+                .referenceOverlapWindow(
+                    referenceDurationSeconds: 120,
+                    sourceDurationNS:
+                        130_000_000_000,
+                    slope: 1,
+                    interceptNS:
+                        -5_000_000_000
+                )
+        )
+
+        XCTAssertEqual(
+            window.startSeconds,
+            0,
+            accuracy: 1e-12
+        )
+        XCTAssertEqual(
+            window.endSeconds,
+            120,
+            accuracy: 1e-12
+        )
+        XCTAssertEqual(
+            window.durationSeconds,
+            120,
+            accuracy: 1e-12
+        )
+    }
+
+    func testOverlapWindowRejectsNonoverlappingSource() {
+        XCTAssertNil(
+            DualViewPlaybackSyncPolicy
+                .referenceOverlapWindow(
+                    referenceDurationSeconds: 60,
+                    sourceDurationNS:
+                        5_000_000_000,
+                    slope: 1,
+                    interceptNS:
+                        70_000_000_000
+                )
+        )
+    }
+
+    func testReferenceDriftUsesClockSlopeAndIntercept() throws {
+        let drift = try XCTUnwrap(
+            DualViewPlaybackSyncPolicy
+                .referenceDriftMS(
+                    referencePTSNS:
+                        10_000_000_000,
+                    observedSourcePTSNS:
+                        9_900_000_000,
+                    slope: 1.002,
+                    interceptNS:
+                        100_000_000
+                )
+        )
+
+        XCTAssertEqual(
+            drift,
+            19.8,
+            accuracy: 1e-9
+        )
+    }
+
     func testPositiveDriftPastThresholdCorrects() {
         let decision =
             DualViewPlaybackSyncPolicy.evaluate(
