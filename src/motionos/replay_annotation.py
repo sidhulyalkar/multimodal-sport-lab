@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Any
 
 from .annotation_contract import (
-    load_annotation_manifest,
     validate_annotation_manifest,
     validate_teacher_labels,
 )
