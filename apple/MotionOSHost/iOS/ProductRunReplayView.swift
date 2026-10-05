@@ -142,6 +142,10 @@ final class ProductRunReplayController: ObservableObject {
         ExternalVideoPoseTrack?
     @Published private(set) var currentAction4PoseFrame:
         ExternalVideoPoseFrame?
+    @Published private(set) var videoAspectRatio:
+        Double =
+            MotionOSVideoPresentation
+                .fallbackAspectRatio
 
     private var pollTask: Task<Void, Never>?
     private var run: ProductRunRecord?
@@ -166,15 +170,28 @@ final class ProductRunReplayController: ObservableObject {
         }
 
         do {
-            let timeline = try await Task.detached(
-                priority: .utility
-            ) {
-                try ProductReplayEvidenceLoader
-                    .loadCameraTimeline(cameraJournalURL)
-            }
-            .value
+            async let timelineTask =
+                Task.detached(
+                    priority: .utility
+                ) {
+                    try ProductReplayEvidenceLoader
+                        .loadCameraTimeline(
+                            cameraJournalURL
+                        )
+                }.value
+            async let aspectTask =
+                MotionOSVideoPresentation
+                    .displayAspectRatio(
+                        for: cameraVideoURL
+                    )
+
+            let timeline =
+                try await timelineTask
+            let aspect =
+                await aspectTask
 
             self.timeline = timeline
+            videoAspectRatio = aspect
             action4Alignment =
                 try? Action4AlignmentSealer
                     .loadReceipt(for: run)
@@ -217,6 +234,10 @@ final class ProductRunReplayController: ObservableObject {
             player = AVPlayer(url: cameraVideoURL)
             currentFrame = timeline?.poseSamples.first?.frame
             currentAction4PoseFrame = nil
+            refreshVideoAspectRatio(
+                for: cameraVideoURL,
+                source: .iPhone
+            )
 
         case .action4:
             guard let externalVideoURL = run.externalVideoURL else {
@@ -228,6 +249,37 @@ final class ProductRunReplayController: ObservableObject {
                 action4Alignment == nil
                     ? nil
                     : timeline?.poseSamples.first?.frame
+            refreshVideoAspectRatio(
+                for: externalVideoURL,
+                source: .action4
+            )
+        }
+    }
+
+    private func refreshVideoAspectRatio(
+        for url: URL,
+        source:
+            ProductReplayVideoSource
+    ) {
+        videoAspectRatio =
+            MotionOSVideoPresentation
+                .fallbackAspectRatio
+        let controller = self
+        Task { @MainActor in
+            let ratio =
+                await MotionOSVideoPresentation
+                    .displayAspectRatio(
+                        for: url
+                    )
+            guard controller
+                    .selectedSource
+                    == source
+            else {
+                return
+            }
+            controller
+                .videoAspectRatio =
+                ratio
         }
     }
 
@@ -663,7 +715,14 @@ struct ProductRunReplayView: View {
                     }
                 }
             }
-            .aspectRatio(16 / 9, contentMode: .fit)
+            .aspectRatio(
+                bodyMode == .video
+                    ? controller
+                        .videoAspectRatio
+                    : MotionOSVideoPresentation
+                        .fallbackAspectRatio,
+                contentMode: .fit
+            )
             .clipShape(
                 RoundedRectangle(
                     cornerRadius: 20,
