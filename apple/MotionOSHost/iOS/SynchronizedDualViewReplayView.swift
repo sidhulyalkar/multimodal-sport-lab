@@ -822,6 +822,13 @@ struct SynchronizedDualViewReplayView: View {
     @State private var showAction4Pose = true
     @State private var showAction4Equipment = true
     @State private var showConfidence = false
+    @State private var reviewLedger:
+        ReplayReviewLedgerV1?
+    @State private var reviewError:
+        String?
+    @State private var isSavingReview = false
+    @State private var lastSavedReviewID:
+        String?
 
     var body: some View {
         ScrollView {
@@ -833,6 +840,7 @@ struct SynchronizedDualViewReplayView: View {
                 hero
                 comparisonStage
                 transportControls
+                reviewMarkersCard
 
                 if let alignment =
                         controller.alignment {
@@ -859,6 +867,7 @@ struct SynchronizedDualViewReplayView: View {
             .inline
         )
         .task(id: run.runID) {
+            loadReviewLedger()
             await controller.load(run)
         }
         .onDisappear {
