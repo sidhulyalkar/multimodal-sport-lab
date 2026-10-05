@@ -67,6 +67,57 @@ final class DualViewPlaybackSyncTests: XCTestCase {
         )
     }
 
+    func testMappedReferenceDecisionUsesReferenceClockThreshold() throws {
+        let decision = try XCTUnwrap(
+            DualViewPlaybackSyncPolicy
+                .evaluateMappedReference(
+                    referencePTSNS:
+                        10_000_000_000,
+                    observedSourcePTSNS:
+                        9_900_000_000,
+                    slope: 1.002,
+                    interceptNS:
+                        100_000_000,
+                    correctionThresholdMS: 15,
+                    correctionAllowed: true
+                )
+        )
+
+        XCTAssertEqual(
+            decision.driftMS,
+            19.8,
+            accuracy: 1e-9
+        )
+        XCTAssertTrue(
+            decision.shouldCorrect
+        )
+    }
+
+    func testLateStartingSourceProducesClippedOverlap() throws {
+        let window = try XCTUnwrap(
+            DualViewPlaybackSyncPolicy
+                .referenceOverlapWindow(
+                    referenceDurationSeconds: 60,
+                    sourceDurationNS:
+                        40_000_000_000,
+                    slope: 1,
+                    interceptNS:
+                        10_000_000_000
+                )
+        )
+
+        XCTAssertEqual(
+            window.startSeconds,
+            10,
+            accuracy: 1e-12
+        )
+        XCTAssertEqual(
+            window.endSeconds,
+            50,
+            accuracy: 1e-12
+        )
+    }
+
     func testPositiveDriftPastThresholdCorrects() {
         let decision =
             DualViewPlaybackSyncPolicy.evaluate(
