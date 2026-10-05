@@ -142,6 +142,10 @@ final class ProductRunReplayController: ObservableObject {
         ExternalVideoPoseTrack?
     @Published private(set) var currentAction4PoseFrame:
         ExternalVideoPoseFrame?
+    @Published private(set) var videoAspectRatio:
+        Double =
+            MotionOSVideoPresentation
+                .fallbackAspectRatio
 
     private var pollTask: Task<Void, Never>?
     private var run: ProductRunRecord?
@@ -166,15 +170,28 @@ final class ProductRunReplayController: ObservableObject {
         }
 
         do {
-            let timeline = try await Task.detached(
-                priority: .utility
-            ) {
-                try ProductReplayEvidenceLoader
-                    .loadCameraTimeline(cameraJournalURL)
-            }
-            .value
+            async let timelineTask =
+                Task.detached(
+                    priority: .utility
+                ) {
+                    try ProductReplayEvidenceLoader
+                        .loadCameraTimeline(
+                            cameraJournalURL
+                        )
+                }.value
+            async let aspectTask =
+                MotionOSVideoPresentation
+                    .displayAspectRatio(
+                        for: cameraVideoURL
+                    )
+
+            let timeline =
+                try await timelineTask
+            let aspect =
+                await aspectTask
 
             self.timeline = timeline
+            videoAspectRatio = aspect
             action4Alignment =
                 try? Action4AlignmentSealer
                     .loadReceipt(for: run)
@@ -217,6 +234,10 @@ final class ProductRunReplayController: ObservableObject {
             player = AVPlayer(url: cameraVideoURL)
             currentFrame = timeline?.poseSamples.first?.frame
             currentAction4PoseFrame = nil
+            refreshVideoAspectRatio(
+                for: cameraVideoURL,
+                source: .iPhone
+            )
 
         case .action4:
             guard let externalVideoURL = run.externalVideoURL else {
@@ -228,6 +249,37 @@ final class ProductRunReplayController: ObservableObject {
                 action4Alignment == nil
                     ? nil
                     : timeline?.poseSamples.first?.frame
+            refreshVideoAspectRatio(
+                for: externalVideoURL,
+                source: .action4
+            )
+        }
+    }
+
+    private func refreshVideoAspectRatio(
+        for url: URL,
+        source:
+            ProductReplayVideoSource
+    ) {
+        videoAspectRatio =
+            MotionOSVideoPresentation
+                .fallbackAspectRatio
+        let controller = self
+        Task { @MainActor in
+            let ratio =
+                await MotionOSVideoPresentation
+                    .displayAspectRatio(
+                        for: url
+                    )
+            guard controller
+                    .selectedSource
+                    == source
+            else {
+                return
+            }
+            controller
+                .videoAspectRatio =
+                ratio
         }
     }
 
@@ -429,6 +481,11 @@ struct ProductRunReplayView: View {
                 hero
                 sourceSelector
                 replayStage
+
+                if controller.action4Alignment != nil,
+                   run.externalVideoURL != nil {
+                    synchronizedComparisonEntry
+                }
 
                 if controller.selectedSource == .action4 {
                     action4SyncCard
@@ -658,7 +715,14 @@ struct ProductRunReplayView: View {
                     }
                 }
             }
-            .aspectRatio(16 / 9, contentMode: .fit)
+            .aspectRatio(
+                bodyMode == .video
+                    ? controller
+                        .videoAspectRatio
+                    : MotionOSVideoPresentation
+                        .fallbackAspectRatio,
+                contentMode: .fit
+            )
             .clipShape(
                 RoundedRectangle(
                     cornerRadius: 20,
@@ -796,6 +860,80 @@ struct ProductRunReplayView: View {
         .background(
             .black.opacity(0.55),
             in: Capsule()
+        )
+    }
+
+    private var synchronizedComparisonEntry: some View {
+        NavigationLink {
+            SynchronizedDualViewReplayView(
+                run: run
+            )
+        } label: {
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(
+                        cornerRadius: 14,
+                        style: .continuous
+                    )
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.cyan.opacity(0.86),
+                                Color.purple.opacity(0.82),
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(
+                        width: 48,
+                        height: 48
+                    )
+
+                    Image(
+                        systemName:
+                            "rectangle.on.rectangle"
+                    )
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(.white)
+                }
+
+                VStack(
+                    alignment: .leading,
+                    spacing: 3
+                ) {
+                    Text("Compare Both Cameras")
+                        .font(
+                            .subheadline.weight(
+                                .semibold
+                            )
+                        )
+                        .foregroundStyle(.primary)
+
+                    Text(
+                        "One scrubber · reviewed time map · live playback drift"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(
+                        .leading
+                    )
+                }
+
+                Spacer()
+
+                Image(
+                    systemName:
+                        "chevron.right"
+                )
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.secondary)
+            }
+            .cardStyle()
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(
+            "Compare synchronized iPhone and Action 4 videos"
         )
     }
 
@@ -1596,7 +1734,7 @@ struct ProductRunReplayView: View {
     }
 }
 
-private struct ExternalVideoPoseOverlay: View {
+struct ExternalVideoPoseOverlay: View {
     let frame: ExternalVideoPoseFrame
     let showConfidence: Bool
     let showEquipment: Bool
@@ -1899,7 +2037,7 @@ private struct ExternalVideoPoseOverlay: View {
     }
 }
 
-private struct ReplayPoseOverlay: View {
+struct ReplayPoseOverlay: View {
     let frame: BodyMovementFrame
     let showBody: Bool
     let showBalance: Bool
