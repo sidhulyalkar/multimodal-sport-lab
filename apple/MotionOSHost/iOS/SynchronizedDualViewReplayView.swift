@@ -1261,6 +1261,71 @@ struct SynchronizedDualViewReplayView: View {
                             "goforward.5"
                     )
                 }
+
+                Menu {
+                    reviewMenuButton(
+                        "Needs review",
+                        systemImage:
+                            "flag.fill",
+                        scope: .other,
+                        verdict: .inspect
+                    )
+                    reviewMenuButton(
+                        "Timing mismatch",
+                        systemImage:
+                            "clock.badge.exclamationmark",
+                        scope: .timing,
+                        verdict: .wrong
+                    )
+                    reviewMenuButton(
+                        "iPhone pose wrong",
+                        systemImage:
+                            "figure.stand.line.dotted.figure.stand",
+                        scope: .iPhonePose,
+                        verdict: .wrong
+                    )
+                    reviewMenuButton(
+                        "Action 4 pose wrong",
+                        systemImage:
+                            "figure.arms.open",
+                        scope: .action4Pose,
+                        verdict: .wrong
+                    )
+                    reviewMenuButton(
+                        "Board / roller wrong",
+                        systemImage:
+                            "skateboard",
+                        scope: .equipment,
+                        verdict: .wrong
+                    )
+                    reviewMenuButton(
+                        "Occluded / unsupported",
+                        systemImage:
+                            "eye.slash",
+                        scope: .other,
+                        verdict: .occluded
+                    )
+                    Divider()
+                    reviewMenuButton(
+                        "Good example",
+                        systemImage:
+                            "star.fill",
+                        scope: .behavior,
+                        verdict: .goodExample
+                    )
+                } label: {
+                    Image(
+                        systemName:
+                            isSavingReview
+                                ? "hourglass"
+                                : "flag"
+                    )
+                }
+                .disabled(
+                    isSavingReview
+                        || controller.alignment
+                            == nil
+                )
             }
             .buttonStyle(.bordered)
             .disabled(
