@@ -81,6 +81,20 @@ final class SynchronizedDualViewReplayController:
         )
     }
 
+    var currentReferenceTimeNS: UInt64 {
+        nanoseconds(
+            referenceSeconds
+        )
+    }
+
+    var currentMappedAction4PTSNS:
+        UInt64? {
+        alignment?
+            .mapReferenceTimeToVideoPTS(
+                currentReferenceTimeNS
+            )
+    }
+
     func load(
         _ run: ProductRunRecord
     ) async {
