@@ -1129,15 +1129,14 @@ struct SynchronizedDualViewReplayView: View {
             Slider(
                 value: $sliderSeconds,
                 in:
-                    controller
-                        .overlapStartSeconds
-                    ...max(
-                        controller
-                            .overlapStartSeconds
-                            + 0.01,
-                        controller
-                            .overlapEndSeconds
-                    ),
+                    controller.overlapStartSeconds
+                        ...max(
+                            controller
+                                .overlapStartSeconds
+                                + 0.01,
+                            controller
+                                .overlapEndSeconds
+                        ),
                 onEditingChanged: {
                     editing in
                     if editing {
