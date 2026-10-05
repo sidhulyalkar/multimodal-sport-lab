@@ -115,6 +115,7 @@ from .public_data import index_totalcapture
 from .public_video import build_public_video_catalog
 from .qc import session_qc
 from .replay import replay_frames
+from .replay_annotation import build_replay_annotation_worklist
 from .replay_review import build_replay_review_queue
 from .session import SessionReader
 from .simulate import simulate_session
@@ -302,6 +303,17 @@ def _parser() -> argparse.ArgumentParser:
     replay_review_queue.add_argument("ledger")
     replay_review_queue.add_argument("alignment")
     replay_review_queue.add_argument("output")
+
+    replay_annotation_worklist = sub.add_parser(
+        "build-replay-annotation-worklist",
+        help=(
+            "bind replay-review windows to validated teacher-label candidates"
+        ),
+    )
+    replay_annotation_worklist.add_argument("queue")
+    replay_annotation_worklist.add_argument("manifest")
+    replay_annotation_worklist.add_argument("labels")
+    replay_annotation_worklist.add_argument("output")
 
     calibration = sub.add_parser(
         "build-calibration-bundle",
@@ -946,6 +958,35 @@ def main(argv: list[str] | None = None) -> int:
                     "schema_version": payload["schema_version"],
                     "run_id": payload["run_id"],
                     "task_count": payload["task_count"],
+                    "output": args.output,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    if args.command == "build-replay-annotation-worklist":
+        payload = build_replay_annotation_worklist(
+            args.queue,
+            args.manifest,
+            args.labels,
+            args.output,
+        )
+        print(
+            json.dumps(
+                {
+                    "schema_version": payload["schema_version"],
+                    "run_id": payload["run_id"],
+                    "review_task_count": payload["summary"][
+                        "review_task_count"
+                    ],
+                    "candidate_frame_count": payload["summary"][
+                        "candidate_frame_count"
+                    ],
+                    "video_only_task_count": payload["summary"][
+                        "video_only_task_count"
+                    ],
                     "output": args.output,
                 },
                 indent=2,
