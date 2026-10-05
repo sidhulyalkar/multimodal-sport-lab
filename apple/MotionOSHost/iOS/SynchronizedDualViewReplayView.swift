@@ -427,42 +427,37 @@ final class SynchronizedDualViewReplayController:
 
         let correctionAllowed =
             isPlaying && canCorrectNow()
-        let syncDecision =
-            DualViewPlaybackSyncPolicy
-                .evaluate(
-                    expectedSourcePTSNS:
-                        expectedActionNS,
-                    observedSourcePTSNS:
-                        nanoseconds(
-                            usableActionSeconds
-                        ),
-                    correctionThresholdMS:
-                        Self
-                            .correctionThresholdMS,
-                    correctionAllowed:
-                        correctionAllowed
-                )
+        guard let syncDecision =
+                DualViewPlaybackSyncPolicy
+                    .evaluateMappedReference(
+                        referencePTSNS:
+                            nanoseconds(
+                                boundedReference
+                            ),
+                        observedSourcePTSNS:
+                            nanoseconds(
+                                usableActionSeconds
+                            ),
+                        slope:
+                            alignment
+                                .clockModel
+                                .slope,
+                        interceptNS:
+                            alignment
+                                .clockModel
+                                .interceptNS,
+                        correctionThresholdMS:
+                            Self
+                                .correctionThresholdMS,
+                        correctionAllowed:
+                            correctionAllowed
+                    )
+        else {
+            playbackDriftMS = nil
+            return
+        }
         playbackDriftMS =
-            DualViewPlaybackSyncPolicy
-                .referenceDriftMS(
-                    referencePTSNS:
-                        nanoseconds(
-                            boundedReference
-                        ),
-                    observedSourcePTSNS:
-                        nanoseconds(
-                            usableActionSeconds
-                        ),
-                    slope:
-                        alignment
-                            .clockModel
-                            .slope,
-                    interceptNS:
-                        alignment
-                            .clockModel
-                            .interceptNS
-                )
-                ?? syncDecision.driftMS
+            syncDecision.driftMS
 
         updateEvidenceFrames(
             referenceSeconds:
