@@ -104,6 +104,32 @@ In **Body** mode:
 This separation is deliberate. MotionOS never paints iPhone pixel coordinates
 onto Action 4 footage.
 
+### Compare both cameras
+
+After the alignment is sealed, Replay exposes **Compare Both Cameras**.
+
+The comparison view:
+
+- uses iPhone elapsed camera PTS as the reference transport;
+- computes the exact shared playable interval before enabling the scrubber;
+- never fabricates frames outside the interval where both sources exist;
+- schedules both local AVPlayers against one host-clock start;
+- maps Action 4 playback through the sealed affine clock;
+- measures live player drift after mapping Action 4 back into reference time;
+- corrects Action 4 scheduling only after drift exceeds the review threshold;
+- keeps correction count visible as a playback diagnostic;
+- provides direct START / MIDDLE / END jumps to the reviewed landmarks;
+- shows iPhone and Action 4 source-specific overlays in their own image planes.
+
+The live drift number is **not** the alignment uncertainty. It answers a
+different question: whether two local AVPlayers are currently presenting the
+already-aligned evidence at the same reference instant. The alignment RMS and
+anchor uncertainty remain the temporal-evidence authority.
+
+If the source video begins late or ends early, the comparison slider is clipped
+to the true overlap. A missing interval is shown as unavailable rather than
+mapping it to frame zero or the last source frame.
+
 ## Passing first physical beta
 
 A useful first run should show:
@@ -116,7 +142,13 @@ A useful first run should show:
 - QR deck / roller overlay appears only when the marker set is actually
   recognized;
 - source hashes remain unchanged;
-- Replay remains responsive while switching iPhone / Action 4 and Video / Body.
+- Replay remains responsive while switching iPhone / Action 4 and Video / Body;
+- **Compare Both Cameras** starts inside the true shared interval, scrubs both
+  views to the same physical instant, and does not synthesize non-overlap;
+- START / MIDDLE / END jumps visibly land on the same reviewed gestures in both
+  panes;
+- live player drift normally remains inside the 90 ms correction envelope
+  during local-file playback, with any corrections counted rather than hidden.
 
 Record any false pose, wrong-person pose, orientation error, QR misidentification,
 or timing mismatch as a beta defect. Do not tune thresholds against one failed
