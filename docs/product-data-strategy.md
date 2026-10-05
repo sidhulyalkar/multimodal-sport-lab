@@ -101,6 +101,8 @@ MotionOSRuns/<run-id>/
   operator/
     protocol.jsonl
     metadata.json
+  review/
+    replay-review-ledger.json
   derived/
     session-features.json
     quality-report.json
@@ -175,6 +177,31 @@ A session becomes substantially more useful when raw sensor data is paired with 
 - one short free-text observation.
 
 Keep this lightweight enough that it is actually completed.
+
+### Replay review markers
+
+The synchronized replay should also turn inspection into reusable data. During
+dual-camera review the athlete/tester can flag a precise reference-time window
+as:
+
+- timing mismatch;
+- iPhone pose issue;
+- Action 4 pose issue;
+- board / roller issue;
+- occluded or unsupported evidence;
+- good behavior example;
+- generic needs-review moment.
+
+These flags live in `review/replay-review-ledger.json`. Each flag preserves
+the reference time, mapped Action 4 PTS, a short surrounding evidence window,
+the availability of pose/equipment evidence at that instant, live playback
+drift as a diagnostic, and hashes for the source/derived artifacts available at
+review time.
+
+A flag is human QA/annotation evidence. It must not silently become metric
+biomechanics truth. The value is that a later detector, evaluator, or annotation
+tool can reopen the exact disputed or exemplary moment rather than relying on a
+free-text memory of where a failure occurred.
 
 ## Product surface
 

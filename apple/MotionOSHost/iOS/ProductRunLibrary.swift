@@ -32,6 +32,7 @@ struct ProductRunRecord: Identifiable, Equatable, Sendable {
     let externalSyncProposalURL: URL?
     let externalAlignmentURL: URL?
     let externalPoseTrackURL: URL?
+    let replayReviewLedgerURL: URL?
     let feedbackURL: URL?
 
     var sourceCount: Int {
@@ -378,6 +379,18 @@ final class ProductRunLibrary: ObservableObject {
                     externalAlignment,
                 externalPoseTrackURL:
                     externalPoseTrack,
+                replayReviewLedgerURL:
+                    existingURL(
+                        directory
+                            .appendingPathComponent(
+                                "review",
+                                isDirectory: true
+                            )
+                            .appendingPathComponent(
+                                "replay-review-ledger.json"
+                            ),
+                        manager: manager
+                    ),
                 feedbackURL: existingURL(
                     directory.appendingPathComponent(
                         "product-feedback.json"

@@ -1042,7 +1042,19 @@ struct ProductRunDetailView: View {
     }
 
     private var evidenceURLs: [URL] {
-        [
+        let reviewURL =
+            ReplayReviewLedgerStore
+                .url(for: run)
+        let existingReviewURL =
+            FileManager.default
+                .fileExists(
+                    atPath:
+                        reviewURL.path
+                )
+                ? reviewURL
+                : nil
+
+        return [
             Optional(run.operatorJournalURL),
             Optional(run.operatorMetadataURL),
             run.productManifestURL,
@@ -1056,6 +1068,7 @@ struct ProductRunDetailView: View {
             run.externalSyncProposalURL,
             run.externalAlignmentURL,
             run.externalPoseTrackURL,
+            existingReviewURL,
             run.feedbackURL,
         ]
         .compactMap { $0 }
