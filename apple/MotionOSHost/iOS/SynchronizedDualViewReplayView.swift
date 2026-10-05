@@ -127,22 +127,22 @@ final class SynchronizedDualViewReplayController:
                         )
                 }.value
             async let iPhoneAspectTask =
-                Self.displayAspectRatio(
-                    for: iPhoneURL
-                )
+                MotionOSVideoPresentation
+                    .displayAspectRatio(
+                        for: iPhoneURL
+                    )
             async let action4AspectTask =
-                Self.displayAspectRatio(
-                    for: actionURL
-                )
+                MotionOSVideoPresentation
+                    .displayAspectRatio(
+                        for: actionURL
+                    )
 
             let timeline =
                 try await timelineTask
             let loadedIPhoneAspect =
-                (try? await iPhoneAspectTask)
-                    ?? 16.0 / 9.0
+                await iPhoneAspectTask
             let loadedAction4Aspect =
-                (try? await action4AspectTask)
-                    ?? 16.0 / 9.0
+                await action4AspectTask
 
             let iPhonePlayer =
                 AVPlayer(url: iPhoneURL)
@@ -739,51 +739,6 @@ final class SynchronizedDualViewReplayController:
             timescale:
                 1_000_000_000
         )
-    }
-
-    nonisolated private static func displayAspectRatio(
-        for url: URL
-    ) async throws -> Double {
-        let asset =
-            AVURLAsset(url: url)
-        guard let track =
-                try await asset
-                    .loadTracks(
-                        withMediaType:
-                            .video
-                    )
-                    .first
-        else {
-            return 16.0 / 9.0
-        }
-
-        let naturalSize =
-            try await track.load(
-                .naturalSize
-            )
-        let transform =
-            try await track.load(
-                .preferredTransform
-            )
-        let transformed =
-            CGRect(
-                origin: .zero,
-                size: naturalSize
-            )
-            .applying(transform)
-        let width =
-            abs(transformed.width)
-        let height =
-            abs(transformed.height)
-
-        guard width.isFinite,
-              height.isFinite,
-              width > 0,
-              height > 0
-        else {
-            return 16.0 / 9.0
-        }
-        return width / height
     }
 
     private func fail(
