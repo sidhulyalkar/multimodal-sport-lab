@@ -8,6 +8,7 @@ enum SynchronizedDualViewReplayError: LocalizedError {
     case missingIPhoneEvidence
     case missingAction4Video
     case missingAlignment
+    case noPlayableOverlap
 
     var errorDescription: String? {
         switch self {
@@ -17,6 +18,8 @@ enum SynchronizedDualViewReplayError: LocalizedError {
             "Synchronized comparison needs the imported Action 4 original."
         case .missingAlignment:
             "Review and seal Action 4 temporal alignment before comparing both cameras."
+        case .noPlayableOverlap:
+            "The reviewed Action 4 source and iPhone reference timeline do not share a playable interval."
         }
     }
 }
@@ -40,6 +43,10 @@ final class SynchronizedDualViewReplayController:
         ExternalVideoPoseFrame?
     @Published private(set) var referenceSeconds:
         Double = 0
+    @Published private(set) var overlapStartSeconds:
+        Double = 0
+    @Published private(set) var overlapEndSeconds:
+        Double = 0
     @Published private(set) var action4Seconds:
         Double = 0
     @Published private(set) var playbackDriftMS:
@@ -50,7 +57,6 @@ final class SynchronizedDualViewReplayController:
     @Published private(set) var errorMessage:
         String?
 
-    private var run: ProductRunRecord?
     private var pollTask: Task<Void, Never>?
     private var lastCorrectionAt: Date?
 
@@ -59,8 +65,16 @@ final class SynchronizedDualViewReplayController:
     private static let correctionCooldownSeconds = 0.45
     private static let seekToleranceSeconds = 0.025
 
-    var durationSeconds: Double {
+    var referenceDurationSeconds: Double {
         timeline?.durationSeconds ?? 0
+    }
+
+    var playableDurationSeconds: Double {
+        max(
+            0,
+            overlapEndSeconds
+                - overlapStartSeconds
+        )
     }
 
     func load(
@@ -69,8 +83,6 @@ final class SynchronizedDualViewReplayController:
         stop()
         isLoading = true
         errorMessage = nil
-        self.run = run
-
         guard let iPhoneURL =
                 run.cameraVideoURL,
               let journalURL =
@@ -124,6 +136,24 @@ final class SynchronizedDualViewReplayController:
             action4Player
                 .automaticallyWaitsToMinimizeStalling = false
 
+            guard let overlap =
+                    DualViewPlaybackSyncPolicy
+                        .referenceOverlapWindow(
+                            referenceDurationSeconds:
+                                timeline.durationSeconds,
+                            sourceDurationNS:
+                                alignment.sourceVideo.durationNS,
+                            slope:
+                                alignment.clockModel.slope,
+                            interceptNS:
+                                alignment.clockModel.interceptNS
+                        ),
+                  overlap.durationSeconds >= 1
+            else {
+                throw SynchronizedDualViewReplayError
+                    .noPlayableOverlap
+            }
+
             self.timeline = timeline
             self.alignment = alignment
             self.action4PoseTrack =
@@ -131,13 +161,19 @@ final class SynchronizedDualViewReplayController:
                     .loadTrack(for: run)
             self.iPhonePlayer = iPhonePlayer
             self.action4Player = action4Player
-            referenceSeconds = 0
+            overlapStartSeconds =
+                overlap.startSeconds
+            overlapEndSeconds =
+                overlap.endSeconds
+            referenceSeconds =
+                overlap.startSeconds
             playbackDriftMS = nil
             correctionCount = 0
             isLoading = false
 
             seek(
-                toReferenceSeconds: 0,
+                toReferenceSeconds:
+                    overlap.startSeconds,
                 preservePlayback: false
             )
             startPolling()
@@ -155,28 +191,26 @@ final class SynchronizedDualViewReplayController:
     }
 
     func play() {
-        guard let iPhonePlayer,
-              let action4Player,
-              durationSeconds > 0
+        guard iPhonePlayer != nil,
+              action4Player != nil,
+              playableDurationSeconds > 0
         else {
             return
         }
 
         if referenceSeconds
-            >= durationSeconds - 0.05 {
+            >= overlapEndSeconds - 0.05 {
             seek(
-                toReferenceSeconds: 0,
+                toReferenceSeconds:
+                    overlapStartSeconds,
                 preservePlayback: false
-            )
-        } else {
-            synchronizePlayers(
-                aroundReferenceSeconds:
-                    referenceSeconds
             )
         }
 
-        iPhonePlayer.play()
-        action4Player.play()
+        startPlayersTogether(
+            atReferenceSeconds:
+                referenceSeconds
+        )
         isPlaying = true
     }
 
@@ -206,8 +240,11 @@ final class SynchronizedDualViewReplayController:
 
         let reference =
             min(
-                max(0, seconds),
-                max(0, durationSeconds)
+                overlapEndSeconds,
+                max(
+                    overlapStartSeconds,
+                    seconds
+                )
             )
         let referenceNS =
             nanoseconds(reference)
@@ -251,8 +288,10 @@ final class SynchronizedDualViewReplayController:
         )
 
         if wasPlaying {
-            iPhonePlayer.play()
-            action4Player.play()
+            startPlayersTogether(
+                atReferenceSeconds:
+                    reference
+            )
         }
     }
 
@@ -277,6 +316,8 @@ final class SynchronizedDualViewReplayController:
         iPhoneFrame = nil
         action4PoseFrame = nil
         playbackDriftMS = nil
+        overlapStartSeconds = 0
+        overlapEndSeconds = 0
         correctionCount = 0
         lastCorrectionAt = nil
         isLoading = false
@@ -284,10 +325,11 @@ final class SynchronizedDualViewReplayController:
 
     private func startPolling() {
         pollTask?.cancel()
-        pollTask = Task {
-            @MainActor [weak self] in
+        let controller = self
+        pollTask = Task { @MainActor in
             while !Task.isCancelled {
-                self?.updatePlaybackState()
+                controller
+                    .updatePlaybackState()
                 try? await Task.sleep(
                     for:
                         .milliseconds(
@@ -302,7 +344,7 @@ final class SynchronizedDualViewReplayController:
         guard let iPhonePlayer,
               let action4Player,
               let alignment,
-              durationSeconds > 0
+              playableDurationSeconds > 0
         else {
             return
         }
@@ -319,8 +361,11 @@ final class SynchronizedDualViewReplayController:
 
         let boundedReference =
             min(
-                reference,
-                durationSeconds
+                overlapEndSeconds,
+                max(
+                    overlapStartSeconds,
+                    reference
+                )
             )
         referenceSeconds =
             boundedReference
@@ -370,7 +415,26 @@ final class SynchronizedDualViewReplayController:
                         correctionAllowed
                 )
         playbackDriftMS =
-            syncDecision.driftMS
+            DualViewPlaybackSyncPolicy
+                .referenceDriftMS(
+                    referencePTSNS:
+                        nanoseconds(
+                            boundedReference
+                        ),
+                    observedSourcePTSNS:
+                        nanoseconds(
+                            usableActionSeconds
+                        ),
+                    slope:
+                        alignment
+                            .clockModel
+                            .slope,
+                    interceptNS:
+                        alignment
+                            .clockModel
+                            .interceptNS
+                )
+                ?? syncDecision.driftMS
 
         updateEvidenceFrames(
             referenceSeconds:
@@ -380,34 +444,24 @@ final class SynchronizedDualViewReplayController:
         )
 
         if syncDecision.shouldCorrect {
-            let tolerance = CMTime(
-                seconds:
-                    Self.seekToleranceSeconds,
-                preferredTimescale: 600
+            scheduleAction4Correction(
+                fromReferenceSeconds:
+                    boundedReference
             )
-            action4Player.seek(
-                to:
-                    mediaTimeNS(
-                        expectedActionNS
-                    ),
-                toleranceBefore: tolerance,
-                toleranceAfter: tolerance
-            )
-            lastCorrectionAt = Date()
-            correctionCount += 1
         }
 
         if boundedReference
-            >= durationSeconds - 0.03 {
+            >= overlapEndSeconds - 0.03 {
             pause()
         }
     }
 
-    private func synchronizePlayers(
-        aroundReferenceSeconds reference:
+    private func startPlayersTogether(
+        atReferenceSeconds reference:
             Double
     ) {
-        guard let action4Player,
+        guard let iPhonePlayer,
+              let action4Player,
               let alignment,
               let actionPTSNS =
                 alignment
@@ -418,17 +472,86 @@ final class SynchronizedDualViewReplayController:
             return
         }
 
-        let tolerance = CMTime(
-            seconds:
-                Self.seekToleranceSeconds,
-            preferredTimescale: 600
+        let hostStart =
+            CMTimeAdd(
+                CMClockGetTime(
+                    CMClockGetHostTimeClock()
+                ),
+                CMTime(
+                    seconds: 0.08,
+                    preferredTimescale: 1_000
+                )
+            )
+
+        iPhonePlayer.setRate(
+            1,
+            time:
+                mediaTime(reference),
+            atHostTime: hostStart
         )
-        action4Player.seek(
-            to: mediaTimeNS(actionPTSNS),
-            toleranceBefore: tolerance,
-            toleranceAfter: tolerance
+        action4Player.setRate(
+            1,
+            time:
+                mediaTimeNS(
+                    actionPTSNS
+                ),
+            atHostTime: hostStart
         )
         lastCorrectionAt = Date()
+    }
+
+    private func scheduleAction4Correction(
+        fromReferenceSeconds reference:
+            Double
+    ) {
+        guard let action4Player,
+              let alignment
+        else {
+            return
+        }
+
+        let leadSeconds = 0.08
+        let targetReference =
+            min(
+                overlapEndSeconds,
+                reference
+                    + leadSeconds
+            )
+        guard let actionPTSNS =
+                alignment
+                    .mapReferenceTimeToVideoPTS(
+                        nanoseconds(
+                            targetReference
+                        )
+                    )
+        else {
+            return
+        }
+
+        let hostTime =
+            CMTimeAdd(
+                CMClockGetTime(
+                    CMClockGetHostTimeClock()
+                ),
+                CMTime(
+                    seconds:
+                        leadSeconds,
+                    preferredTimescale:
+                        1_000
+                )
+            )
+
+        action4Player.setRate(
+            1,
+            time:
+                mediaTimeNS(
+                    actionPTSNS
+                ),
+            atHostTime:
+                hostTime
+        )
+        lastCorrectionAt = Date()
+        correctionCount += 1
     }
 
     private func canCorrectNow() -> Bool {
