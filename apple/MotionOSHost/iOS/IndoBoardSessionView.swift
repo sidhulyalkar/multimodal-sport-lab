@@ -971,11 +971,11 @@ struct IndoBoardSessionView: View {
         VStack(alignment: .leading, spacing: 12) {
             MotionOSSectionHeader(
                 title: session.outcome == .aborted
-                    ? "Attempt preserved"
-                    : "Capture sealed",
+                    ? "Attempt saved"
+                    : "Session saved",
                 subtitle: session.outcome == .aborted
-                    ? "Stopped early or failed to start; available evidence remains inspectable"
-                    : "Raw sources remain independent and hashable",
+                    ? "Stopped early. Any recordings already captured are still available."
+                    : "Your Watch and camera recordings are saved for review.",
                 systemImage: session.outcome == .aborted
                     ? "exclamationmark.triangle.fill"
                     : "checkmark.seal.fill",
@@ -995,26 +995,26 @@ struct IndoBoardSessionView: View {
 
             VStack(spacing: 8) {
                 completionRow(
-                    "Operator protocol",
+                    "Session plan",
                     detail: fieldRun.phase == .sealed
-                        ? "sealed"
-                        : fieldRun.phase.rawValue,
+                        ? "Saved"
+                        : fieldRun.phase.rawValue.capitalized,
                     complete: fieldRun.phase == .sealed,
                     symbol: "list.clipboard.fill"
                 )
                 completionRow(
                     "iPhone camera",
                     detail: camera.evidenceBundle != nil
-                        ? "video + frame evidence"
-                        : camera.phase.rawValue,
+                        ? "Video saved"
+                        : camera.phase.rawValue.capitalized,
                     complete: camera.evidenceBundle != nil,
                     symbol: "camera.fill"
                 )
                 completionRow(
                     "Apple Watch",
                     detail: watchEvidenceReady
-                        ? "journal verified on iPhone"
-                        : "waiting for transfer / verification",
+                        ? "Data saved"
+                        : "Still syncing",
                     complete: watchEvidenceReady,
                     symbol: "applewatch"
                 )
@@ -1179,11 +1179,9 @@ struct IndoBoardSessionView: View {
                     .buttonStyle(.bordered)
 
                     Text(
-                        "Use Photos after transferring through DJI Mimo, or "
-                            + "Files when reading from an SD card / external drive. "
-                            + "MotionOS copies the untouched movie into this run "
-                            + "and records its SHA-256 + byte count. No transcoding "
-                            + "occurs during evidence import."
+                        "Choose the original video from Photos or Files. "
+                            + "MotionOS keeps the original recording and aligns it "
+                            + "with this session after import."
                     )
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -1192,14 +1190,14 @@ struct IndoBoardSessionView: View {
 
             if session.cueReceipts.count < 3 {
                 Label(
-                    "Only \(session.cueReceipts.count)/3 sync cues were Watch-acknowledged.",
+                    "Timing needs review · \(session.cueReceipts.count)/3 alignment gestures captured.",
                     systemImage: "exclamationmark.triangle.fill"
                 )
                 .font(.caption)
                 .foregroundStyle(.yellow)
             } else {
                 Label(
-                    "3/3 sync cues were journaled on Watch",
+                    "Timing checks captured",
                     systemImage: "checkmark.shield.fill"
                 )
                 .font(.caption)
@@ -1215,7 +1213,7 @@ struct IndoBoardSessionView: View {
                     runLibrary.refresh()
                 } label: {
                     Label(
-                        "Start Another Without Action 4",
+                        "Start Another Without External Camera",
                         systemImage: "arrow.counterclockwise"
                     )
                     .frame(maxWidth: .infinity)
@@ -1223,8 +1221,8 @@ struct IndoBoardSessionView: View {
                 .buttonStyle(.bordered)
 
                 Text(
-                    "The current run stays preserved in Sessions with its "
-                        + "planned Action 4 source marked incomplete."
+                    "This session stays in Sessions. The optional external "
+                        + "camera will simply remain incomplete."
                 )
                 .font(.caption2)
                 .foregroundStyle(.secondary)
@@ -1278,7 +1276,7 @@ struct IndoBoardSessionView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("MOTIONOS COACH")
+                    Text("EXPERIMENTAL SESSION CUE")
                         .font(.caption2.weight(.bold))
                         .foregroundStyle(.secondary)
                     Text(coach.headline)
@@ -1286,10 +1284,6 @@ struct IndoBoardSessionView: View {
                 }
 
                 Spacer()
-
-                Text("\(coach.confidencePercent)%")
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundStyle(.secondary)
             }
 
             Text(coach.observation)
@@ -1345,7 +1339,7 @@ struct IndoBoardSessionView: View {
             }
 
             VStack(alignment: .leading, spacing: 5) {
-                Label("TRY", systemImage: "lightbulb.fill")
+                Label("TRY NEXT", systemImage: "lightbulb.fill")
                     .font(.caption2.weight(.bold))
                     .foregroundStyle(.cyan)
                 Text(coach.tip)
@@ -1354,7 +1348,7 @@ struct IndoBoardSessionView: View {
             }
 
             VStack(alignment: .leading, spacing: 5) {
-                Label("NEXT DRILL", systemImage: "repeat")
+                Label("REPEAT WITH", systemImage: "repeat")
                     .font(.caption2.weight(.bold))
                     .foregroundStyle(.indigo)
                 Text(coach.drill)
@@ -1377,9 +1371,21 @@ struct IndoBoardSessionView: View {
                 }
             }
 
-            Text(coach.evidenceLabel)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Why this appeared")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Text(coach.evidenceLabel)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                Text(
+                    "Experimental guidance is separate from the new personal "
+                        + "baseline and session-delta pipeline until that "
+                        + "interpretation layer is explicitly connected."
+                )
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
+            }
         }
         .padding(14)
         .background(
