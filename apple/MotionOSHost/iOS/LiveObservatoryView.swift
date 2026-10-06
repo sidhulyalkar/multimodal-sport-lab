@@ -128,13 +128,28 @@ struct LiveObservatoryView: View {
                 action: nil
             )
         case .watchSetupRequired:
+            if let startAction {
+                return IdleContent(
+                    title: "Choose a session to get started",
+                    detail:
+                        "MotionOS checks the devices required by the activity "
+                            + "after you choose what you want to record.",
+                    symbol: "figure.run.circle",
+                    tint: .indigo,
+                    action: startAction
+                )
+            }
             return IdleContent(
                 title: observation.link.title,
                 detail: observation.link.detail,
                 symbol: observation.link.symbol,
                 tint: .orange,
                 action: onOpenDevices.map {
-                    IdleAction(title: "Fix Setup", symbol: "applewatch", perform: $0)
+                    IdleAction(
+                        title: "Fix Setup",
+                        symbol: "applewatch",
+                        perform: $0
+                    )
                 }
             )
         case .saved:
