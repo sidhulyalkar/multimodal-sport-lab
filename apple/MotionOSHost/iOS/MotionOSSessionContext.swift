@@ -58,6 +58,28 @@ enum MotionOSLocalProfile {
 }
 
 enum MotionOSSessionContextFactory {
+    static let indoBoardStanceDefaultsKey =
+        "motionos.indo-board.stance.v1"
+
+    static func currentIndoBoard(
+        captureMode: IndoBoardSessionCoordinator.CaptureMode,
+        defaults: UserDefaults = .standard
+    ) -> ProductSessionManifest.SessionContext {
+        let stance = defaults.string(
+            forKey: indoBoardStanceDefaultsKey
+        )
+        .flatMap(IndoBoardStancePreference.init(rawValue:))
+            ?? .variesOrUnsure
+
+        return indoBoard(
+            profileID: MotionOSLocalProfile.profileID(
+                defaults: defaults
+            ),
+            stance: stance,
+            captureMode: captureMode
+        )
+    }
+
     static func indoBoard(
         profileID: String,
         stance: IndoBoardStancePreference,
