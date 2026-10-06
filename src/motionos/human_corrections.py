@@ -224,10 +224,6 @@ def build_human_correction_receipt(
     ):
         raise ValueError("unsupported replay annotation worklist schema")
 
-    run_id = _required_string(spec.get("run_id"), field="spec.run_id")
-    if worklist.get("run_id") != run_id:
-        raise ValueError("correction spec/worklist run_id mismatch")
-
     worklist_sha256, worklist_bytes = file_sha256(worklist_file)
     spec_worklist_sha = _required_string(
         spec.get("worklist_sha256"),
@@ -235,6 +231,10 @@ def build_human_correction_receipt(
     )
     if spec_worklist_sha != worklist_sha256:
         raise ValueError("correction spec worklist hash mismatch")
+
+    run_id = _required_string(spec.get("run_id"), field="spec.run_id")
+    if worklist.get("run_id") != run_id:
+        raise ValueError("correction spec/worklist run_id mismatch")
 
     bindings = worklist.get("bindings")
     if not isinstance(bindings, dict):
