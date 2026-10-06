@@ -288,7 +288,11 @@ struct MotionOSiOSApp: App {
                 phone: coordinator,
                 camera: cameraController,
                 fieldRun: fieldRun,
-                pod: podController
+                pod: podController,
+                context: MotionOSSessionContextFactory
+                    .currentIndoBoard(
+                        captureMode: indoBoardSession.captureMode
+                    )
             )
             let accepted =
                 indoBoardSession.phase == .running
