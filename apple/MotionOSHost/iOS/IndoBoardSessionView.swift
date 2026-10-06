@@ -13,6 +13,7 @@ struct IndoBoardSessionView: View {
     @State private var importingExternalVideo = false
     @State private var selectedExternalVideoItem: PhotosPickerItem?
     @State private var showMeasurementDetails = false
+    @State private var showSessionOptions = false
 
     var body: some View {
         ScrollView {
@@ -188,12 +189,9 @@ struct IndoBoardSessionView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Indo Board Session")
                         .font(.title2.weight(.bold))
-                    Text(
-                        "M0 · 2 min · "
-                            + session.captureMode.displayName
-                    )
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.secondary)
+                    Text("Guided 2-minute balance session")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.secondary)
                 }
 
                 Spacer(minLength: 8)
@@ -208,9 +206,8 @@ struct IndoBoardSessionView: View {
             if session.phase != .running
                 && session.phase != .finishing {
                 Text(
-                    "Record Apple Watch motion + physiology, iPhone video, "
-                        + "operator protocol events, and journal-backed sync cues "
-                        + "as one coordinated product session."
+                    "MotionOS checks your Watch and camera, helps frame your "
+                        + "body and board, then records them together."
                 )
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
@@ -218,8 +215,8 @@ struct IndoBoardSessionView: View {
 
                 HStack(spacing: 8) {
                     featurePill("Watch", "applewatch")
-                    featurePill("iPhone Vision", "video.fill")
-                    featurePill("120 s", "timer")
+                    featurePill("iPhone", "video.fill")
+                    featurePill("2 min", "timer")
                 }
             }
         }
@@ -227,117 +224,124 @@ struct IndoBoardSessionView: View {
     }
 
     private var captureModeCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            MotionOSSectionHeader(
-                title: "Capture sources",
-                subtitle: "Watch + iPhone are the core session",
-                systemImage: "point.3.connected.trianglepath.dotted",
-                accent: .purple
-            )
+        DisclosureGroup(isExpanded: $showSessionOptions) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 8) {
+                    requirementPill(
+                        "Apple Watch",
+                        symbol: "applewatch",
+                        required: true
+                    )
+                    requirementPill(
+                        "iPhone camera",
+                        symbol: "camera.fill",
+                        required: true
+                    )
+                }
 
-            HStack(spacing: 8) {
-                requirementPill(
-                    "Watch",
-                    symbol: "applewatch",
-                    required: true
-                )
-                requirementPill(
-                    "iPhone Vision",
-                    symbol: "camera.fill",
-                    required: true
-                )
-            }
+                Divider()
 
-            Divider()
+                NavigationLink {
+                    IndoBoardMarkerSetupView()
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "qrcode.viewfinder")
+                            .foregroundStyle(.cyan)
 
-            NavigationLink {
-                IndoBoardMarkerSetupView()
-            } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: "qrcode.viewfinder")
-                        .foregroundStyle(.cyan)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Beta board + roller tracking")
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Board tracking (beta)")
+                                .font(.subheadline.weight(.semibold))
+                            Text(
+                                "Optional markers can improve board-relative "
+                                    + "measurements."
+                            )
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                .buttonStyle(.plain)
+
+                Divider()
+
+                Toggle(
+                    isOn: externalCameraEnabled
+                ) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Add an external camera")
                             .font(.subheadline.weight(.semibold))
                         Text(
-                            "Optional 3-marker bootstrap for deck-centered balance metrics"
+                            "Optional. A second fixed view can improve later "
+                                + "calibration and 3D analysis."
                         )
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                     }
-                    Spacer()
-                    Image(systemName: "chevron.right")
+                }
+                .disabled(
+                    session.phase == .starting
+                        || session.phase == .running
+                        || session.phase == .finishing
+                        || session.phase == .watchStopRequired
+                )
+
+                if session.requiresExternalCamera {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label(
+                            "Action camera setup",
+                            systemImage: "video.fill"
+                        )
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(.tertiary)
-                }
-            }
-            .buttonStyle(.plain)
+                        .foregroundStyle(.purple)
 
-            Divider()
+                        Text(
+                            "Use a fixed tripod and keep your full body, both "
+                                + "feet, board, roller, and recovery space in "
+                                + "frame. Start recording before stepping on."
+                        )
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
 
-            Toggle(
-                isOn: externalCameraEnabled
-            ) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Add external calibration camera")
+                        Toggle(
+                            "External camera is recording",
+                            isOn: $session.externalCameraConfirmed
+                        )
                         .font(.subheadline.weight(.semibold))
-                    Text(
-                        "Optional high-fidelity teacher view. Keep the Action 4 "
-                            + "rolling before you mount, say “Start Recording,” "
-                            + "or use DJI's Bluetooth remote while on the board. "
-                            + "MotionOS uses shared sync gestures to align and trim it later."
-                    )
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+
+                        Text(
+                            "MotionOS aligns the imported video after the "
+                                + "session. The camera does not need to be "
+                                + "connected live."
+                        )
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                    }
                 }
             }
-            .disabled(
-                session.phase == .starting
-                    || session.phase == .running
-                    || session.phase == .finishing
-                    || session.phase == .watchStopRequired
-            )
-
-            if session.requiresExternalCamera {
-                VStack(alignment: .leading, spacing: 9) {
-                    Label(
-                        "Action 4 · 4K 16:9 · 60 fps · EIS off · fixed tripod",
-                        systemImage: "video.fill"
-                    )
-                    .font(.caption)
-                    .foregroundStyle(.purple)
-
-                    Text(
-                        "Frame the full rider, both feet, deck/roller, and enough "
-                            + "lateral recovery space. A 45–90° viewpoint offset "
-                            + "from the iPhone is preferred for multiview geometry."
-                    )
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-
-                    Toggle(
-                        "Action 4 is recording",
-                        isOn: $session.externalCameraConfirmed
-                    )
+            .padding(.top, 10)
+        } label: {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Session options")
                     .font(.subheadline.weight(.semibold))
-
-                    Text(
-                        "This is an operator confirmation, not a claimed DJI API "
-                            + "connection. Once confirmed, do not move the tripod."
-                    )
-                    .font(.caption2)
+                Text("Required devices are checked automatically")
+                    .font(.caption)
                     .foregroundStyle(.secondary)
-                }
             }
         }
+        .tint(.secondary)
         .cardStyle()
     }
 
     private var sourcePreflight: some View {
         VStack(alignment: .leading, spacing: 12) {
             MotionOSSectionHeader(
-                title: "Session preflight",
+                title: "Ready check",
                 subtitle: preflightSubtitle,
                 systemImage: "checklist.checked",
                 accent: preflightReady ? .green : .yellow
@@ -550,8 +554,8 @@ struct IndoBoardSessionView: View {
                     }
                 } label: {
                     Label(
-                        "Prepare Session",
-                        systemImage: "wand.and.stars"
+                        "Check My Setup",
+                        systemImage: "checkmark.circle"
                     )
                     .frame(maxWidth: .infinity)
                 }
@@ -576,7 +580,7 @@ struct IndoBoardSessionView: View {
                 } label: {
                     HStack {
                         Image(systemName: "record.circle.fill")
-                        Text("Start Complete Session")
+                        Text("Start Session")
                             .fontWeight(.semibold)
                         Spacer()
                         Text("2:00")
@@ -589,9 +593,9 @@ struct IndoBoardSessionView: View {
                 .disabled(!preflightReady)
 
                 Text(
-                    "MotionOS starts the Watch workout first, waits for the "
-                        + "mirrored running state, then starts iPhone video "
-                        + "and seals the operator protocol around the same run."
+                    "Your Watch and iPhone will start together after a short "
+                        + "countdown. You do not need to touch the phone while "
+                        + "balancing."
                 )
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -763,8 +767,8 @@ struct IndoBoardSessionView: View {
                         elapsed
                             >= IndoBoardProductProtocol
                                 .targetDurationSeconds
-                            ? "Finish & Seal Session"
-                            : "Stop Early & Preserve Attempt",
+                            ? "Finish Session"
+                            : "Stop Early",
                         systemImage: "stop.circle.fill"
                     )
                     .frame(maxWidth: .infinity)
@@ -777,7 +781,7 @@ struct IndoBoardSessionView: View {
     private var syncCueRow: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("JOURNAL-BACKED SYNC")
+                Text("SYNC GESTURES")
                     .font(.caption2.weight(.bold))
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -800,8 +804,8 @@ struct IndoBoardSessionView: View {
 
             Text(
                 session.pendingCueID == nil
-                    ? "Cues are sent automatically near 0:12, 0:50, and 1:50. When the Watch taps you and shows SYNC · MOVE NOW, make one quick arm gesture while keeping the board near neutral."
-                    : "Waiting for the Watch to journal and acknowledge the automatic cue…"
+                    ? "When the Watch taps you, make one quick arm gesture while keeping the board near neutral. MotionOS uses these moments to align recordings."
+                    : "Waiting for the Watch to confirm the cue…"
             )
             .font(.caption2)
             .foregroundStyle(
@@ -867,8 +871,8 @@ struct IndoBoardSessionView: View {
     private var liveProtocol: some View {
         VStack(alignment: .leading, spacing: 12) {
             MotionOSSectionHeader(
-                title: "Protocol",
-                subtitle: "Repeatable blocks for useful product feedback and later comparison",
+                title: "Session plan",
+                subtitle: "The same short blocks each time make progress easier to compare",
                 systemImage: "list.number",
                 accent: .indigo
             )
@@ -886,11 +890,9 @@ struct IndoBoardSessionView: View {
             }
 
             Text(
-                "MotionOS advances these blocks automatically from the "
-                    + "two-minute protocol so you do not need to touch the "
-                    + "phone while balancing. Operator block timestamps "
-                    + "document protocol intent only; Watch/device clocks "
-                    + "remain the measurement authority."
+                "MotionOS advances automatically so you can stay focused on "
+                    + "the board. The same sequence is reused for comparable "
+                    + "future sessions."
             )
             .font(.caption2)
             .foregroundStyle(.secondary)
