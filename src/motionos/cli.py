@@ -113,6 +113,7 @@ from .p1 import (
     write_p1_receipt,
 )
 from .personal_baseline import build_personal_movement_baseline
+from .personal_delta import build_personal_session_delta
 from .public_data import index_totalcapture
 from .public_video import build_public_video_catalog
 from .qc import session_qc
@@ -352,6 +353,16 @@ def _parser() -> argparse.ArgumentParser:
     )
     personal_baseline.add_argument("spec")
     personal_baseline.add_argument("output")
+
+    personal_delta = sub.add_parser(
+        "build-personal-session-delta",
+        help=(
+            "compare one reviewed session against an exact-context personal "
+            "movement baseline without assigning technique quality"
+        ),
+    )
+    personal_delta.add_argument("spec")
+    personal_delta.add_argument("output")
 
     calibration = sub.add_parser(
         "build-calibration-bundle",
@@ -1101,6 +1112,30 @@ def main(argv: list[str] | None = None) -> int:
                     ],
                     "baseline_group_count": payload["summary"][
                         "baseline_group_count"
+                    ],
+                    "output": args.output,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    if args.command == "build-personal-session-delta":
+        payload = build_personal_session_delta(
+            args.spec,
+            args.output,
+        )
+        print(
+            json.dumps(
+                {
+                    "schema_version": payload["schema_version"],
+                    "profile_id": payload["profile_id"],
+                    "sport": payload["sport"],
+                    "current_run_id": payload["current_run_id"],
+                    "context_match": payload["summary"]["context_match"],
+                    "comparison_count": payload["summary"][
+                        "comparison_count"
                     ],
                     "output": args.output,
                 },
