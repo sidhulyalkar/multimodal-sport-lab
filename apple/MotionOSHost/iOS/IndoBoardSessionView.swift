@@ -13,6 +13,7 @@ struct IndoBoardSessionView: View {
     @State private var importingExternalVideo = false
     @State private var selectedExternalVideoItem: PhotosPickerItem?
     @State private var showMeasurementDetails = false
+    @State private var showSessionOptions = false
 
     var body: some View {
         ScrollView {
@@ -188,12 +189,9 @@ struct IndoBoardSessionView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Indo Board Session")
                         .font(.title2.weight(.bold))
-                    Text(
-                        "M0 · 2 min · "
-                            + session.captureMode.displayName
-                    )
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.secondary)
+                    Text("Guided 2-minute balance session")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.secondary)
                 }
 
                 Spacer(minLength: 8)
@@ -208,9 +206,8 @@ struct IndoBoardSessionView: View {
             if session.phase != .running
                 && session.phase != .finishing {
                 Text(
-                    "Record Apple Watch motion + physiology, iPhone video, "
-                        + "operator protocol events, and journal-backed sync cues "
-                        + "as one coordinated product session."
+                    "MotionOS checks your Watch and camera, helps frame your "
+                        + "body and board, then records them together."
                 )
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
@@ -218,8 +215,8 @@ struct IndoBoardSessionView: View {
 
                 HStack(spacing: 8) {
                     featurePill("Watch", "applewatch")
-                    featurePill("iPhone Vision", "video.fill")
-                    featurePill("120 s", "timer")
+                    featurePill("iPhone", "video.fill")
+                    featurePill("2 min", "timer")
                 }
             }
         }
@@ -227,117 +224,124 @@ struct IndoBoardSessionView: View {
     }
 
     private var captureModeCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            MotionOSSectionHeader(
-                title: "Capture sources",
-                subtitle: "Watch + iPhone are the core session",
-                systemImage: "point.3.connected.trianglepath.dotted",
-                accent: .purple
-            )
+        DisclosureGroup(isExpanded: $showSessionOptions) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 8) {
+                    requirementPill(
+                        "Apple Watch",
+                        symbol: "applewatch",
+                        required: true
+                    )
+                    requirementPill(
+                        "iPhone camera",
+                        symbol: "camera.fill",
+                        required: true
+                    )
+                }
 
-            HStack(spacing: 8) {
-                requirementPill(
-                    "Watch",
-                    symbol: "applewatch",
-                    required: true
-                )
-                requirementPill(
-                    "iPhone Vision",
-                    symbol: "camera.fill",
-                    required: true
-                )
-            }
+                Divider()
 
-            Divider()
+                NavigationLink {
+                    IndoBoardMarkerSetupView()
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "qrcode.viewfinder")
+                            .foregroundStyle(.cyan)
 
-            NavigationLink {
-                IndoBoardMarkerSetupView()
-            } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: "qrcode.viewfinder")
-                        .foregroundStyle(.cyan)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Beta board + roller tracking")
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Board tracking (beta)")
+                                .font(.subheadline.weight(.semibold))
+                            Text(
+                                "Optional markers can improve board-relative "
+                                    + "measurements."
+                            )
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                .buttonStyle(.plain)
+
+                Divider()
+
+                Toggle(
+                    isOn: externalCameraEnabled
+                ) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Add an external camera")
                             .font(.subheadline.weight(.semibold))
                         Text(
-                            "Optional 3-marker bootstrap for deck-centered balance metrics"
+                            "Optional. A second fixed view can improve later "
+                                + "calibration and 3D analysis."
                         )
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                     }
-                    Spacer()
-                    Image(systemName: "chevron.right")
+                }
+                .disabled(
+                    session.phase == .starting
+                        || session.phase == .running
+                        || session.phase == .finishing
+                        || session.phase == .watchStopRequired
+                )
+
+                if session.requiresExternalCamera {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label(
+                            "Action camera setup",
+                            systemImage: "video.fill"
+                        )
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(.tertiary)
-                }
-            }
-            .buttonStyle(.plain)
+                        .foregroundStyle(.purple)
 
-            Divider()
+                        Text(
+                            "Use a fixed tripod and keep your full body, both "
+                                + "feet, board, roller, and recovery space in "
+                                + "frame. Start recording before stepping on."
+                        )
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
 
-            Toggle(
-                isOn: externalCameraEnabled
-            ) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Add external calibration camera")
+                        Toggle(
+                            "External camera is recording",
+                            isOn: $session.externalCameraConfirmed
+                        )
                         .font(.subheadline.weight(.semibold))
-                    Text(
-                        "Optional high-fidelity teacher view. Keep the Action 4 "
-                            + "rolling before you mount, say “Start Recording,” "
-                            + "or use DJI's Bluetooth remote while on the board. "
-                            + "MotionOS uses shared sync gestures to align and trim it later."
-                    )
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+
+                        Text(
+                            "MotionOS aligns the imported video after the "
+                                + "session. The camera does not need to be "
+                                + "connected live."
+                        )
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                    }
                 }
             }
-            .disabled(
-                session.phase == .starting
-                    || session.phase == .running
-                    || session.phase == .finishing
-                    || session.phase == .watchStopRequired
-            )
-
-            if session.requiresExternalCamera {
-                VStack(alignment: .leading, spacing: 9) {
-                    Label(
-                        "Action 4 · 4K 16:9 · 60 fps · EIS off · fixed tripod",
-                        systemImage: "video.fill"
-                    )
-                    .font(.caption)
-                    .foregroundStyle(.purple)
-
-                    Text(
-                        "Frame the full rider, both feet, deck/roller, and enough "
-                            + "lateral recovery space. A 45–90° viewpoint offset "
-                            + "from the iPhone is preferred for multiview geometry."
-                    )
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-
-                    Toggle(
-                        "Action 4 is recording",
-                        isOn: $session.externalCameraConfirmed
-                    )
+            .padding(.top, 10)
+        } label: {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Session options")
                     .font(.subheadline.weight(.semibold))
-
-                    Text(
-                        "This is an operator confirmation, not a claimed DJI API "
-                            + "connection. Once confirmed, do not move the tripod."
-                    )
-                    .font(.caption2)
+                Text("Required devices are checked automatically")
+                    .font(.caption)
                     .foregroundStyle(.secondary)
-                }
             }
         }
+        .tint(.secondary)
         .cardStyle()
     }
 
     private var sourcePreflight: some View {
         VStack(alignment: .leading, spacing: 12) {
             MotionOSSectionHeader(
-                title: "Session preflight",
+                title: "Ready check",
                 subtitle: preflightSubtitle,
                 systemImage: "checklist.checked",
                 accent: preflightReady ? .green : .yellow
@@ -352,6 +356,20 @@ struct IndoBoardSessionView: View {
                 symbol: "applewatch"
             )
 
+            if !watchPreflightReady {
+                NavigationLink {
+                    WatchCaptureToolsView()
+                } label: {
+                    Label(
+                        "Fix Apple Watch Setup",
+                        systemImage: "arrow.right.circle"
+                    )
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity, minHeight: 40)
+                }
+                .buttonStyle(.bordered)
+            }
+
             readinessRow(
                 title: "iPhone camera",
                 detail: cameraDetail,
@@ -363,14 +381,28 @@ struct IndoBoardSessionView: View {
                 symbol: "camera.fill"
             )
 
+            if !cameraPreflightReady {
+                NavigationLink {
+                    CameraCaptureCard()
+                } label: {
+                    Label(
+                        "Fix Camera Setup",
+                        systemImage: "camera"
+                    )
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity, minHeight: 40)
+                }
+                .buttonStyle(.bordered)
+            }
+
             boardTrackingRow
 
             if session.requiresExternalCamera {
                 readinessRow(
-                    title: "Action 4",
+                    title: "External camera",
                     detail: session.externalCameraConfirmed
-                        ? "recording confirmed · fixed tripod"
-                        : "roll / voice-start / use DJI remote, then confirm",
+                        ? "Recording confirmed"
+                        : "Start recording, then confirm above",
                     ready: session.externalCameraConfirmed,
                     symbol: "video.fill"
                 )
@@ -442,18 +474,13 @@ struct IndoBoardSessionView: View {
                 : (hasEvidence ? .yellow : .secondary)
 
         let detail: String = {
-            guard health.sampleCount > 0 else {
-                return "optional · body-only beta still available"
+            if stable {
+                return "Optional enhancement ready"
             }
-            guard hasEvidence else {
-                return "no deck + roller observations in the recent window"
+            if hasEvidence {
+                return "Optional enhancement is intermittent"
             }
-            return String(
-                format:
-                    "%.0f%% visible · %.0f%% confidence",
-                health.coverageFraction * 100,
-                health.meanConfidence * 100
-            )
+            return "Optional · body tracking still works"
         }()
 
         return HStack(spacing: 9) {
@@ -482,18 +509,6 @@ struct IndoBoardSessionView: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
 
-                if hasEvidence {
-                    Text(
-                        "Tracking: \(equipmentSourceLabel(camera.latestIndoBoardState))"
-                            + " · Coaching: "
-                            + equipmentSourceLabel(
-                                camera.latestIndoBoardCoachingState,
-                                fallback: "body pose only"
-                            )
-                    )
-                    .font(.system(size: 9, weight: .medium))
-                    .foregroundStyle(.tertiary)
-                }
             }
 
             Spacer()
@@ -506,26 +521,6 @@ struct IndoBoardSessionView: View {
                     .font(.system(size: 8, weight: .bold))
                     .foregroundStyle(.secondary)
             }
-        }
-    }
-
-    private func equipmentSourceLabel(
-        _ state: IndoBoardBalanceState?,
-        fallback: String = "none"
-    ) -> String {
-        guard let state else {
-            return fallback
-        }
-
-        switch state.provenance {
-        case .fiducialMeasured:
-            return "QR measured"
-        case .manualAnnotated:
-            return "reviewed"
-        case .modelEstimated:
-            return "markerless model"
-        case .geometricProxy:
-            return "geometric proxy"
         }
     }
 
@@ -550,8 +545,8 @@ struct IndoBoardSessionView: View {
                     }
                 } label: {
                     Label(
-                        "Prepare Session",
-                        systemImage: "wand.and.stars"
+                        "Check My Setup",
+                        systemImage: "checkmark.circle"
                     )
                     .frame(maxWidth: .infinity)
                 }
@@ -576,7 +571,7 @@ struct IndoBoardSessionView: View {
                 } label: {
                     HStack {
                         Image(systemName: "record.circle.fill")
-                        Text("Start Complete Session")
+                        Text("Start Session")
                             .fontWeight(.semibold)
                         Spacer()
                         Text("2:00")
@@ -589,16 +584,16 @@ struct IndoBoardSessionView: View {
                 .disabled(!preflightReady)
 
                 Text(
-                    "MotionOS starts the Watch workout first, waits for the "
-                        + "mirrored running state, then starts iPhone video "
-                        + "and seals the operator protocol around the same run."
+                    "Your Watch and iPhone will start together after a short "
+                        + "countdown. You do not need to touch the phone while "
+                        + "balancing."
                 )
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
             case .starting:
                 progressRow(
-                    "Starting Watch first, then camera and protocol evidence"
+                    "Starting your Watch and iPhone recording"
                 )
 
             case .countdown:
@@ -763,8 +758,8 @@ struct IndoBoardSessionView: View {
                         elapsed
                             >= IndoBoardProductProtocol
                                 .targetDurationSeconds
-                            ? "Finish & Seal Session"
-                            : "Stop Early & Preserve Attempt",
+                            ? "Finish Session"
+                            : "Stop Early",
                         systemImage: "stop.circle.fill"
                     )
                     .frame(maxWidth: .infinity)
@@ -777,7 +772,7 @@ struct IndoBoardSessionView: View {
     private var syncCueRow: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("JOURNAL-BACKED SYNC")
+                Text("SYNC GESTURES")
                     .font(.caption2.weight(.bold))
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -800,8 +795,8 @@ struct IndoBoardSessionView: View {
 
             Text(
                 session.pendingCueID == nil
-                    ? "Cues are sent automatically near 0:12, 0:50, and 1:50. When the Watch taps you and shows SYNC · MOVE NOW, make one quick arm gesture while keeping the board near neutral."
-                    : "Waiting for the Watch to journal and acknowledge the automatic cue…"
+                    ? "When the Watch taps you, make one quick arm gesture while keeping the board near neutral. MotionOS uses these moments to align recordings."
+                    : "Waiting for the Watch to confirm the cue…"
             )
             .font(.caption2)
             .foregroundStyle(
@@ -867,8 +862,8 @@ struct IndoBoardSessionView: View {
     private var liveProtocol: some View {
         VStack(alignment: .leading, spacing: 12) {
             MotionOSSectionHeader(
-                title: "Protocol",
-                subtitle: "Repeatable blocks for useful product feedback and later comparison",
+                title: "Session plan",
+                subtitle: "The same short blocks each time make progress easier to compare",
                 systemImage: "list.number",
                 accent: .indigo
             )
@@ -886,11 +881,9 @@ struct IndoBoardSessionView: View {
             }
 
             Text(
-                "MotionOS advances these blocks automatically from the "
-                    + "two-minute protocol so you do not need to touch the "
-                    + "phone while balancing. Operator block timestamps "
-                    + "document protocol intent only; Watch/device clocks "
-                    + "remain the measurement authority."
+                "MotionOS advances automatically so you can stay focused on "
+                    + "the board. The same sequence is reused for comparable "
+                    + "future sessions."
             )
             .font(.caption2)
             .foregroundStyle(.secondary)
@@ -969,11 +962,11 @@ struct IndoBoardSessionView: View {
         VStack(alignment: .leading, spacing: 12) {
             MotionOSSectionHeader(
                 title: session.outcome == .aborted
-                    ? "Attempt preserved"
-                    : "Capture sealed",
+                    ? "Attempt saved"
+                    : "Session saved",
                 subtitle: session.outcome == .aborted
-                    ? "Stopped early or failed to start; available evidence remains inspectable"
-                    : "Raw sources remain independent and hashable",
+                    ? "Stopped early. Any recordings already captured are still available."
+                    : "Your Watch and camera recordings are saved for review.",
                 systemImage: session.outcome == .aborted
                     ? "exclamationmark.triangle.fill"
                     : "checkmark.seal.fill",
@@ -993,26 +986,26 @@ struct IndoBoardSessionView: View {
 
             VStack(spacing: 8) {
                 completionRow(
-                    "Operator protocol",
+                    "Session plan",
                     detail: fieldRun.phase == .sealed
-                        ? "sealed"
-                        : fieldRun.phase.rawValue,
+                        ? "Saved"
+                        : fieldRun.phase.rawValue.capitalized,
                     complete: fieldRun.phase == .sealed,
                     symbol: "list.clipboard.fill"
                 )
                 completionRow(
                     "iPhone camera",
                     detail: camera.evidenceBundle != nil
-                        ? "video + frame evidence"
-                        : camera.phase.rawValue,
+                        ? "Video saved"
+                        : camera.phase.rawValue.capitalized,
                     complete: camera.evidenceBundle != nil,
                     symbol: "camera.fill"
                 )
                 completionRow(
                     "Apple Watch",
                     detail: watchEvidenceReady
-                        ? "journal verified on iPhone"
-                        : "waiting for transfer / verification",
+                        ? "Data saved"
+                        : "Still syncing",
                     complete: watchEvidenceReady,
                     symbol: "applewatch"
                 )
@@ -1177,11 +1170,9 @@ struct IndoBoardSessionView: View {
                     .buttonStyle(.bordered)
 
                     Text(
-                        "Use Photos after transferring through DJI Mimo, or "
-                            + "Files when reading from an SD card / external drive. "
-                            + "MotionOS copies the untouched movie into this run "
-                            + "and records its SHA-256 + byte count. No transcoding "
-                            + "occurs during evidence import."
+                        "Choose the original video from Photos or Files. "
+                            + "MotionOS keeps the original recording and aligns it "
+                            + "with this session after import."
                     )
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -1190,14 +1181,14 @@ struct IndoBoardSessionView: View {
 
             if session.cueReceipts.count < 3 {
                 Label(
-                    "Only \(session.cueReceipts.count)/3 sync cues were Watch-acknowledged.",
+                    "Timing needs review · \(session.cueReceipts.count)/3 alignment gestures captured.",
                     systemImage: "exclamationmark.triangle.fill"
                 )
                 .font(.caption)
                 .foregroundStyle(.yellow)
             } else {
                 Label(
-                    "3/3 sync cues were journaled on Watch",
+                    "Timing checks captured",
                     systemImage: "checkmark.shield.fill"
                 )
                 .font(.caption)
@@ -1213,7 +1204,7 @@ struct IndoBoardSessionView: View {
                     runLibrary.refresh()
                 } label: {
                     Label(
-                        "Start Another Without Action 4",
+                        "Start Another Without External Camera",
                         systemImage: "arrow.counterclockwise"
                     )
                     .frame(maxWidth: .infinity)
@@ -1221,8 +1212,8 @@ struct IndoBoardSessionView: View {
                 .buttonStyle(.bordered)
 
                 Text(
-                    "The current run stays preserved in Sessions with its "
-                        + "planned Action 4 source marked incomplete."
+                    "This session stays in Sessions. The optional external "
+                        + "camera will simply remain incomplete."
                 )
                 .font(.caption2)
                 .foregroundStyle(.secondary)
@@ -1276,7 +1267,7 @@ struct IndoBoardSessionView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("MOTIONOS COACH")
+                    Text("EXPERIMENTAL SESSION CUE")
                         .font(.caption2.weight(.bold))
                         .foregroundStyle(.secondary)
                     Text(coach.headline)
@@ -1284,10 +1275,6 @@ struct IndoBoardSessionView: View {
                 }
 
                 Spacer()
-
-                Text("\(coach.confidencePercent)%")
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundStyle(.secondary)
             }
 
             Text(coach.observation)
@@ -1343,7 +1330,7 @@ struct IndoBoardSessionView: View {
             }
 
             VStack(alignment: .leading, spacing: 5) {
-                Label("TRY", systemImage: "lightbulb.fill")
+                Label("TRY NEXT", systemImage: "lightbulb.fill")
                     .font(.caption2.weight(.bold))
                     .foregroundStyle(.cyan)
                 Text(coach.tip)
@@ -1352,7 +1339,7 @@ struct IndoBoardSessionView: View {
             }
 
             VStack(alignment: .leading, spacing: 5) {
-                Label("NEXT DRILL", systemImage: "repeat")
+                Label("REPEAT WITH", systemImage: "repeat")
                     .font(.caption2.weight(.bold))
                     .foregroundStyle(.indigo)
                 Text(coach.drill)
@@ -1375,9 +1362,21 @@ struct IndoBoardSessionView: View {
                 }
             }
 
-            Text(coach.evidenceLabel)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Why this appeared")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Text(coach.evidenceLabel)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                Text(
+                    "Experimental guidance is separate from the new personal "
+                        + "baseline and session-delta pipeline until that "
+                        + "interpretation layer is explicitly connected."
+                )
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
+            }
         }
         .padding(14)
         .background(
@@ -1570,13 +1569,13 @@ struct IndoBoardSessionView: View {
     ) -> String {
         switch outcome {
         case .improved:
-            return "This cue helped this attempt"
+            return "Target moved in the intended direction"
         case .oppositeDirection:
-            return "This cue moved the target the wrong way"
+            return "Target moved in the opposite direction"
         case .noClearChange:
-            return "No clear cue effect yet"
+            return "No clear change yet"
         case .insufficientEvidence:
-            return "Cue effect not scored"
+            return "Not enough data to compare"
         }
     }
 
@@ -1647,17 +1646,16 @@ struct IndoBoardSessionView: View {
     private var recoveryCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             MotionOSSectionHeader(
-                title: "Finish Watch capture",
-                subtitle: "The iPhone and operator evidence are already sealed",
+                title: "Finish on Apple Watch",
+                subtitle: "Your iPhone recording is already saved",
                 systemImage: "applewatch.radiowaves.left.and.right",
                 accent: .yellow
             )
 
             Text(
-                "MotionOS could not confirm that the Watch workout stopped. "
-                    + "Open MotionOS on the Watch, stop the capture there, "
-                    + "then recheck. Do not start another product session "
-                    + "until the Watch has left its running state."
+                "MotionOS could not confirm that the Watch session stopped. "
+                    + "Open MotionOS on Apple Watch, end the session there, "
+                    + "then tap Recheck Watch."
             )
             .font(.caption)
             .foregroundStyle(.secondary)
@@ -1684,10 +1682,10 @@ struct IndoBoardSessionView: View {
         ) {
             VStack(alignment: .leading, spacing: 8) {
                 Text(
-                    "Raw Watch, camera, and operator evidence stays preserved. "
-                        + "Live movement values are derived signals. Stronger "
-                        + "biomechanics claims remain gated on calibration and "
-                        + "post-session quality checks."
+                    "MotionOS keeps the original Watch and camera recordings "
+                        + "separate from measurements derived from them. More "
+                        + "advanced movement claims require additional quality "
+                        + "checks and calibration."
                 )
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -1801,20 +1799,15 @@ struct IndoBoardSessionView: View {
     }
 
     private var cameraDetail: String {
-        guard let configuration = camera.configuration else {
-            return camera.phase.rawValue
+        guard camera.configuration != nil else {
+            return camera.phase.rawValue.capitalized
         }
 
         if session.cameraProfileReady(camera) {
-            return String(
-                format: "%dx%d · %.0f fps · stab off",
-                configuration.formatWidth,
-                configuration.formatHeight,
-                configuration.configuredFrameRate
-            )
+            return "Ready"
         }
 
-        return "profile needs review"
+        return "Camera settings need attention"
     }
 
     private var watchPreflightReady: Bool {
@@ -1853,13 +1846,17 @@ struct IndoBoardSessionView: View {
         )
     }
 
+    private var cameraPreflightReady: Bool {
+        (
+            camera.phase == .ready
+                || camera.phase == .evidenceReady
+                || camera.phase == .recording
+        ) && session.cameraProfileReady(camera)
+    }
+
     private var preflightReady: Bool {
         watchPreflightReady
-            && (
-                camera.phase == .ready
-                    || camera.phase == .evidenceReady
-            )
-            && session.cameraProfileReady(camera)
+            && cameraPreflightReady
             && (phone.iPhoneBatteryLevel ?? 0) >= 0.20
             && (phone.iPhoneAvailableStorageBytes ?? 0)
                 >= 5_000_000_000
@@ -1871,8 +1868,8 @@ struct IndoBoardSessionView: View {
 
     private var preflightSubtitle: String {
         preflightReady
-            ? "Required sources are ready for a coordinated run"
-            : "Resolve the yellow items before starting"
+            ? "You're ready to start"
+            : "Fix the required items below before starting"
     }
 
     private var phaseLabel: String {
@@ -1890,11 +1887,11 @@ struct IndoBoardSessionView: View {
         case .running:
             "RECORDING"
         case .finishing:
-            "SEALING"
+            "SAVING"
         case .watchStopRequired:
             "WATCH STOP"
         case .sealed:
-            "SEALED"
+            "SAVED"
         case .failed:
             "CHECK"
         }
@@ -1936,21 +1933,21 @@ struct IndoBoardSessionView: View {
     private var controlTitle: String {
         switch session.phase {
         case .idle, .failed:
-            "Prepare capture"
+            "Get ready"
         case .preparing:
-            "Running preflight"
+            "Checking setup"
         case .ready:
             "Ready to record"
         case .starting:
-            "Starting sources"
+            "Starting session"
         case .countdown:
             "Get ready"
         case .running:
             "Session live"
         case .finishing:
-            "Sealing evidence"
+            "Saving session"
         case .watchStopRequired:
-            "Finish Watch capture"
+            "Finish on Apple Watch"
         case .sealed:
             "Session complete"
         }
@@ -1959,23 +1956,23 @@ struct IndoBoardSessionView: View {
     private var controlSubtitle: String {
         switch session.phase {
         case .idle, .failed:
-            "One workflow coordinates the sources without merging their native clocks"
+            "MotionOS will check the devices required for this session"
         case .preparing:
-            "MotionOS is checking required capture conditions"
+            "Checking the required devices and recording conditions"
         case .ready:
-            "Watch first, camera second, protocol evidence third"
+            "Everything required is ready"
         case .starting:
-            "Waiting for the Watch workout before video capture begins"
+            "Starting the Watch before the countdown begins"
         case .countdown:
-            "Pre-roll is recording; the protocol starts when the countdown ends"
+            "Recording has started. The guided session begins after the countdown"
         case .running:
-            "Follow the protocol and collect three journal-backed sync cues"
+            "Follow the guided blocks. Your Watch will tap for three quick alignment gestures"
         case .finishing:
-            "Each source closes into its own durable evidence artifact"
+            "Saving the Watch and iPhone recordings"
         case .watchStopRequired:
-            "The Watch journal still needs a manual stop before this run is fully closed"
+            "End the session on Apple Watch, then recheck here"
         case .sealed:
-            "Review the recovered Watch session in Sessions when transfer completes"
+            "Your session will appear in Sessions when syncing finishes"
         }
     }
 

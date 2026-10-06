@@ -46,9 +46,9 @@ targets:
         WKRunsIndependentlyOfCompanionApp: false
         WKBackgroundModes:
           - workout-processing
-        NSHealthShareUsageDescription: MotionOS reads workout metrics so it can synchronize physiology with motion.
-        NSHealthUpdateUsageDescription: MotionOS saves the workout you explicitly start.
-        NSMotionUsageDescription: MotionOS records wrist motion during an active workout.
+        NSHealthShareUsageDescription: MotionOS reads workout metrics such as heart rate so they can be viewed alongside movement sessions you record.
+        NSHealthUpdateUsageDescription: MotionOS starts and saves the workout sessions you choose to record.
+        NSMotionUsageDescription: MotionOS records wrist movement during sessions you choose to start.
     entitlements:
       path: Watch/MotionOSWatch.entitlements
       properties:
@@ -80,10 +80,10 @@ targets:
           - UIInterfaceOrientationLandscapeRight
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
-        NSHealthShareUsageDescription: MotionOS uses workout state to coordinate capture with Apple Watch.
-        NSHealthUpdateUsageDescription: MotionOS starts workouts on your paired Apple Watch.
-        NSMotionUsageDescription: MotionOS may use motion data during calibration.
-        NSCameraUsageDescription: MotionOS records calibration video and Vision 3D pose only when you explicitly start a camera evidence session.
+        NSHealthShareUsageDescription: MotionOS uses workout state to keep iPhone and Apple Watch recordings together during sessions you start.
+        NSHealthUpdateUsageDescription: MotionOS starts workout sessions on your paired Apple Watch when you choose to record.
+        NSMotionUsageDescription: MotionOS may use motion data while setting up or recording a movement session.
+        NSCameraUsageDescription: MotionOS uses the camera during sessions you start to record your movement and help analyze technique.
     entitlements:
       path: iOS/MotionOSiOS.entitlements
       properties:

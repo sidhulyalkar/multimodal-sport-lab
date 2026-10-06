@@ -1,7 +1,10 @@
 import SwiftUI
 
 struct PhoneContentView: View {
-    @State private var selectedTab: MotionOSTab = .observe
+    @AppStorage("motionos.first-run.completed.v1")
+    private var firstRunCompleted = false
+
+    @State private var selectedTab: MotionOSTab = .home
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -10,22 +13,35 @@ struct PhoneContentView: View {
                     selectedTab: $selectedTab
                 )
             }
-            .tag(MotionOSTab.observe)
+            .tag(MotionOSTab.home)
             .tabItem {
                 Label(
-                    "Observe",
-                    systemImage: "waveform.path.ecg"
+                    "Home",
+                    systemImage: "house.fill"
                 )
             }
 
             NavigationStack {
                 CaptureHomeView()
             }
-            .tag(MotionOSTab.capture)
+            .tag(MotionOSTab.record)
             .tabItem {
                 Label(
-                    "Capture",
+                    "Record",
                     systemImage: "record.circle"
+                )
+            }
+
+            NavigationStack {
+                ProgressHomeView(
+                    selectedTab: $selectedTab
+                )
+            }
+            .tag(MotionOSTab.progress)
+            .tabItem {
+                Label(
+                    "Progress",
+                    systemImage: "chart.line.uptrend.xyaxis"
                 )
             }
 
@@ -39,18 +55,21 @@ struct PhoneContentView: View {
                     systemImage: "clock.arrow.circlepath"
                 )
             }
-
-            NavigationStack {
-                DeviceHubView()
-            }
-            .tag(MotionOSTab.devices)
-            .tabItem {
-                Label(
-                    "Devices",
-                    systemImage: "sensor.tag.radiowaves.forward"
-                )
-            }
         }
         .tint(.indigo)
+        .fullScreenCover(
+            isPresented: Binding(
+                get: { !firstRunCompleted },
+                set: { presented in
+                    if !presented {
+                        firstRunCompleted = true
+                    }
+                }
+            )
+        ) {
+            MotionOSFirstRunView {
+                firstRunCompleted = true
+            }
+        }
     }
 }

@@ -30,16 +30,16 @@ struct WatchContentView: View {
             .padding(.bottom, 8)
         }
         .confirmationDialog(
-            "End this capture?",
+            "End this session?",
             isPresented: $confirmStop,
             titleVisibility: .visible
         ) {
-            Button("End Capture", role: .destructive) {
+            Button("End Session", role: .destructive) {
                 controller.stop()
             }
-            Button("Keep Recording", role: .cancel) {}
+            Button("Keep Going", role: .cancel) {}
         } message: {
-            Text("MotionOS will seal the Watch journal before transfer.")
+            Text("MotionOS will save the Watch recording before it syncs to iPhone.")
         }
         .confirmationDialog(
             "Delete this recording?",
@@ -162,7 +162,7 @@ struct WatchContentView: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Indo Board")
                         .font(.subheadline.weight(.semibold))
-                    Text("Camera setup + session control")
+                    Text("Guided setup + controls")
                         .font(.system(size: 9))
                         .foregroundStyle(.secondary)
                 }
@@ -181,9 +181,9 @@ struct WatchContentView: View {
                 indoRemoteStatusContent(status)
             } else {
                 remoteInstruction(
-                    title: "Connecting to camera",
+                    title: "Checking iPhone",
                     detail:
-                        "MotionOS is asking the iPhone for the current setup state.",
+                        "MotionOS is checking the camera and session setup on your iPhone.",
                     symbol: "arrow.triangle.2.circlepath",
                     color: .secondary
                 )
@@ -215,9 +215,9 @@ struct WatchContentView: View {
 
         if phase == "starting" || phase == "preparing" {
             remoteInstruction(
-                title: "Arming sensors",
+                title: "Getting ready",
                 detail:
-                    "Stay on the board. MotionOS is opening the Watch journal and iPhone video together.",
+                    "Stay on the board while MotionOS starts the Watch and iPhone together.",
                 symbol: "hourglass",
                 color: .yellow
             )
@@ -228,7 +228,7 @@ struct WatchContentView: View {
                 title: "Saving session",
                 detail:
                     status.startBlocker
-                        ?? "MotionOS is sealing video and Watch evidence.",
+                        ?? "MotionOS is saving your Watch and iPhone recordings.",
                 symbol: "lock.doc",
                 color: .yellow
             )
@@ -240,21 +240,10 @@ struct WatchContentView: View {
                     HStack(spacing: 6) {
                         Image(systemName: "figure.mind.and.body")
                             .foregroundStyle(.cyan)
-                        Text("COACH")
+                        Text("EXPERIMENTAL CUE")
                             .font(.system(size: 9, weight: .bold))
                             .foregroundStyle(.secondary)
                         Spacer()
-                        if let confidence =
-                            status.coachConfidencePercent {
-                            Text("\(confidence)%")
-                                .font(
-                                    .system(
-                                        size: 9,
-                                        design: .monospaced
-                                    )
-                                )
-                                .foregroundStyle(.secondary)
-                        }
                     }
 
                     Text(headline)
@@ -321,7 +310,7 @@ struct WatchContentView: View {
                 remoteInstruction(
                     title: "Session saved",
                     detail:
-                        "Your camera and Watch evidence are sealed. MotionOS needs a cleaner pose capture before giving a coaching cue.",
+                        "Your session is saved. MotionOS needs a clearer camera view before offering an experimental cue.",
                     symbol: "checkmark.seal.fill",
                     color: .green
                 )
@@ -333,7 +322,7 @@ struct WatchContentView: View {
                 Label(
                     status.coachDrill == nil
                         ? "Next Session"
-                        : "Repeat & Test Cue",
+                        : "Repeat & Test",
                     systemImage: "arrow.clockwise"
                 )
                 .frame(maxWidth: .infinity)

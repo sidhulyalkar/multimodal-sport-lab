@@ -15,7 +15,6 @@ struct SessionLibraryView: View {
                     latestSnapshot(latest)
                 }
 
-                MovementTrendsCard()
                 productRuns
                 library
             }
@@ -49,9 +48,9 @@ struct SessionLibraryView: View {
                 HStack {
                     MotionOSSectionHeader(
                         title: run.outcome == .completed
-                            ? "Latest complete run"
-                            : "Latest aborted attempt",
-                        subtitle: run.protocolKind,
+                            ? "Latest session"
+                            : "Latest attempt",
+                        subtitle: displayProtocolName(run.protocolKind),
                         systemImage: run.outcome == .completed
                             ? "figure.surfing"
                             : "exclamationmark.triangle.fill",
@@ -68,26 +67,25 @@ struct SessionLibraryView: View {
 
                 HStack(spacing: 8) {
                     snapshotMetric(
-                        "SOURCES",
-                        "\(run.sourceCount)/\(run.expectedSourceCount)",
-                        "point.3.connected.trianglepath.dotted"
-                    )
-                    snapshotMetric(
-                        "SYNC",
-                        run.syncComplete
-                            ? "3/3"
-                            : "\(run.syncCueLabels.count)/3",
-                        "waveform.path"
+                        "DURATION",
+                        run.watchSummary.map {
+                            duration($0.imu.durationSeconds)
+                        } ?? "—",
+                        "timer"
                     )
                     snapshotMetric(
                         "WATCH",
-                        run.watchSummary.map {
-                            String(
-                                format: "%.1f Hz",
-                                $0.imu.effectiveHz
-                            )
-                        } ?? "pending",
+                        run.watchJournalURL != nil
+                            ? "Saved"
+                            : "Pending",
                         "applewatch"
+                    )
+                    snapshotMetric(
+                        "VIDEO",
+                        run.cameraVideoURL != nil
+                            ? "Saved"
+                            : "None",
+                        "video.fill"
                     )
                 }
 
@@ -146,8 +144,8 @@ struct SessionLibraryView: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             MotionOSSectionHeader(
-                title: "Latest capture",
-                subtitle: "A quick read from the latest sealed Watch journal",
+                title: "Latest Watch recording",
+                subtitle: "A quick view of the most recent Watch-only session",
                 systemImage: "waveform.path.ecg.rectangle",
                 accent: .indigo
             )
@@ -160,8 +158,8 @@ struct SessionLibraryView: View {
                         "timer"
                     )
                     snapshotMetric(
-                        "IMU",
-                        String(format: "%.1f Hz", summary.imu.effectiveHz),
+                        "MOTION",
+                        "Saved",
                         "waveform.path"
                     )
                     snapshotMetric(
@@ -181,11 +179,8 @@ struct SessionLibraryView: View {
                             "timer"
                         )
                         snapshotMetric(
-                            "IMU",
-                            String(
-                                format: "%.1f Hz",
-                                summary.imu.effectiveHz
-                            ),
+                            "MOTION",
+                            "Saved",
                             "waveform.path"
                         )
                     }
@@ -309,12 +304,12 @@ struct SessionLibraryView: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
-                    Text(run.protocolKind)
+                    Text(displayProtocolName(run.protocolKind))
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.primary)
 
                     if run.outcome == .aborted {
-                        Text("ABORTED")
+                        Text("STOPPED EARLY")
                             .font(.system(size: 9, weight: .bold))
                             .foregroundStyle(.yellow)
                     }
@@ -325,14 +320,16 @@ struct SessionLibraryView: View {
                         Text(date, style: .date)
                     }
                     Text("·")
-                    Text(run.captureModeLabel)
-                    Text("·")
-                    Text("\(run.sourceCount)/\(run.expectedSourceCount) sources")
+                    Text(
+                        run.outcome == .completed
+                            ? "Completed"
+                            : "Stopped early"
+                    )
                     Text("·")
                     Text(
                         run.syncComplete
-                            ? "3/3 sync"
-                            : "\(run.syncCueLabels.count)/3 sync"
+                            ? "Timing ready"
+                            : "Timing needs review"
                     )
                 }
                 .font(.caption)
@@ -344,12 +341,12 @@ struct SessionLibraryView: View {
                         present: run.watchJournalURL != nil
                     )
                     sourceDot(
-                        "Camera",
+                        "iPhone",
                         present: run.cameraVideoURL != nil
                     )
                     if run.externalVideoURL != nil {
                         sourceDot(
-                            "Action 4",
+                            "External",
                             present: true
                         )
                     }
@@ -385,7 +382,7 @@ struct SessionLibraryView: View {
     private var library: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Watch recordings")
+                Text("Watch-only recordings")
                     .font(.headline)
 
                 Spacer(minLength: 0)
@@ -402,11 +399,11 @@ struct SessionLibraryView: View {
                                 endPoint: .trailing
                             )
                         )
-                    Text("No sealed sessions yet")
+                    Text("No additional recordings yet")
                         .font(.headline)
                     Text(
-                        "Complete your first Watch or Indo Board capture "
-                            + "and MotionOS will build the library here."
+                        "Guided activity sessions and standalone Watch "
+                            + "recordings will appear here after they are saved."
                     )
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -542,6 +539,17 @@ struct SessionLibraryView: View {
                 style: .continuous
             )
         )
+    }
+
+    private func displayProtocolName(
+        _ raw: String
+    ) -> String {
+        if raw == FieldProtocolKind.indoBoard.rawValue {
+            return "Indo Board"
+        }
+        return raw
+            .replacingOccurrences(of: "_", with: " ")
+            .localizedCapitalized
     }
 
     private func sessionTitle(
