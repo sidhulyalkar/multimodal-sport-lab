@@ -17,19 +17,17 @@ struct ProductRunDetailView: View {
     @State private var savedFeedback:
         ProductSessionFeedback?
     @State private var feedbackError: String?
+    @State private var showTechnicalDetails = false
 
     var body: some View {
         ScrollView {
             LazyVStack(spacing: MotionOSDesign.pageSpacing) {
                 hero
-                sourceMap
 
                 if run.cameraVideoURL != nil,
                    run.cameraJournalURL != nil {
                     replayEntry
                 }
-
-                protocolEvidence
 
                 if let summary = run.watchSummary {
                     watchSummary(summary)
@@ -49,7 +47,13 @@ struct ProductRunDetailView: View {
                 }
 
                 feedback
-                evidence
+                technicalDetailsControl
+
+                if showTechnicalDetails {
+                    sourceMap
+                    protocolEvidence
+                    evidence
+                }
             }
             .motionOSPageWidth()
             .padding(.horizontal, MotionOSDesign.pageHorizontalPadding)
@@ -99,7 +103,7 @@ struct ProductRunDetailView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(run.protocolKind)
+                    Text(displayProtocolName(run.protocolKind))
                         .font(.title2.weight(.bold))
 
                     if let date = run.startedAt ?? run.sealedAt {
@@ -117,82 +121,128 @@ struct ProductRunDetailView: View {
                 Spacer(minLength: 8)
 
                 MotionOSStatusBadge(
-                    title: "SEALED",
-                    systemImage: "checkmark.seal.fill",
-                    color: .green
-                )
-            }
-
-            Text(run.runID)
-                .font(.system(.caption, design: .monospaced))
-                .foregroundStyle(.secondary)
-                .textSelection(.enabled)
-
-            if let captureMode = run.captureMode {
-                Label(
-                    captureMode,
-                    systemImage: "slider.horizontal.3"
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
-
-            FlowLayout(spacing: 8) {
-                MotionOSStatusBadge(
                     title: run.outcome == .completed
-                        ? "COMPLETE"
-                        : "ABORTED",
+                        ? "SAVED"
+                        : "STOPPED EARLY",
                     systemImage: run.outcome == .completed
-                        ? "checkmark.seal.fill"
+                        ? "checkmark.circle.fill"
                         : "exclamationmark.triangle.fill",
                     color: run.outcome == .completed
                         ? .green
                         : .yellow
                 )
-                MotionOSStatusBadge(
-                    title: run.captureModeLabel,
-                    systemImage: "scope",
-                    color: .purple
+            }
+
+            HStack(spacing: 8) {
+                sessionSourcePill(
+                    "Watch",
+                    symbol: "applewatch",
+                    ready: run.watchJournalURL != nil
                 )
-                MotionOSStatusBadge(
-                    title: "\(run.sourceCount)/\(run.expectedSourceCount) sources",
-                    systemImage: "point.3.connected.trianglepath.dotted",
-                    color: run.evidenceComplete ? .green : .indigo
+                sessionSourcePill(
+                    "Video",
+                    symbol: "video.fill",
+                    ready: run.cameraVideoURL != nil
                 )
-                MotionOSStatusBadge(
-                    title: run.syncComplete
-                        ? "3/3 sync"
-                        : "\(run.syncCueLabels.count)/3 sync",
-                    systemImage: run.syncComplete
-                        ? "checkmark.shield.fill"
-                        : "waveform.path",
-                    color: run.syncComplete
-                        ? .green
-                        : .yellow
+                sessionSourcePill(
+                    "Timing",
+                    symbol: "clock.arrow.2.circlepath",
+                    ready: run.syncComplete
                 )
-                if run.failureNoteCount > 0 {
-                    MotionOSStatusBadge(
-                        title: "\(run.failureNoteCount) notes",
-                        systemImage: "exclamationmark.bubble",
-                        color: .yellow
-                    )
-                }
+            }
+
+            if run.outcome == .aborted {
+                Text(
+                    "This attempt is kept for review but excluded from "
+                        + "longitudinal comparisons."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
             }
         }
         .cardStyle()
     }
 
+    private func sessionSourcePill(
+        _ title: String,
+        symbol: String,
+        ready: Bool
+    ) -> some View {
+        Label(
+            ready ? title : "\(title) pending",
+            systemImage: ready
+                ? "checkmark.circle.fill"
+                : symbol
+        )
+        .font(.caption.weight(.semibold))
+        .foregroundStyle(ready ? Color.green : Color.secondary)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+        .background(
+            (ready ? Color.green : Color.secondary).opacity(0.07),
+            in: RoundedRectangle(
+                cornerRadius: 11,
+                style: .continuous
+            )
+        )
+    }
+
+    private var technicalDetailsControl: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                showTechnicalDetails.toggle()
+            }
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "wrench.and.screwdriver")
+                    .foregroundStyle(.secondary)
+                    .frame(width: 30)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Technical details")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                    Text(
+                        "Sources, synchronization, protocol records, and "
+                            + "provenance"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+
+                Spacer(minLength: 8)
+
+                Image(
+                    systemName: showTechnicalDetails
+                        ? "chevron.up"
+                        : "chevron.down"
+                )
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.tertiary)
+            }
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .cardStyle()
+        .accessibilityLabel(
+            showTechnicalDetails
+                ? "Hide technical details"
+                : "Show technical details"
+        )
+    }
+
     private var sourceMap: some View {
         VStack(alignment: .leading, spacing: 12) {
             MotionOSSectionHeader(
-                title: "Evidence map",
-                subtitle: "Independent source artifacts linked through this run",
+                title: "Recording sources",
+                subtitle: "Technical source and provenance status for this session",
                 systemImage: "point.3.connected.trianglepath.dotted",
                 accent: .cyan
             )
 
             sourceRow(
-                "Operator protocol",
+                "Session protocol",
                 symbol: "list.clipboard.fill",
                 ready: true,
                 detail: "sealed"
@@ -202,16 +252,16 @@ struct ProductRunDetailView: View {
                 symbol: "applewatch",
                 ready: run.watchJournalURL != nil,
                 detail: run.watchJournalURL != nil
-                    ? "journal recovered"
-                    : "awaiting journal"
+                    ? "recording available"
+                    : "waiting for sync"
             )
             sourceRow(
                 "iPhone camera",
                 symbol: "camera.fill",
                 ready: run.cameraVideoURL != nil,
                 detail: run.cameraVideoURL != nil
-                    ? "video + frame evidence"
-                    : "not linked"
+                    ? "video available"
+                    : "not available"
             )
             sourceRow(
                 "Action 4",
@@ -239,8 +289,8 @@ struct ProductRunDetailView: View {
             )
 
             Text(
-                "Sources remain independent. This screen is a provenance "
-                    + "map, not proof that their clocks are fully synchronized."
+                "These technical records keep each source traceable. Timing "
+                    + "status is reported separately from source availability."
             )
             .font(.caption2)
             .foregroundStyle(.secondary)
@@ -312,10 +362,10 @@ struct ProductRunDetailView: View {
     private var protocolEvidence: some View {
         VStack(alignment: .leading, spacing: 10) {
             MotionOSSectionHeader(
-                title: "Protocol evidence",
+                title: "Session timing details",
                 subtitle:
-                    "\(run.completedBlockIDs.count) blocks complete · "
-                    + "\(run.syncCueLabels.count) Watch-backed sync cues",
+                    "\(run.completedBlockIDs.count) blocks recorded · "
+                    + "\(run.syncCueLabels.count) alignment gestures captured",
                 systemImage: "list.number",
                 accent: run.syncComplete ? .green : .yellow
             )
@@ -354,13 +404,8 @@ struct ProductRunDetailView: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             MotionOSSectionHeader(
-                title: "Watch movement trace",
-                subtitle:
-                    String(
-                        format: "%.1f Hz · %.0f ms max gap",
-                        summary.imu.effectiveHz,
-                        summary.imu.maxGapMS
-                    ),
+                title: "Movement snapshot",
+                subtitle: "Descriptive Watch signals from this session",
                 systemImage: "waveform.path.ecg",
                 accent: .indigo
             )
@@ -371,7 +416,7 @@ struct ProductRunDetailView: View {
                     duration(summary.imu.durationSeconds)
                 )
                 summaryMetric(
-                    "Accel RMS",
+                    "Movement",
                     summary.motion.userAccelerationRMSG.map {
                         String(format: "%.2f g", $0)
                     } ?? "—"
@@ -1259,6 +1304,17 @@ struct ProductRunDetailView: View {
                     + error.localizedDescription
             )
         }
+    }
+
+    private func displayProtocolName(
+        _ raw: String
+    ) -> String {
+        if raw == FieldProtocolKind.indoBoard.rawValue {
+            return "Indo Board"
+        }
+        return raw
+            .replacingOccurrences(of: "_", with: " ")
+            .localizedCapitalized
     }
 
     private func humanize(
