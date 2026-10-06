@@ -8,7 +8,7 @@ import SwiftUI
 /// live. The sealed Watch journal remains the evidence.
 struct LiveObservatoryView: View {
     enum Style {
-        /// The Observe tab hero, including the calm idle state.
+        /// The Home tab hero, including the calm idle state.
         case hero
         /// Inside a capture workspace, where a session is already running.
         case embedded
@@ -115,13 +115,13 @@ struct LiveObservatoryView: View {
 
     private func idleContent(_ observation: WatchObservation) -> IdleContent {
         let startAction = onStartCapture.map {
-            IdleAction(title: "Start Capture", symbol: "record.circle", perform: $0)
+            IdleAction(title: "Start Session", symbol: "record.circle", perform: $0)
         }
 
         switch observation.observatory {
         case .checking:
             return IdleContent(
-                title: "Checking Watch",
+                title: "Checking your Watch",
                 detail: observation.link.detail,
                 symbol: "applewatch",
                 tint: .secondary,
@@ -134,13 +134,13 @@ struct LiveObservatoryView: View {
                 symbol: observation.link.symbol,
                 tint: .orange,
                 action: onOpenDevices.map {
-                    IdleAction(title: "Open Devices", symbol: "applewatch", perform: $0)
+                    IdleAction(title: "Fix Setup", symbol: "applewatch", perform: $0)
                 }
             )
         case .saved:
             return IdleContent(
-                title: "Recording saved",
-                detail: "The Watch journal is sealed and syncing to Sessions.",
+                title: "Session saved",
+                detail: "Your Watch recording is safely saved and will appear in Sessions when syncing finishes.",
                 symbol: "checkmark.seal.fill",
                 tint: .green,
                 action: startAction
@@ -157,8 +157,8 @@ struct LiveObservatoryView: View {
             )
         default:
             return IdleContent(
-                title: "No active movement session",
-                detail: "Start a capture and live movement appears here.",
+                title: "Ready when you are",
+                detail: "Start a session and MotionOS will guide the setup for the activity you choose.",
                 symbol: "waveform.path.ecg",
                 tint: .indigo,
                 action: startAction
@@ -201,7 +201,7 @@ struct LiveObservatoryView: View {
 
             HStack(spacing: 10) {
                 metric(
-                    title: "Motion",
+                    title: "Movement",
                     value: phase.isLive
                         ? snapshot?.motion.map { String(format: "%.2f", $0.userAccelerationPeakG) }
                         : nil,
@@ -227,7 +227,7 @@ struct LiveObservatoryView: View {
             }
 
             if style == .hero || snapshot != nil {
-                DisclosureGroup("Signal details") {
+                DisclosureGroup("Technical details") {
                     signalDetails(snapshot)
                         .padding(.top, 8)
                 }
@@ -394,7 +394,7 @@ struct LiveObservatoryView: View {
                         + "\(diagnostics.invalidPackets) invalid"
                 )
             }
-            Text("Live preview only. The sealed Watch journal is the record.")
+            Text("Live preview only. The saved Watch recording remains the source for later analysis.")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
                 .padding(.top, 2)
