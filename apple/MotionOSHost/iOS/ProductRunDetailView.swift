@@ -657,9 +657,8 @@ struct ProductRunDetailView: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             MotionOSSectionHeader(
-                title: "Coach",
-                subtitle:
-                    "\(Int((coach.confidence * 100).rounded()))% confidence · \(coach.evidenceLabel)",
+                title: "Experimental session cue",
+                subtitle: coach.evidenceLabel,
                 systemImage: "figure.mind.and.body",
                 accent: .cyan
             )
@@ -712,11 +711,11 @@ struct ProductRunDetailView: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(
                             improved
-                                ? "Cue response improved"
+                                ? "Target moved in the intended direction"
                                 : (
                                     opposite
-                                        ? "Cue response moved the wrong way"
-                                        : "Cue effect was not clear"
+                                        ? "Target moved in the opposite direction"
+                                        : "No clear change yet"
                                 )
                         )
                         .font(.caption.weight(.bold))
@@ -756,7 +755,7 @@ struct ProductRunDetailView: View {
             }
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("DRILL")
+                Text("REPEAT WITH")
                     .font(.caption2.weight(.bold))
                     .foregroundStyle(.indigo)
                 Text(coach.drill)
@@ -786,8 +785,11 @@ struct ProductRunDetailView: View {
             }
 
             Text(
-                "This is an evidence-linked coaching hypothesis, not a diagnosis. "
-                    + "The next comparable attempt is used to test whether the cue helped."
+                "This is an experimental hypothesis from the earlier heuristic "
+                    + "coach. It is not yet the reviewed personal baseline or "
+                    + "session-delta interpretation. A later comparable attempt "
+                    + "can test the cue, but the result is not automatically "
+                    + "proof of improvement."
             )
             .font(.caption2)
             .foregroundStyle(.tertiary)
@@ -994,7 +996,7 @@ struct ProductRunDetailView: View {
                             .buttonStyle(.plain)
                         }
 
-                        Text("WAS THE COACHING USEFUL?")
+                        Text("WAS THIS CUE USEFUL?")
                             .font(.caption2.weight(.bold))
                             .foregroundStyle(.secondary)
 
