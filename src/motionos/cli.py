@@ -48,6 +48,7 @@ from .experiments import (
     verify_experiment_manifest,
     verify_grouped_split,
 )
+from .human_corrections import build_human_correction_receipt
 from .indo_annotations import (
     build_annotation_queue,
     export_equipment_observations,
@@ -97,7 +98,6 @@ from .indo_shadow_eval import (
 from .indo_shadow_gate import (
     assess_markerless_shadow_gate,
 )
-from .human_corrections import build_human_correction_receipt
 from .insole import (
     import_opengo_text_export,
     write_p2_capture_receipt,
