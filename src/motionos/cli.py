@@ -112,6 +112,7 @@ from .p1 import (
     write_impulse_clock_observations,
     write_p1_receipt,
 )
+from .personal_baseline import build_personal_movement_baseline
 from .public_data import index_totalcapture
 from .public_video import build_public_video_catalog
 from .qc import session_qc
@@ -341,6 +342,16 @@ def _parser() -> argparse.ArgumentParser:
     reviewed_labels.add_argument("manifest")
     reviewed_labels.add_argument("output_labels")
     reviewed_labels.add_argument("output_receipt")
+
+    personal_baseline = sub.add_parser(
+        "build-personal-movement-baseline",
+        help=(
+            "build context-bound personal distributions from explicitly "
+            "accepted reviewed labels"
+        ),
+    )
+    personal_baseline.add_argument("spec")
+    personal_baseline.add_argument("output")
 
     calibration = sub.add_parser(
         "build-calibration-bundle",
@@ -1067,6 +1078,31 @@ def main(argv: list[str] | None = None) -> int:
                     "rejected_count": payload["summary"]["rejected_count"],
                     "output_labels": args.output_labels,
                     "output_receipt": args.output_receipt,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    if args.command == "build-personal-movement-baseline":
+        payload = build_personal_movement_baseline(
+            args.spec,
+            args.output,
+        )
+        print(
+            json.dumps(
+                {
+                    "schema_version": payload["schema_version"],
+                    "profile_id": payload["profile_id"],
+                    "sport": payload["sport"],
+                    "source_session_count": payload["summary"][
+                        "source_session_count"
+                    ],
+                    "baseline_group_count": payload["summary"][
+                        "baseline_group_count"
+                    ],
+                    "output": args.output,
                 },
                 indent=2,
                 sort_keys=True,
