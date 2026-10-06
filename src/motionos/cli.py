@@ -97,6 +97,7 @@ from .indo_shadow_eval import (
 from .indo_shadow_gate import (
     assess_markerless_shadow_gate,
 )
+from .human_corrections import build_human_correction_receipt
 from .insole import (
     import_opengo_text_export,
     write_p2_capture_receipt,
@@ -314,6 +315,18 @@ def _parser() -> argparse.ArgumentParser:
     replay_annotation_worklist.add_argument("manifest")
     replay_annotation_worklist.add_argument("labels")
     replay_annotation_worklist.add_argument("output")
+
+    human_correction_receipt = sub.add_parser(
+        "build-human-correction-receipt",
+        help=(
+            "record explicit human accept/correct/reject decisions against "
+            "hash-bound replay annotation candidates"
+        ),
+    )
+    human_correction_receipt.add_argument("spec")
+    human_correction_receipt.add_argument("worklist")
+    human_correction_receipt.add_argument("labels")
+    human_correction_receipt.add_argument("output")
 
     calibration = sub.add_parser(
         "build-calibration-bundle",
@@ -987,6 +1000,29 @@ def main(argv: list[str] | None = None) -> int:
                     "video_only_task_count": payload["summary"][
                         "video_only_task_count"
                     ],
+                    "output": args.output,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    if args.command == "build-human-correction-receipt":
+        payload = build_human_correction_receipt(
+            args.spec,
+            args.worklist,
+            args.labels,
+            args.output,
+        )
+        print(
+            json.dumps(
+                {
+                    "schema_version": payload["schema_version"],
+                    "run_id": payload["run_id"],
+                    "decision_count": payload["summary"]["decision_count"],
+                    "corrected_count": payload["summary"]["corrected_count"],
+                    "rejected_count": payload["summary"]["rejected_count"],
                     "output": args.output,
                 },
                 indent=2,
