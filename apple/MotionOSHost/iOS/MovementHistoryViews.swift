@@ -25,13 +25,13 @@ struct MovementTrendsCard: View {
 
         return VStack(alignment: .leading, spacing: 13) {
             MotionOSSectionHeader(
-                title: "Movement history",
+                title: "Watch signal history",
                 subtitle: historySubtitle,
                 systemImage: "chart.xyaxis.line",
                 accent: .purple
             )
 
-            Picker("Movement history metric", selection: $metric) {
+            Picker("Watch signal history metric", selection: $metric) {
                 ForEach(Metric.allCases) { item in
                     Text(item.rawValue).tag(item)
                 }
@@ -98,7 +98,7 @@ struct MovementTrendsCard: View {
                             formatted(last.value)
                         )
                         historyMetric(
-                            "CHANGE",
+                            "DIFFERENCE",
                             signedDelta(
                                 latest: last.value,
                                 previous: first.value
@@ -111,12 +111,12 @@ struct MovementTrendsCard: View {
                     Image(systemName: "chart.line.uptrend.xyaxis")
                         .font(.title2)
                         .foregroundStyle(.purple)
-                    Text("Two comparable sessions unlock trends")
+                    Text("Two sessions unlock signal history")
                         .font(.subheadline.weight(.semibold))
                     Text(
-                        "MotionOS will compare descriptive Watch-derived "
-                            + "signals across repeated Indo Board sessions "
-                            + "without turning them into a mystery score."
+                        "This chart shows descriptive Watch signals across "
+                            + "completed Indo Board sessions. Personal ranges "
+                            + "use the stricter reviewed comparison pipeline."
                     )
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -127,9 +127,9 @@ struct MovementTrendsCard: View {
             }
 
             Text(
-                "These are descriptive Watch-session trends. Changes can reflect "
-                    + "task intensity, placement, fatigue, or protocol differences "
-                    + "and are not interpreted as improvement or decline."
+                "This legacy signal history is not context-matched and is not "
+                    + "the personal movement baseline. Differences can reflect task "
+                    + "intensity, Watch placement, fatigue, or setup changes."
             )
             .font(.caption2)
             .foregroundStyle(.tertiary)
