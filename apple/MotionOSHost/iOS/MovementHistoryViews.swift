@@ -276,7 +276,7 @@ struct PreviousRunComparisonCard: View {
            let previousSummary = previous.watchSummary {
             VStack(alignment: .leading, spacing: 12) {
                 MotionOSSectionHeader(
-                    title: "Compared with previous session",
+                    title: "Quick signal comparison",
                     subtitle: comparisonSubtitle(previous),
                     systemImage: "arrow.left.arrow.right",
                     accent: .cyan
@@ -285,7 +285,7 @@ struct PreviousRunComparisonCard: View {
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: 8) {
                         deltaTile(
-                            "Accel RMS",
+                            "Movement",
                             delta(
                                 currentSummary.motion
                                     .userAccelerationRMSG,
@@ -295,7 +295,7 @@ struct PreviousRunComparisonCard: View {
                             unit: "g"
                         )
                         deltaTile(
-                            "Rotation RMS",
+                            "Rotation",
                             delta(
                                 currentSummary.motion
                                     .rotationRateRMSRadS,
@@ -305,7 +305,7 @@ struct PreviousRunComparisonCard: View {
                             unit: "rad/s"
                         )
                         deltaTile(
-                            "Mean HR",
+                            "Heart rate",
                             delta(
                                 currentSummary.heartRate.meanBPM,
                                 previousSummary.heartRate.meanBPM
@@ -318,7 +318,7 @@ struct PreviousRunComparisonCard: View {
                     VStack(spacing: 8) {
                         HStack(spacing: 8) {
                             deltaTile(
-                                "Accel RMS",
+                                "Movement",
                                 delta(
                                     currentSummary.motion
                                         .userAccelerationRMSG,
@@ -328,7 +328,7 @@ struct PreviousRunComparisonCard: View {
                                 unit: "g"
                             )
                             deltaTile(
-                                "Rotation RMS",
+                                "Rotation",
                                 delta(
                                     currentSummary.motion
                                         .rotationRateRMSRadS,
@@ -339,7 +339,7 @@ struct PreviousRunComparisonCard: View {
                             )
                         }
                         deltaTile(
-                            "Mean HR",
+                            "Heart rate",
                             delta(
                                 currentSummary.heartRate.meanBPM,
                                 previousSummary.heartRate.meanBPM
@@ -351,9 +351,10 @@ struct PreviousRunComparisonCard: View {
                 }
 
                 Text(
-                    "Deltas are descriptive. MotionOS does not label a positive "
-                        + "or negative change as better or worse without a "
-                        + "validated task-specific interpretation."
+                    "This is a quick Watch-signal comparison for the same "
+                        + "activity and recording mode. It is not the reviewed, "
+                        + "exact-context personal baseline. Differences are "
+                        + "descriptive only."
                 )
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
@@ -392,7 +393,7 @@ struct PreviousRunComparisonCard: View {
         guard let currentMode = run.productManifest?.captureMode,
               let otherMode = other.productManifest?.captureMode
         else {
-            return true
+            return false
         }
         return currentMode == otherMode
     }
@@ -401,9 +402,9 @@ struct PreviousRunComparisonCard: View {
         _ previous: ProductRunRecord
     ) -> String {
         guard let date = previous.startedAt ?? previous.sealedAt else {
-            return "Previous comparable sealed run"
+            return "Same activity + recording mode"
         }
-        return "Previous comparable run · "
+        return "Same activity + recording mode · "
             + date.formatted(
                 date: .abbreviated,
                 time: .omitted
