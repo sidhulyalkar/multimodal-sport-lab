@@ -14,6 +14,10 @@ struct IndoBoardSessionView: View {
     @State private var selectedExternalVideoItem: PhotosPickerItem?
     @State private var showMeasurementDetails = false
     @State private var showSessionOptions = false
+    @AppStorage(
+        MotionOSSessionContextFactory.indoBoardStanceDefaultsKey
+    ) private var stanceRawValue =
+        IndoBoardStancePreference.variesOrUnsure.rawValue
 
     var body: some View {
         ScrollView {
@@ -134,6 +138,7 @@ struct IndoBoardSessionView: View {
         switch session.phase {
         case .idle, .preparing, .ready, .failed:
             captureModeCard
+            sessionContextCard
             sourcePreflight
 
             if camera.phase == .ready
@@ -219,6 +224,57 @@ struct IndoBoardSessionView: View {
                     featurePill("2 min", "timer")
                 }
             }
+        }
+        .cardStyle()
+    }
+
+    private var sessionContextCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            MotionOSSectionHeader(
+                title: "Your setup",
+                subtitle: "Remembered for like-for-like comparisons",
+                systemImage: "person.crop.circle",
+                accent: .indigo
+            )
+
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Foot position")
+                        .font(.subheadline.weight(.semibold))
+                    Text(
+                        "Choose the foot you normally place toward the front "
+                            + "of the board."
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 8)
+
+                Picker(
+                    "Foot position",
+                    selection: stanceBinding
+                ) {
+                    ForEach(
+                        IndoBoardStancePreference.allCases
+                    ) { stance in
+                        Text(stance.title)
+                            .tag(stance)
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+            }
+
+            Text(
+                "MotionOS stores this preference locally and writes the "
+                    + "selected value into each session so sessions with "
+                    + "different setups are not silently pooled."
+            )
+            .font(.caption2)
+            .foregroundStyle(.tertiary)
+            .fixedSize(horizontal: false, vertical: true)
         }
         .cardStyle()
     }
@@ -565,7 +621,8 @@ struct IndoBoardSessionView: View {
                             phone: phone,
                             camera: camera,
                             fieldRun: fieldRun,
-                            pod: pod
+                            pod: pod,
+                            context: currentSessionContext
                         )
                     }
                 } label: {
@@ -1827,6 +1884,32 @@ struct IndoBoardSessionView: View {
             return "Open MotionOS on Watch and enable Health"
         }
         return "Ready"
+    }
+
+    private var stanceBinding:
+        Binding<IndoBoardStancePreference> {
+        Binding(
+            get: {
+                IndoBoardStancePreference(
+                    rawValue: stanceRawValue
+                ) ?? .variesOrUnsure
+            },
+            set: { stance in
+                stanceRawValue = stance.rawValue
+            }
+        )
+    }
+
+    private var currentSessionContext:
+        ProductSessionManifest.SessionContext {
+        MotionOSSessionContextFactory.indoBoard(
+            profileID: MotionOSLocalProfile.profileID(),
+            stance:
+                IndoBoardStancePreference(
+                    rawValue: stanceRawValue
+                ) ?? .variesOrUnsure,
+            captureMode: session.captureMode
+        )
     }
 
     private var externalCameraEnabled: Binding<Bool> {
