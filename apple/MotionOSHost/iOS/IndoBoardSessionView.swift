@@ -356,6 +356,20 @@ struct IndoBoardSessionView: View {
                 symbol: "applewatch"
             )
 
+            if !watchPreflightReady {
+                NavigationLink {
+                    WatchCaptureToolsView()
+                } label: {
+                    Label(
+                        "Fix Apple Watch Setup",
+                        systemImage: "arrow.right.circle"
+                    )
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity, minHeight: 40)
+                }
+                .buttonStyle(.bordered)
+            }
+
             readinessRow(
                 title: "iPhone camera",
                 detail: cameraDetail,
@@ -367,14 +381,28 @@ struct IndoBoardSessionView: View {
                 symbol: "camera.fill"
             )
 
+            if !cameraPreflightReady {
+                NavigationLink {
+                    CameraCaptureCard()
+                } label: {
+                    Label(
+                        "Fix Camera Setup",
+                        systemImage: "camera"
+                    )
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity, minHeight: 40)
+                }
+                .buttonStyle(.bordered)
+            }
+
             boardTrackingRow
 
             if session.requiresExternalCamera {
                 readinessRow(
-                    title: "Action 4",
+                    title: "External camera",
                     detail: session.externalCameraConfirmed
-                        ? "recording confirmed · fixed tripod"
-                        : "roll / voice-start / use DJI remote, then confirm",
+                        ? "Recording confirmed"
+                        : "Start recording, then confirm above",
                     ready: session.externalCameraConfirmed,
                     symbol: "video.fill"
                 )
@@ -446,18 +474,13 @@ struct IndoBoardSessionView: View {
                 : (hasEvidence ? .yellow : .secondary)
 
         let detail: String = {
-            guard health.sampleCount > 0 else {
-                return "optional · body-only beta still available"
+            if stable {
+                return "Optional enhancement ready"
             }
-            guard hasEvidence else {
-                return "no deck + roller observations in the recent window"
+            if hasEvidence {
+                return "Optional enhancement is intermittent"
             }
-            return String(
-                format:
-                    "%.0f%% visible · %.0f%% confidence",
-                health.coverageFraction * 100,
-                health.meanConfidence * 100
-            )
+            return "Optional · body tracking still works"
         }()
 
         return HStack(spacing: 9) {
@@ -486,18 +509,6 @@ struct IndoBoardSessionView: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
 
-                if hasEvidence {
-                    Text(
-                        "Tracking: \(equipmentSourceLabel(camera.latestIndoBoardState))"
-                            + " · Coaching: "
-                            + equipmentSourceLabel(
-                                camera.latestIndoBoardCoachingState,
-                                fallback: "body pose only"
-                            )
-                    )
-                    .font(.system(size: 9, weight: .medium))
-                    .foregroundStyle(.tertiary)
-                }
             }
 
             Spacer()
@@ -602,7 +613,7 @@ struct IndoBoardSessionView: View {
 
             case .starting:
                 progressRow(
-                    "Starting Watch first, then camera and protocol evidence"
+                    "Starting your Watch and iPhone recording"
                 )
 
             case .countdown:
@@ -1578,13 +1589,13 @@ struct IndoBoardSessionView: View {
     ) -> String {
         switch outcome {
         case .improved:
-            return "This cue helped this attempt"
+            return "Target moved in the intended direction"
         case .oppositeDirection:
-            return "This cue moved the target the wrong way"
+            return "Target moved in the opposite direction"
         case .noClearChange:
-            return "No clear cue effect yet"
+            return "No clear change yet"
         case .insufficientEvidence:
-            return "Cue effect not scored"
+            return "Not enough data to compare"
         }
     }
 
@@ -1655,17 +1666,16 @@ struct IndoBoardSessionView: View {
     private var recoveryCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             MotionOSSectionHeader(
-                title: "Finish Watch capture",
-                subtitle: "The iPhone and operator evidence are already sealed",
+                title: "Finish on Apple Watch",
+                subtitle: "Your iPhone recording is already saved",
                 systemImage: "applewatch.radiowaves.left.and.right",
                 accent: .yellow
             )
 
             Text(
-                "MotionOS could not confirm that the Watch workout stopped. "
-                    + "Open MotionOS on the Watch, stop the capture there, "
-                    + "then recheck. Do not start another product session "
-                    + "until the Watch has left its running state."
+                "MotionOS could not confirm that the Watch session stopped. "
+                    + "Open MotionOS on Apple Watch, end the session there, "
+                    + "then tap Recheck Watch."
             )
             .font(.caption)
             .foregroundStyle(.secondary)
@@ -1692,10 +1702,10 @@ struct IndoBoardSessionView: View {
         ) {
             VStack(alignment: .leading, spacing: 8) {
                 Text(
-                    "Raw Watch, camera, and operator evidence stays preserved. "
-                        + "Live movement values are derived signals. Stronger "
-                        + "biomechanics claims remain gated on calibration and "
-                        + "post-session quality checks."
+                    "MotionOS keeps the original Watch and camera recordings "
+                        + "separate from measurements derived from them. More "
+                        + "advanced movement claims require additional quality "
+                        + "checks and calibration."
                 )
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -1810,19 +1820,14 @@ struct IndoBoardSessionView: View {
 
     private var cameraDetail: String {
         guard let configuration = camera.configuration else {
-            return camera.phase.rawValue
+            return camera.phase.rawValue.capitalized
         }
 
         if session.cameraProfileReady(camera) {
-            return String(
-                format: "%dx%d · %.0f fps · stab off",
-                configuration.formatWidth,
-                configuration.formatHeight,
-                configuration.configuredFrameRate
-            )
+            return "Ready"
         }
 
-        return "profile needs review"
+        return "Camera settings need attention"
     }
 
     private var watchPreflightReady: Bool {
@@ -1861,13 +1866,17 @@ struct IndoBoardSessionView: View {
         )
     }
 
+    private var cameraPreflightReady: Bool {
+        (
+            camera.phase == .ready
+                || camera.phase == .evidenceReady
+                || camera.phase == .recording
+        ) && session.cameraProfileReady(camera)
+    }
+
     private var preflightReady: Bool {
         watchPreflightReady
-            && (
-                camera.phase == .ready
-                    || camera.phase == .evidenceReady
-            )
-            && session.cameraProfileReady(camera)
+            && cameraPreflightReady
             && (phone.iPhoneBatteryLevel ?? 0) >= 0.20
             && (phone.iPhoneAvailableStorageBytes ?? 0)
                 >= 5_000_000_000
@@ -1879,8 +1888,8 @@ struct IndoBoardSessionView: View {
 
     private var preflightSubtitle: String {
         preflightReady
-            ? "Required sources are ready for a coordinated run"
-            : "Resolve the yellow items before starting"
+            ? "You're ready to start"
+            : "Fix the required items below before starting"
     }
 
     private var phaseLabel: String {
@@ -1898,11 +1907,11 @@ struct IndoBoardSessionView: View {
         case .running:
             "RECORDING"
         case .finishing:
-            "SEALING"
+            "SAVING"
         case .watchStopRequired:
             "WATCH STOP"
         case .sealed:
-            "SEALED"
+            "SAVED"
         case .failed:
             "CHECK"
         }
@@ -1944,21 +1953,21 @@ struct IndoBoardSessionView: View {
     private var controlTitle: String {
         switch session.phase {
         case .idle, .failed:
-            "Prepare capture"
+            "Get ready"
         case .preparing:
-            "Running preflight"
+            "Checking setup"
         case .ready:
             "Ready to record"
         case .starting:
-            "Starting sources"
+            "Starting session"
         case .countdown:
             "Get ready"
         case .running:
             "Session live"
         case .finishing:
-            "Sealing evidence"
+            "Saving session"
         case .watchStopRequired:
-            "Finish Watch capture"
+            "Finish on Apple Watch"
         case .sealed:
             "Session complete"
         }
@@ -1967,23 +1976,23 @@ struct IndoBoardSessionView: View {
     private var controlSubtitle: String {
         switch session.phase {
         case .idle, .failed:
-            "One workflow coordinates the sources without merging their native clocks"
+            "MotionOS will check the devices required for this session"
         case .preparing:
-            "MotionOS is checking required capture conditions"
+            "Checking the required devices and recording conditions"
         case .ready:
-            "Watch first, camera second, protocol evidence third"
+            "Everything required is ready"
         case .starting:
-            "Waiting for the Watch workout before video capture begins"
+            "Starting the Watch before the countdown begins"
         case .countdown:
-            "Pre-roll is recording; the protocol starts when the countdown ends"
+            "Recording has started. The guided session begins after the countdown"
         case .running:
-            "Follow the protocol and collect three journal-backed sync cues"
+            "Follow the guided blocks. Your Watch will tap for three quick alignment gestures"
         case .finishing:
-            "Each source closes into its own durable evidence artifact"
+            "Saving the Watch and iPhone recordings"
         case .watchStopRequired:
-            "The Watch journal still needs a manual stop before this run is fully closed"
+            "End the session on Apple Watch, then recheck here"
         case .sealed:
-            "Review the recovered Watch session in Sessions when transfer completes"
+            "Your session will appear in Sessions when syncing finishes"
         }
     }
 
