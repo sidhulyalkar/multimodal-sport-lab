@@ -524,26 +524,6 @@ struct IndoBoardSessionView: View {
         }
     }
 
-    private func equipmentSourceLabel(
-        _ state: IndoBoardBalanceState?,
-        fallback: String = "none"
-    ) -> String {
-        guard let state else {
-            return fallback
-        }
-
-        switch state.provenance {
-        case .fiducialMeasured:
-            return "QR measured"
-        case .manualAnnotated:
-            return "reviewed"
-        case .modelEstimated:
-            return "markerless model"
-        case .geometricProxy:
-            return "geometric proxy"
-        }
-    }
-
     @ViewBuilder
     private var sessionControl: some View {
         VStack(alignment: .leading, spacing: 13) {
@@ -1819,7 +1799,7 @@ struct IndoBoardSessionView: View {
     }
 
     private var cameraDetail: String {
-        guard let configuration = camera.configuration else {
+        guard camera.configuration != nil else {
             return camera.phase.rawValue.capitalized
         }
 
