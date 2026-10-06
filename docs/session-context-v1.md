@@ -64,9 +64,9 @@ local UUID should not quietly become an account system.
 ProductSessionManifest now optionally carries:
 
     context
-      profile_id
-      activity_id
-      protocol_id
+      profileID
+      activityID
+      protocolID
       dimensions
 
 For the current Indo Board flow the dimensions include stance and capture mode.
