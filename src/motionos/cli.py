@@ -118,6 +118,7 @@ from .qc import session_qc
 from .replay import replay_frames
 from .replay_annotation import build_replay_annotation_worklist
 from .replay_review import build_replay_review_queue
+from .reviewed_labels import materialize_reviewed_labels
 from .session import SessionReader
 from .simulate import simulate_session
 from .validate import validate_m0_session
@@ -327,6 +328,19 @@ def _parser() -> argparse.ArgumentParser:
     human_correction_receipt.add_argument("worklist")
     human_correction_receipt.add_argument("labels")
     human_correction_receipt.add_argument("output")
+
+    reviewed_labels = sub.add_parser(
+        "materialize-reviewed-labels",
+        help=(
+            "apply an evidence-bound human correction receipt to a new "
+            "reviewed teacher-label artifact"
+        ),
+    )
+    reviewed_labels.add_argument("receipt")
+    reviewed_labels.add_argument("labels")
+    reviewed_labels.add_argument("manifest")
+    reviewed_labels.add_argument("output_labels")
+    reviewed_labels.add_argument("output_receipt")
 
     calibration = sub.add_parser(
         "build-calibration-bundle",
@@ -1024,6 +1038,35 @@ def main(argv: list[str] | None = None) -> int:
                     "corrected_count": payload["summary"]["corrected_count"],
                     "rejected_count": payload["summary"]["rejected_count"],
                     "output": args.output,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    if args.command == "materialize-reviewed-labels":
+        payload = materialize_reviewed_labels(
+            args.receipt,
+            args.labels,
+            args.manifest,
+            args.output_labels,
+            args.output_receipt,
+        )
+        print(
+            json.dumps(
+                {
+                    "schema_version": payload["schema_version"],
+                    "run_id": payload["run_id"],
+                    "review_decision_count": payload["summary"][
+                        "review_decision_count"
+                    ],
+                    "corrected_field_count": payload["summary"][
+                        "corrected_field_count"
+                    ],
+                    "rejected_count": payload["summary"]["rejected_count"],
+                    "output_labels": args.output_labels,
+                    "output_receipt": args.output_receipt,
                 },
                 indent=2,
                 sort_keys=True,
