@@ -6,7 +6,7 @@ import SwiftUI
 
 enum ProductReplayVideoSource: String, CaseIterable, Identifiable {
     case iPhone = "iPhone"
-    case action4 = "Action 4"
+    case action4 = "External camera"
 
     var id: String { rawValue }
 }
@@ -210,7 +210,7 @@ final class ProductRunReplayController: ObservableObject {
             currentFrame = nil
             isLoading = false
             errorMessage = (
-                "Video is playable, but synchronized pose evidence "
+                "Video is playable, but synchronized pose data "
                     + "could not be loaded: "
                     + error.localizedDescription
             )
@@ -1704,9 +1704,8 @@ struct ProductRunReplayView: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 9) {
             MotionOSSectionHeader(
-                title: "Coach",
-                subtitle:
-                    "(Int((coach.confidence * 100).rounded()))% confidence · hypothesis",
+                title: "Experimental cue",
+                subtitle: coach.evidenceLabel,
                 systemImage: "figure.mind.and.body",
                 accent: .cyan
             )
@@ -1724,8 +1723,9 @@ struct ProductRunReplayView: View {
                 .font(.subheadline.weight(.semibold))
 
             Text(
-                "Use the replay to inspect the frames behind the observation, "
-                    + "then test the cue on the next comparable attempt."
+                "Use the replay to inspect what produced this observation. "
+                    + "This cue comes from the earlier heuristic coach and is "
+                    + "not yet a reviewed personal-baseline interpretation."
             )
             .font(.caption2)
             .foregroundStyle(.tertiary)
@@ -1863,7 +1863,7 @@ struct ExternalVideoPoseOverlay: View {
             }
 
             let badge = Text(
-                "ACTION 4 · SOURCE POSE"
+                "EXTERNAL CAMERA · POSE ESTIMATE"
             )
             .font(
                 .caption2.weight(.bold)
@@ -1879,7 +1879,7 @@ struct ExternalVideoPoseOverlay: View {
             )
         }
         .accessibilityLabel(
-            "Action 4 source-camera body pose overlay"
+            "External camera estimated body pose overlay"
         )
     }
 
