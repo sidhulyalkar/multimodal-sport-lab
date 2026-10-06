@@ -271,7 +271,7 @@ struct ProgressHomeView: View {
         case 1:
             "Repeat a similar session to begin seeing personal trends."
         default:
-            "MotionOS compares repeated sessions without turning movement into one opaque score."
+            "Session history is available now. Personal ranges use only like-for-like reviewed sessions."
         }
     }
 
