@@ -275,6 +275,16 @@ struct IndoBoardSessionView: View {
             .font(.caption2)
             .foregroundStyle(.tertiary)
             .fixedSize(horizontal: false, vertical: true)
+
+            if stanceBinding.wrappedValue == .variesOrUnsure {
+                Label(
+                    "You can still record. Stance-specific personal "
+                        + "comparisons will wait for a more specific setup.",
+                    systemImage: "info.circle"
+                )
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            }
         }
         .cardStyle()
     }
