@@ -10,6 +10,7 @@ public struct ProductSessionManifest: Codable, Equatable, Sendable {
 
     public let schemaVersion: String
     public let runID: String
+    public let profileID: String?
     public let sport: String
     public let captureMode: String
     public let targetDurationSeconds: Double
@@ -121,6 +122,8 @@ public struct ProductSessionManifest: Codable, Equatable, Sendable {
 
     public init(
         runID: String,
+        profileID: String? = nil,
+        sport: String = "indo_board",
         captureMode: String,
         targetDurationSeconds: Double,
         createdAtUTC: String = ISO8601DateFormatter().string(from: Date()),
@@ -144,7 +147,8 @@ public struct ProductSessionManifest: Codable, Equatable, Sendable {
     ) {
         self.schemaVersion = Self.schemaVersion
         self.runID = runID
-        self.sport = "indo_board"
+        self.profileID = profileID
+        self.sport = sport
         self.captureMode = captureMode
         self.targetDurationSeconds = targetDurationSeconds
         self.createdAtUTC = createdAtUTC
@@ -180,6 +184,8 @@ public struct ProductSessionManifest: Codable, Equatable, Sendable {
     ) -> ProductSessionManifest {
         ProductSessionManifest(
             runID: runID,
+            profileID: profileID,
+            sport: sport,
             captureMode: captureMode,
             targetDurationSeconds: targetDurationSeconds,
             createdAtUTC: createdAtUTC,
