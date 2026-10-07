@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct MotionOSActivityDescriptor: Identifiable, Hashable {
+struct MotionOSActivityDescriptor: Identifiable {
     let id: String
     let title: String
     let subtitle: String
@@ -9,17 +9,7 @@ struct MotionOSActivityDescriptor: Identifiable, Hashable {
     let requirementSummary: String
     let accent: Color
 
-    static func == (
-        lhs: MotionOSActivityDescriptor,
-        rhs: MotionOSActivityDescriptor
-    ) -> Bool {
-        lhs.id == rhs.id
-    }
 
-    func hash(into hasher: inout Hasher) {
-        hasher.combine(id)
-    }
-}
 
 enum MotionOSActivityCatalog {
     static let indoBoard = MotionOSActivityDescriptor(
