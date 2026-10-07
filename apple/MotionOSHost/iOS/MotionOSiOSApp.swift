@@ -12,6 +12,7 @@ struct MotionOSiOSApp: App {
     @StateObject private var indoBoardSession =
         IndoBoardSessionCoordinator()
     @StateObject private var runLibrary = ProductRunLibrary()
+    @StateObject private var athleteProfiles = AthleteProfileStore()
 
     var body: some Scene {
         WindowGroup {
@@ -24,6 +25,7 @@ struct MotionOSiOSApp: App {
                 .environmentObject(guidedP0)
                 .environmentObject(indoBoardSession)
                 .environmentObject(runLibrary)
+                .environmentObject(athleteProfiles)
                 .task {
                     coordinator.inbox.refreshCatalog()
                     runLibrary.refresh()
@@ -285,6 +287,7 @@ struct MotionOSiOSApp: App {
             }
 
             await indoBoardSession.start(
+                profileID: athleteProfiles.activeProfile.id,
                 phone: coordinator,
                 camera: cameraController,
                 fieldRun: fieldRun,
