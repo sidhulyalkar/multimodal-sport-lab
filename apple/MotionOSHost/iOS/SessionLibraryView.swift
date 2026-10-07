@@ -5,14 +5,15 @@ import SwiftUI
 struct SessionLibraryView: View {
     @EnvironmentObject private var inbox: PhoneJournalInbox
     @EnvironmentObject private var runLibrary: ProductRunLibrary
+    @EnvironmentObject private var profiles: AthleteProfileStore
 
     var body: some View {
         ScrollView {
             LazyVStack(spacing: MotionOSDesign.pageSpacing) {
-                if let latestRun = runLibrary.runs.first {
+                if let latestRun = profileRuns.first {
                     latestRunSnapshot(latestRun)
-                } else if let latest = inbox.latestSessionSummary {
-                    latestSnapshot(latest)
+                } else {
+                    profileEmptyState
                 }
 
                 productRuns
@@ -36,6 +37,36 @@ struct SessionLibraryView: View {
             inbox.refreshCatalog()
             runLibrary.refresh()
         }
+    }
+
+    private var profileRuns: [ProductRunRecord] {
+        runLibrary.runs(for: profiles.activeProfile.id)
+    }
+
+    private var profileEmptyState: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "figure.run.circle")
+                .font(.largeTitle)
+                .foregroundStyle(.indigo)
+
+            Text(
+                profiles.activeProfile.displayName == "Me"
+                    ? "No guided sessions yet"
+                    : "No sessions for \(profiles.activeProfile.displayName) yet"
+            )
+            .font(.headline)
+
+            Text(
+                "Record a guided activity to start a separate history for "
+                    + profiles.activeProfile.displayName + "."
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 22)
+        .cardStyle()
     }
 
     private func latestRunSnapshot(
@@ -248,7 +279,7 @@ struct SessionLibraryView: View {
 
     @ViewBuilder
     private var productRuns: some View {
-        let history = Array(runLibrary.runs.dropFirst())
+        let history = Array(profileRuns.dropFirst())
         if !history.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
                 Text("History")
@@ -382,8 +413,13 @@ struct SessionLibraryView: View {
     private var library: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Watch-only recordings")
-                    .font(.headline)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Watch-only recordings")
+                        .font(.headline)
+                    Text("Not assigned to a profile unless linked to a guided session")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
 
                 Spacer(minLength: 0)
             }
