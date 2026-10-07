@@ -5,6 +5,8 @@ import MotionOSAppleCapture
 struct ProductRunRecord: Identifiable, Equatable, Sendable {
     let id: String
     let runID: String
+    let profileID: String
+    let sport: String
     let protocolKind: String
     let protocolVersion: String
     let outcome: ProductSessionOutcome
@@ -85,6 +87,12 @@ final class ProductRunLibrary: ObservableObject {
     @Published private(set) var isLoading = false
     @Published private(set) var errorMessage: String?
     private var refreshPending = false
+
+    func runs(
+        for profileID: String
+    ) -> [ProductRunRecord] {
+        runs.filter { $0.profileID == profileID }
+    }
 
     func refresh() {
         if isLoading {
@@ -204,6 +212,23 @@ final class ProductRunLibrary: ObservableObject {
             )
             let sealReadiness = stringMap(
                 metadata["seal_readiness"]
+            )
+            let profileID = usefulIdentifier(
+                productManifest?.profileID
+                    ?? sealReadiness["profile_id"]
+                    ?? startReadiness["profile_id"]
+            ) ?? AthleteProfile.legacyDefaultID
+            let protocolKind =
+                metadata["protocol_kind"] as? String
+                    ?? "Unknown"
+            let sport = usefulIdentifier(
+                productManifest?.sport
+                    ?? sealReadiness["sport"]
+                    ?? startReadiness["sport"]
+            ) ?? (
+                protocolKind == FieldProtocolKind.indoBoard.rawValue
+                    ? "indo_board"
+                    : "unknown"
             )
             let watchSessionID = usefulIdentifier(
                 productManifest?.watchSessionID
@@ -339,9 +364,9 @@ final class ProductRunLibrary: ObservableObject {
             return ProductRunRecord(
                 id: runID,
                 runID: runID,
-                protocolKind:
-                    metadata["protocol_kind"] as? String
-                        ?? "Unknown",
+                profileID: profileID,
+                sport: sport,
+                protocolKind: protocolKind,
                 protocolVersion:
                     metadata["protocol_version"] as? String
                         ?? "unknown",
