@@ -10,10 +10,12 @@ struct IndoBoardSessionView: View {
     @EnvironmentObject private var fieldRun: FieldRunCoordinator
     @EnvironmentObject private var session: IndoBoardSessionCoordinator
     @EnvironmentObject private var runLibrary: ProductRunLibrary
+    @EnvironmentObject private var profiles: AthleteProfileStore
     @State private var importingExternalVideo = false
     @State private var selectedExternalVideoItem: PhotosPickerItem?
     @State private var showMeasurementDetails = false
     @State private var showSessionOptions = false
+    @State private var showProfiles = false
 
     var body: some View {
         ScrollView {
@@ -42,6 +44,10 @@ struct IndoBoardSessionView: View {
         }
         .navigationTitle("Indo Board")
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showProfiles) {
+            AthleteProfileView()
+                .environmentObject(profiles)
+        }
         .task {
             phone.refreshWatchState()
             phone.refreshHostReadiness()
@@ -203,6 +209,8 @@ struct IndoBoardSessionView: View {
                 )
             }
 
+            profileOwnership
+
             if session.phase != .running
                 && session.phase != .finishing {
                 Text(
@@ -221,6 +229,76 @@ struct IndoBoardSessionView: View {
             }
         }
         .cardStyle()
+    }
+
+    private var profileOwnership: some View {
+        Button {
+            showProfiles = true
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "person.crop.circle")
+                    .foregroundStyle(.indigo)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Recording for")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    Text(
+                        session.activeProfileID == nil
+                            ? profiles.activeProfile.displayName
+                            : profileDisplayName(
+                                id: session.activeProfileID
+                                    ?? profiles.activeProfile.id
+                            )
+                    )
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                }
+
+                Spacer(minLength: 8)
+
+                if profileCanChange {
+                    Text(
+                        profiles.profiles.count > 1
+                            ? "Change"
+                            : "Profile"
+                    )
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.indigo)
+                } else {
+                    Image(systemName: "lock.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!profileCanChange)
+        .accessibilityHint(
+            profileCanChange
+                ? "Choose who this session belongs to"
+                : "Profile is locked for the active session"
+        )
+    }
+
+    private var profileCanChange: Bool {
+        switch session.phase {
+        case .starting, .countdown, .running, .finishing,
+             .watchStopRequired:
+            return false
+        case .idle, .preparing, .ready, .sealed, .failed:
+            return true
+        }
+    }
+
+    private func profileDisplayName(
+        id: String
+    ) -> String {
+        profiles.profiles.first {
+            $0.id == id
+        }?.displayName ?? "Profile"
     }
 
     private var captureModeCard: some View {
@@ -562,6 +640,7 @@ struct IndoBoardSessionView: View {
                 Button {
                     Task {
                         await session.start(
+                            profileID: profiles.activeProfile.id,
                             phone: phone,
                             camera: camera,
                             fieldRun: fieldRun,
@@ -610,8 +689,8 @@ struct IndoBoardSessionView: View {
                     Text("Settle into your natural stance")
                         .font(.headline)
                     Text(
-                        "Watch and camera pre-roll are already capturing. "
-                            + "The 2-minute protocol clock starts after the countdown."
+                        "Your Watch and camera are already recording. "
+                            + "The 2-minute session starts after the countdown."
                     )
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -624,7 +703,7 @@ struct IndoBoardSessionView: View {
 
             case .finishing:
                 progressRow(
-                    "Stopping Watch, sealing video, and closing operator evidence"
+                    "Saving your Watch and camera recordings"
                 )
 
             case .watchStopRequired:
@@ -637,10 +716,9 @@ struct IndoBoardSessionView: View {
                     .foregroundStyle(.yellow)
 
                     Text(
-                        "The camera and operator evidence are sealed, but "
-                            + "the phone could not confirm Watch shutdown. "
-                            + "Stop the workout on the Watch so its journal "
-                            + "can close and transfer."
+                        "Your iPhone recording is safe, but MotionOS could not "
+                            + "confirm that the Watch stopped. Stop the session "
+                            + "on your Watch, then return here to finish syncing."
                     )
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -659,7 +737,7 @@ struct IndoBoardSessionView: View {
 
             case .sealed:
                 Label(
-                    "Session evidence sealed",
+                    "Session saved",
                     systemImage: "checkmark.seal.fill"
                 )
                 .font(.headline)

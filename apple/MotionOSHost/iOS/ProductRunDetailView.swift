@@ -6,6 +6,7 @@ struct ProductRunDetailView: View {
     let run: ProductRunRecord
 
     @EnvironmentObject private var library: ProductRunLibrary
+    @EnvironmentObject private var profiles: AthleteProfileStore
 
     @State private var perceivedStability = 3
     @State private var perceivedEffort = 3
@@ -116,6 +117,15 @@ struct ProductRunDetailView: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                     }
+
+                    if profiles.profiles.count > 1 {
+                        Label(
+                            profileName(for: run.profileID),
+                            systemImage: "person.crop.circle"
+                        )
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                    }
                 }
 
                 Spacer(minLength: 8)
@@ -161,6 +171,14 @@ struct ProductRunDetailView: View {
             }
         }
         .cardStyle()
+    }
+
+    private func profileName(
+        for id: String
+    ) -> String {
+        profiles.profiles.first {
+            $0.id == id
+        }?.displayName ?? "Local profile"
     }
 
     private func sessionSourcePill(
@@ -491,6 +509,7 @@ struct ProductRunDetailView: View {
 
         return library.runs.first { candidate in
             guard candidate.runID != run.runID,
+                  candidate.profileID == run.profileID,
                   candidate.protocolKind == run.protocolKind,
                   candidate.protocolVersion == run.protocolVersion,
                   let candidateDate =

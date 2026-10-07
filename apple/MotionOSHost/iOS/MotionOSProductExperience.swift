@@ -191,6 +191,9 @@ struct ProgressHomeView: View {
     @Binding var selectedTab: MotionOSTab
 
     @EnvironmentObject private var runLibrary: ProductRunLibrary
+    @EnvironmentObject private var profiles: AthleteProfileStore
+
+    @State private var showProfiles = false
 
     var body: some View {
         ScrollView {
@@ -212,6 +215,26 @@ struct ProgressHomeView: View {
         }
         .navigationTitle("Progress")
         .navigationBarTitleDisplayMode(.large)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showProfiles = true
+                } label: {
+                    Label(
+                        profiles.activeProfile.displayName,
+                        systemImage: "person.crop.circle"
+                    )
+                }
+                .accessibilityLabel(
+                    "Progress profile: "
+                        + profiles.activeProfile.displayName
+                )
+            }
+        }
+        .sheet(isPresented: $showProfiles) {
+            AthleteProfileView()
+                .environmentObject(profiles)
+        }
         .task {
             runLibrary.refresh()
         }
@@ -221,7 +244,9 @@ struct ProgressHomeView: View {
     }
 
     private var completedRuns: Int {
-        runLibrary.runs.filter { $0.outcome == .completed }.count
+        runLibrary.runs(for: profiles.activeProfile.id)
+            .filter { $0.outcome == .completed }
+            .count
     }
 
     private var progressIntro: some View {
@@ -232,6 +257,15 @@ struct ProgressHomeView: View {
                 systemImage: "chart.line.uptrend.xyaxis",
                 accent: .indigo
             )
+
+            Label(
+                profiles.activeProfile.displayName == "Me"
+                    ? "Your profile"
+                    : "Showing " + profiles.activeProfile.displayName,
+                systemImage: "person.crop.circle"
+            )
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.secondary)
 
             if completedRuns < 2 {
                 Button {
@@ -260,7 +294,7 @@ struct ProgressHomeView: View {
         case 1:
             "One session saved"
         default:
-            "(completedRuns) sessions in your history"
+            "\(completedRuns) sessions in your history"
         }
     }
 

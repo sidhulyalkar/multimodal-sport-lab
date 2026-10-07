@@ -128,6 +128,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
     @Published private(set) var phase: Phase = .idle
     @Published private(set) var outcome: ProductSessionOutcome?
     @Published private(set) var activeWatchSessionID: String?
+    @Published private(set) var activeProfileID: String?
     @Published var captureMode: CaptureMode = .watchAndPhone
     @Published private(set) var startedAt: Date?
     @Published private(set) var countdownRemaining: Int?
@@ -238,6 +239,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
     }
 
     func start(
+        profileID: String,
         phone: PhoneSessionCoordinator,
         camera: CameraCaptureController,
         fieldRun: FieldRunCoordinator,
@@ -258,6 +260,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         productManifestURL = nil
         outcome = nil
         activeWatchSessionID = nil
+        activeProfileID = profileID
         startedAt = nil
         countdownRemaining = nil
 
@@ -730,6 +733,8 @@ final class IndoBoardSessionCoordinator: ObservableObject {
                ) {
                 let updated = ProductSessionManifest(
                     runID: existing.runID,
+                    profileID: existing.profileID,
+                    sport: existing.sport,
                     captureMode: existing.captureMode,
                     targetDurationSeconds: existing.targetDurationSeconds,
                     createdAtUTC: existing.createdAtUTC,
@@ -802,6 +807,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         phase = .idle
         outcome = nil
         activeWatchSessionID = nil
+        activeProfileID = nil
         startedAt = nil
         countdownRemaining = nil
         cueReceipts = []
@@ -1202,6 +1208,8 @@ final class IndoBoardSessionCoordinator: ObservableObject {
     ) -> [String: String] {
         [
             "run_id": runID,
+            "profile_id":
+                activeProfileID ?? AthleteProfile.legacyDefaultID,
             "sport": "indo_board",
             "watch_paired": String(phone.watchPaired),
             "watch_app_installed": String(phone.watchAppInstalled),
@@ -1262,6 +1270,9 @@ final class IndoBoardSessionCoordinator: ObservableObject {
 
         let manifest = ProductSessionManifest(
             runID: runID,
+            profileID:
+                activeProfileID ?? AthleteProfile.legacyDefaultID,
+            sport: "indo_board",
             captureMode: captureMode.rawValue,
             targetDurationSeconds: Self.targetDurationSeconds,
             outcome: outcome ?? .completed,
