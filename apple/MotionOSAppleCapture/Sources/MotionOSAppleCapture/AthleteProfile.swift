@@ -5,6 +5,7 @@ public enum MotionOSUnitPreference:
     Codable,
     CaseIterable,
     Equatable,
+    Hashable,
     Sendable
 {
     case automatic
