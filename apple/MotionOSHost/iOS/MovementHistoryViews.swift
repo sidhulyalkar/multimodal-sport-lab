@@ -12,6 +12,7 @@ struct MovementTrendsCard: View {
     }
 
     @EnvironmentObject private var library: ProductRunLibrary
+    @EnvironmentObject private var profiles: AthleteProfileStore
     @State private var metric: Metric = .acceleration
 
     private struct Point: Identifiable {
@@ -138,7 +139,7 @@ struct MovementTrendsCard: View {
     }
 
     private var trendPoints: [Point] {
-        library.runs
+        library.runs(for: profiles.activeProfile.id)
             .compactMap { run -> Point? in
                 guard run.protocolKind
                         == FieldProtocolKind.indoBoard.rawValue,
@@ -161,11 +162,11 @@ struct MovementTrendsCard: View {
     private var historySubtitle: String {
         switch metric {
         case .acceleration:
-            "Watch user-acceleration RMS across sealed Indo Board runs"
+            "Watch movement across saved Indo Board sessions"
         case .rotation:
-            "Watch angular-rate RMS across sealed Indo Board runs"
+            "Watch rotation across saved Indo Board sessions"
         case .heart:
-            "Mean recorded heart rate across sealed Indo Board runs"
+            "Mean heart rate across saved Indo Board sessions"
         }
     }
 
@@ -366,7 +367,8 @@ struct PreviousRunComparisonCard: View {
     private var previousComparableRun: ProductRunRecord? {
         let ordered = library.runs
             .filter {
-                $0.protocolKind == run.protocolKind
+                $0.profileID == run.profileID
+                    && $0.protocolKind == run.protocolKind
                     && $0.outcome == .completed
                     && $0.id != run.id
                     && $0.watchSummary != nil
