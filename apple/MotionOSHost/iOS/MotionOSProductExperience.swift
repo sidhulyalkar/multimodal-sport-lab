@@ -8,8 +8,7 @@ struct MotionOSActivityDescriptor: Identifiable {
     let systemImage: String
     let requirementSummary: String
     let accent: Color
-
-
+}
 
 enum MotionOSActivityCatalog {
     static let indoBoard = MotionOSActivityDescriptor(
