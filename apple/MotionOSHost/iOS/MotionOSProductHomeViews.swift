@@ -143,8 +143,13 @@ struct ObserveHomeView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .disabled(indoBoardActive)
         .cardStyle()
-        .accessibilityHint("Switch who new sessions belong to")
+        .accessibilityHint(
+            indoBoardActive
+                ? "Finish the active session before switching profiles"
+                : "Switch who new sessions belong to"
+        )
     }
 
     private var indoBoardActive: Bool {
