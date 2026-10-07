@@ -76,15 +76,15 @@ struct SessionLibraryView: View {
                     snapshotMetric(
                         "WATCH",
                         run.watchJournalURL != nil
-                            ? "Saved"
-                            : "Pending",
+                            ? "Ready"
+                            : "Syncing",
                         "applewatch"
                     )
                     snapshotMetric(
                         "VIDEO",
                         run.cameraVideoURL != nil
-                            ? "Saved"
-                            : "None",
+                            ? "Ready"
+                            : "Not used",
                         "video.fill"
                     )
                 }
@@ -328,8 +328,8 @@ struct SessionLibraryView: View {
                     Text("·")
                     Text(
                         run.syncComplete
-                            ? "Timing ready"
-                            : "Timing needs review"
+                            ? "Ready to review"
+                            : "Needs attention"
                     )
                 }
                 .font(.caption)
@@ -469,9 +469,9 @@ struct SessionLibraryView: View {
                         Text("·")
                         Text(self.duration(duration))
                     }
-                    if let hz = item.summary?.imu.effectiveHz {
+                    if item.summary != nil {
                         Text("·")
-                        Text(String(format: "%.1f Hz", hz))
+                        Text("Watch")
                     }
                 }
                 .font(.caption)
@@ -480,7 +480,7 @@ struct SessionLibraryView: View {
                 if let summary = item.summary {
                     continuityLabel(summary)
                 } else {
-                    Text("Raw evidence recovered")
+                    Text("Recording recovered")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
@@ -505,8 +505,8 @@ struct SessionLibraryView: View {
 
         Label(
             clean
-                ? "Continuity clean"
-                : "Continuity needs review",
+                ? "Recording complete"
+                : "Recording needs review",
             systemImage: clean
                 ? "checkmark.shield.fill"
                 : "exclamationmark.triangle.fill"
@@ -638,7 +638,7 @@ private struct RecoveredSessionDetailView: View {
                 MotionOSMark(size: 44)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Recovered session")
+                    Text("Watch session")
                         .font(.title3.weight(.bold))
                     if let date = session.receivedAt {
                         Text(date.formatted(date: .abbreviated, time: .shortened))
@@ -650,16 +650,21 @@ private struct RecoveredSessionDetailView: View {
                 Spacer()
 
                 MotionOSStatusBadge(
-                    title: "SEALED",
+                    title: "SAVED",
                     systemImage: "checkmark.seal.fill",
                     color: .green
                 )
             }
 
-            Text(session.sessionID)
-                .font(.system(.caption, design: .monospaced))
-                .foregroundStyle(.secondary)
-                .textSelection(.enabled)
+            DisclosureGroup("Technical details") {
+                Text(session.sessionID)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+                    .padding(.top, 6)
+            }
+            .font(.caption)
+            .tint(.secondary)
         }
         .cardStyle()
     }
@@ -679,24 +684,23 @@ private struct RecoveredSessionDetailView: View {
                     "timer"
                 )
                 metric(
-                    "IMU rate",
-                    String(
-                        format: "%.1f Hz",
-                        summary.imu.effectiveHz
-                    ),
-                    "waveform.path"
-                )
-            }
-            GridRow {
-                metric(
-                    "User accel RMS",
+                    "Movement",
                     summary.motion.userAccelerationRMSG.map {
                         String(format: "%.2f g", $0)
                     } ?? "—",
                     "figure.run"
                 )
+            }
+            GridRow {
                 metric(
-                    "Mean HR",
+                    "Rotation",
+                    summary.motion.rotationRateRMSRadS.map {
+                        String(format: "%.2f rad/s", $0)
+                    } ?? "—",
+                    "gyroscope"
+                )
+                metric(
+                    "Heart rate",
                     summary.heartRate.meanBPM.map {
                         "\(Int($0.rounded())) bpm"
                     } ?? "—",

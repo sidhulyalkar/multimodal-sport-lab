@@ -52,9 +52,9 @@ struct SessionLensCard: View {
             }
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("Session lens")
+                Text("Latest movement")
                     .font(.headline)
-                Text("Derived view of the latest sealed Watch journal")
+                Text("A quick look at your latest saved Watch session")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -62,7 +62,7 @@ struct SessionLensCard: View {
             Spacer(minLength: 8)
 
             if inbox.latestSessionSummary != nil {
-                Label("SEALED", systemImage: "checkmark.seal.fill")
+                Label("SAVED", systemImage: "checkmark.circle.fill")
                     .font(.caption2.weight(.bold))
                     .foregroundStyle(.green)
                     .padding(.horizontal, 9)
@@ -87,14 +87,21 @@ struct SessionLensCard: View {
 
         sessionChart(summary)
 
-        motionStats(summary)
-        integrity(summary)
-        provenance(summary)
+        DisclosureGroup("Measurement details") {
+            VStack(alignment: .leading, spacing: 10) {
+                motionStats(summary)
+                integrity(summary)
+                provenance(summary)
 
-        Text(summary.claimBoundary)
-            .font(.caption2)
-            .foregroundStyle(.tertiary)
-            .fixedSize(horizontal: false, vertical: true)
+                Text(summary.claimBoundary)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.top, 8)
+        }
+        .font(.subheadline)
+        .tint(.secondary)
     }
 
     private func overview(
@@ -115,26 +122,25 @@ struct SessionLensCard: View {
                 )
 
                 summaryMetric(
-                    label: "IMU RATE",
-                    value: String(
-                        format: "%.1f Hz",
-                        summary.imu.effectiveHz
-                    ),
-                    detail: "\(summary.imu.count) samples",
-                    symbol: "waveform.path",
-                    accent: .cyan
+                    label: "MOVEMENT",
+                    value: summary.motion.userAccelerationRMSG.map {
+                        String(format: "%.2f g", $0)
+                    } ?? "—",
+                    detail: "average intensity",
+                    symbol: "figure.run",
+                    accent: .purple
                 )
             }
 
             GridRow {
                 summaryMetric(
-                    label: "MOTION RMS",
-                    value: summary.motion.userAccelerationRMSG.map {
-                        String(format: "%.2f g", $0)
+                    label: "ROTATION",
+                    value: summary.motion.rotationRateRMSRadS.map {
+                        String(format: "%.2f rad/s", $0)
                     } ?? "—",
-                    detail: "user acceleration",
-                    symbol: "figure.run",
-                    accent: .purple
+                    detail: "average wrist rotation",
+                    symbol: "gyroscope",
+                    accent: .cyan
                 )
 
                 summaryMetric(
@@ -453,9 +459,9 @@ struct SessionLensCard: View {
         HStack(spacing: 10) {
             ProgressView()
             VStack(alignment: .leading, spacing: 2) {
-                Text("Building the session lens")
+                Text("Preparing your session")
                     .font(.subheadline.weight(.semibold))
-                Text("Streaming the sealed journal into bounded derived metrics.")
+                Text("Analyzing the saved Watch recording.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -469,9 +475,9 @@ struct SessionLensCard: View {
                 .font(.title3)
                 .foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: 2) {
-                Text("No sealed Watch session yet")
+                Text("No Watch session yet")
                     .font(.subheadline.weight(.semibold))
-                Text("Your first recovered journal will appear here as a trace and integrity summary.")
+                Text("Your first saved Watch session will appear here with movement and heart-rate summaries.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
