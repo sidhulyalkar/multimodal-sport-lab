@@ -293,7 +293,8 @@ struct CaptureHomeView: View {
                         .foregroundStyle(.secondary)
 
                     Text(
-                        "(activity.sessionSummary) · "
+                        activity.sessionSummary
+                            + " · "
                             + activity.requirementSummary
                     )
                     .font(.caption)
