@@ -491,6 +491,7 @@ struct ProductRunDetailView: View {
 
         return library.runs.first { candidate in
             guard candidate.runID != run.runID,
+                  candidate.profileID == run.profileID,
                   candidate.protocolKind == run.protocolKind,
                   candidate.protocolVersion == run.protocolVersion,
                   let candidateDate =
