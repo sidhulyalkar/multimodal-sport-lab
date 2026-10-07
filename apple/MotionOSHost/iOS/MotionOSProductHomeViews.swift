@@ -13,8 +13,10 @@ struct ObserveHomeView: View {
     @EnvironmentObject private var phone: PhoneSessionCoordinator
     @EnvironmentObject private var inbox: PhoneJournalInbox
     @EnvironmentObject private var indoBoard: IndoBoardSessionCoordinator
+    @EnvironmentObject private var profiles: AthleteProfileStore
 
     @State private var showDevices = false
+    @State private var showProfiles = false
 
     var body: some View {
         ScrollView {
@@ -27,9 +29,14 @@ struct ObserveHomeView: View {
                     onOpenDevices: { showDevices = true }
                 )
 
+                if profiles.profiles.count > 1 {
+                    activeProfileCard
+                }
+
                 if indoBoardActive {
                     activeProductSession
-                } else if inbox.latestSessionID != nil
+                } else if profiles.profiles.count == 1
+                    && inbox.latestSessionID != nil
                     && !phone.observation().observatory.isRecordingActive {
                     SessionLensCard()
                 }
@@ -48,6 +55,10 @@ struct ObserveHomeView: View {
         .toolbar(.hidden, for: .navigationBar)
         .navigationDestination(isPresented: $showDevices) {
             DeviceHubView()
+        }
+        .sheet(isPresented: $showProfiles) {
+            AthleteProfileView()
+                .environmentObject(profiles)
         }
         .refreshable {
             phone.refreshWatchState()
@@ -98,6 +109,42 @@ struct ObserveHomeView: View {
             )
         }
         .padding(.horizontal, 2)
+    }
+
+    private var activeProfileCard: some View {
+        Button {
+            showProfiles = true
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "person.crop.circle.fill")
+                    .font(.title3)
+                    .foregroundStyle(.indigo)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Active profile")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(profiles.activeProfile.displayName)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                }
+
+                Spacer()
+
+                Text("Switch")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.indigo)
+
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .cardStyle()
+        .accessibilityHint("Switch who new sessions belong to")
     }
 
     private var indoBoardActive: Bool {
