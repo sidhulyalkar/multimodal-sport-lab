@@ -11,10 +11,10 @@ import hashlib
 import json
 import math
 import statistics
+from collections.abc import Sequence
 from dataclasses import dataclass
 from itertools import pairwise
 from pathlib import Path
-from typing import Sequence
 
 from .indo_board_state import BoardFrameState, derive_board_state
 
@@ -117,7 +117,7 @@ def _episodes(segments: list[list[BoardFrameState]], cfg: DynamicsConfig) -> lis
 def analyze_indo_dynamics(
     frames: Sequence[BoardFrameState],
     *,
-    config: DynamicsConfig = DynamicsConfig(),
+    config: DynamicsConfig | None = None,
     capture_span_s: float | None = None,
 ) -> dict:
     """Return descriptive motion features, or abstain on insufficient exposure.
@@ -125,6 +125,7 @@ def analyze_indo_dynamics(
     A tracking gap breaks every dynamic calculation and censors active events.
     Zero-duration samples never contribute to time fractions or rate metrics.
     """
+    config = config or DynamicsConfig()
     config.validate()
     segments, valid_count = _segments(frames, config)
     span_s = max(0.0, frames[-1].time_s - frames[0].time_s) if frames else 0.0
@@ -219,7 +220,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         source = args.observations.read_bytes()
         payload = json.loads(source)
         if not isinstance(payload, dict):
-            raise ValueError("board observations must contain a JSON object")
+            raise TypeError("board observations must contain a JSON object")
         # Include leading/trailing dropout in coverage, not just surviving board frames.
         raw_times = []
         for item in payload.get("frames", []):
