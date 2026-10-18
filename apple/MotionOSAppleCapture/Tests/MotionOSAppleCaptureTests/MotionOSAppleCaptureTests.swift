@@ -115,8 +115,18 @@ final class MotionOSAppleCaptureTests: XCTestCase {
 
 
     func testProductSessionManifestRoundTripsWithSourceHashes() throws {
+        let context = ProductSessionManifest.SessionContext(
+            profileID: "profile-local-1",
+            activityID: "indo_board",
+            protocolID: IndoBoardProductProtocol.protocolID,
+            dimensions: [
+                "stance": "left_foot_forward",
+                "equipment_profile": "default",
+            ]
+        )
         let manifest = ProductSessionManifest(
             runID: "run-001",
+            context: context,
             captureMode: "Multiview capture",
             targetDurationSeconds: 120,
             createdAtUTC: "2026-10-01T17:00:00Z",
@@ -174,6 +184,11 @@ final class MotionOSAppleCaptureTests: XCTestCase {
         XCTAssertEqual(decoded.syncReceipts.first?.label, "start")
         XCTAssertEqual(decoded.watchJournalSHA256, "watch-journal")
         XCTAssertEqual(decoded.watchJournalByteCount, 4_096)
+        XCTAssertEqual(decoded.context, context)
+        XCTAssertEqual(
+            decoded.context?.dimensions["stance"],
+            "left_foot_forward"
+        )
         XCTAssertEqual(
             decoded.coachSummary?
                 .numericMetrics?["neutral_finish_spread"],
@@ -194,8 +209,15 @@ final class MotionOSAppleCaptureTests: XCTestCase {
             numericMetrics: ["pelvis_spread": 0.08],
             interventionID: "quiet-return"
         )
+        let context = ProductSessionManifest.SessionContext(
+            profileID: "profile-bind",
+            activityID: "indo_board",
+            protocolID: IndoBoardProductProtocol.protocolID,
+            dimensions: ["stance": "right_foot_forward"]
+        )
         let manifest = ProductSessionManifest(
             runID: "run-bind-watch",
+            context: context,
             captureMode: "Watch + iPhone",
             targetDurationSeconds: 120,
             createdAtUTC: "2026-10-03T18:00:00Z",
@@ -229,6 +251,7 @@ final class MotionOSAppleCaptureTests: XCTestCase {
         XCTAssertEqual(updated.operatorJournalSHA256, "operator-journal")
         XCTAssertEqual(updated.externalCameraSHA256, "external-video")
         XCTAssertEqual(updated.coachSummary, coach)
+        XCTAssertEqual(updated.context, context)
     }
 
     func testProductSessionManifestOutcomeRoundTripAndLegacyDefault() throws {
@@ -260,6 +283,7 @@ final class MotionOSAppleCaptureTests: XCTestCase {
             ) as? [String: Any]
         )
         legacyObject.removeValue(forKey: "outcome")
+        legacyObject.removeValue(forKey: "context")
         let legacyData = try JSONSerialization.data(
             withJSONObject: legacyObject,
             options: [.sortedKeys]
@@ -269,6 +293,7 @@ final class MotionOSAppleCaptureTests: XCTestCase {
             from: legacyData
         )
         XCTAssertEqual(legacy.resolvedOutcome, .completed)
+        XCTAssertNil(legacy.context)
     }
 
     func testProductSessionManifestStoreWritesAtomicArtifact() throws {

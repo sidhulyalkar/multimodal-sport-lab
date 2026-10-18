@@ -24,6 +24,10 @@ struct ProductRunDetailView: View {
             LazyVStack(spacing: MotionOSDesign.pageSpacing) {
                 hero
 
+                if let context = run.productManifest?.context {
+                    sessionContext(context)
+                }
+
                 if run.cameraVideoURL != nil,
                    run.cameraJournalURL != nil {
                     replayEntry
@@ -161,6 +165,60 @@ struct ProductRunDetailView: View {
             }
         }
         .cardStyle()
+    }
+
+    private func sessionContext(
+        _ context: ProductSessionManifest.SessionContext
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            MotionOSSectionHeader(
+                title: "Session setup",
+                subtitle: "Used to keep personal comparisons like-for-like",
+                systemImage: "person.crop.circle",
+                accent: .indigo
+            )
+
+            if let stance = context.dimensions["stance"] {
+                HStack(spacing: 10) {
+                    Image(systemName: "shoeprints.fill")
+                        .foregroundStyle(.indigo)
+                        .frame(width: 24)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Foot position")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text(displayStance(stance))
+                            .font(.subheadline.weight(.semibold))
+                    }
+
+                    Spacer()
+                }
+
+                if stance
+                    == IndoBoardStancePreference
+                        .variesOrUnsure.rawValue {
+                    Text(
+                        "This session is still saved normally. MotionOS should "
+                            + "abstain from stance-specific personal comparisons "
+                            + "until the setup is declared more precisely."
+                    )
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .cardStyle()
+    }
+
+    private func displayStance(
+        _ raw: String
+    ) -> String {
+        IndoBoardStancePreference(rawValue: raw)?.title
+            ?? raw
+                .replacingOccurrences(of: "_", with: " ")
+                .localizedCapitalized
     }
 
     private func sessionSourcePill(

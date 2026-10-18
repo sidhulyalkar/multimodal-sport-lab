@@ -128,6 +128,8 @@ final class IndoBoardSessionCoordinator: ObservableObject {
     @Published private(set) var phase: Phase = .idle
     @Published private(set) var outcome: ProductSessionOutcome?
     @Published private(set) var activeWatchSessionID: String?
+    @Published private(set) var activeSessionContext:
+        ProductSessionManifest.SessionContext?
     @Published var captureMode: CaptureMode = .watchAndPhone
     @Published private(set) var startedAt: Date?
     @Published private(set) var countdownRemaining: Int?
@@ -241,13 +243,15 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         phone: PhoneSessionCoordinator,
         camera: CameraCaptureController,
         fieldRun: FieldRunCoordinator,
-        pod: EquipmentPodController
+        pod: EquipmentPodController,
+        context: ProductSessionManifest.SessionContext
     ) async {
         if phase != .ready {
             await prepare(phone: phone, camera: camera)
         }
         guard phase == .ready else { return }
 
+        activeSessionContext = context
         phase = .starting
         errorMessage = nil
         cueReceipts = []
@@ -258,6 +262,7 @@ final class IndoBoardSessionCoordinator: ObservableObject {
         productManifestURL = nil
         outcome = nil
         activeWatchSessionID = nil
+        activeSessionContext = nil
         startedAt = nil
         countdownRemaining = nil
 
@@ -730,6 +735,8 @@ final class IndoBoardSessionCoordinator: ObservableObject {
                ) {
                 let updated = ProductSessionManifest(
                     runID: existing.runID,
+                    sport: existing.sport,
+                    context: existing.context,
                     captureMode: existing.captureMode,
                     targetDurationSeconds: existing.targetDurationSeconds,
                     createdAtUTC: existing.createdAtUTC,
@@ -1262,6 +1269,8 @@ final class IndoBoardSessionCoordinator: ObservableObject {
 
         let manifest = ProductSessionManifest(
             runID: runID,
+            sport: "indo_board",
+            context: activeSessionContext,
             captureMode: captureMode.rawValue,
             targetDurationSeconds: Self.targetDurationSeconds,
             outcome: outcome ?? .completed,

@@ -11,6 +11,7 @@ public struct ProductSessionManifest: Codable, Equatable, Sendable {
     public let schemaVersion: String
     public let runID: String
     public let sport: String
+    public let context: SessionContext?
     public let captureMode: String
     public let targetDurationSeconds: Double
     public let createdAtUTC: String
@@ -32,6 +33,25 @@ public struct ProductSessionManifest: Codable, Equatable, Sendable {
     public let cameraEvidenceSealed: Bool
     public let coachSummary: CoachSummary?
     public let claimBoundary: String
+
+    public struct SessionContext: Codable, Equatable, Sendable {
+        public let profileID: String
+        public let activityID: String
+        public let protocolID: String
+        public let dimensions: [String: String]
+
+        public init(
+            profileID: String,
+            activityID: String,
+            protocolID: String,
+            dimensions: [String: String] = [:]
+        ) {
+            self.profileID = profileID
+            self.activityID = activityID
+            self.protocolID = protocolID
+            self.dimensions = dimensions
+        }
+    }
 
     public struct CoachSummary: Codable, Equatable, Sendable {
         public let headline: String
@@ -121,6 +141,8 @@ public struct ProductSessionManifest: Codable, Equatable, Sendable {
 
     public init(
         runID: String,
+        sport: String = "indo_board",
+        context: SessionContext? = nil,
         captureMode: String,
         targetDurationSeconds: Double,
         createdAtUTC: String = ISO8601DateFormatter().string(from: Date()),
@@ -144,7 +166,8 @@ public struct ProductSessionManifest: Codable, Equatable, Sendable {
     ) {
         self.schemaVersion = Self.schemaVersion
         self.runID = runID
-        self.sport = "indo_board"
+        self.sport = sport
+        self.context = context
         self.captureMode = captureMode
         self.targetDurationSeconds = targetDurationSeconds
         self.createdAtUTC = createdAtUTC
@@ -180,6 +203,8 @@ public struct ProductSessionManifest: Codable, Equatable, Sendable {
     ) -> ProductSessionManifest {
         ProductSessionManifest(
             runID: runID,
+            sport: sport,
+            context: context,
             captureMode: captureMode,
             targetDurationSeconds: targetDurationSeconds,
             createdAtUTC: createdAtUTC,
