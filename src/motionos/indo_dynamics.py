@@ -118,6 +118,7 @@ def analyze_indo_dynamics(
     frames: Sequence[BoardFrameState],
     *,
     config: DynamicsConfig = DynamicsConfig(),
+    capture_span_s: float | None = None,
 ) -> dict:
     """Return descriptive motion features, or abstain on insufficient exposure.
 
@@ -127,6 +128,10 @@ def analyze_indo_dynamics(
     config.validate()
     segments, valid_count = _segments(frames, config)
     span_s = max(0.0, frames[-1].time_s - frames[0].time_s) if frames else 0.0
+    if capture_span_s is not None:
+        if not math.isfinite(capture_span_s) or capture_span_s < span_s:
+            raise ValueError("capture_span_s must be finite and include qualified observations")
+        span_s = capture_span_s
     intervals = [
         (a, b, b.time_s - a.time_s)
         for segment in segments
@@ -215,7 +220,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         payload = json.loads(source)
         if not isinstance(payload, dict):
             raise ValueError("board observations must contain a JSON object")
-        report = analyze_indo_dynamics(derive_board_state(payload))
+        # Include leading/trailing dropout in coverage, not just surviving board frames.
+        raw_times = []
+        for item in payload.get("frames", []):
+            if not isinstance(item, dict):
+                continue
+            try:
+                t = float(item["time_s"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            if math.isfinite(t):
+                raw_times.append(t)
+        capture_span_s = max(raw_times) - min(raw_times) if raw_times else None
+        report = analyze_indo_dynamics(
+            derive_board_state(payload), capture_span_s=capture_span_s
+        )
         report["source_sha256"] = hashlib.sha256(source).hexdigest()
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps(report, indent=2, sort_keys=True, allow_nan=False) + "\n")
