@@ -14,6 +14,7 @@ struct IndoBoardSessionView: View {
     @State private var selectedExternalVideoItem: PhotosPickerItem?
     @State private var showMeasurementDetails = false
     @State private var showSessionOptions = false
+    @State private var showRecordingGuide = false
 
     var body: some View {
         ScrollView {
@@ -135,6 +136,7 @@ struct IndoBoardSessionView: View {
         case .idle, .preparing, .ready, .failed:
             captureModeCard
             sourcePreflight
+            researchRecordingGuide
 
             if camera.phase == .ready
                 || camera.phase == .recording {
@@ -333,6 +335,84 @@ struct IndoBoardSessionView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+        }
+        .tint(.secondary)
+        .cardStyle()
+    }
+
+    private var researchRecordingGuide: some View {
+        DisclosureGroup(isExpanded: $showRecordingGuide) {
+            VStack(alignment: .leading, spacing: 10) {
+                Label(
+                    "iPhone: locked 1080p / 30 fps in this build",
+                    systemImage: "camera"
+                )
+                .font(.subheadline.weight(.medium))
+
+                if let configuration = camera.configuration {
+                    Text(
+                        "Actual prepared format: "
+                            + "\(configuration.formatWidth)×\(configuration.formatHeight), "
+                            + String(format: "%.0f fps", configuration.configuredFrameRate)
+                    )
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                }
+
+                Text(
+                    "Set the phone on a rigid tripod. Keep your head, both hands, "
+                        + "feet, deck, roller, and recovery space visible. "
+                        + "Check the live preview for blur, shadows, and glare: "
+                        + "the automated framing score is not a lighting test."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+                Divider()
+
+                Label(
+                    "Optional Action 4: 4K / 60 fps, fixed tripod",
+                    systemImage: "video"
+                )
+                .font(.subheadline.weight(.medium))
+
+                Text(
+                    "Use a second oblique view, turn stabilization off for "
+                        + "metric calibration, start the Action 4 manually before "
+                        + "stepping on, and confirm it is recording. Import the "
+                        + "untouched movie after the run."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+                Divider()
+
+                Label("Recording protocol: exactly 2 minutes", systemImage: "timer")
+                    .font(.subheadline.weight(.medium))
+
+                Text(
+                    "This guided session automatically ends after 120 seconds. "
+                        + "Record a few controlled attempts per run. Use separate "
+                        + "runs for squats, waves, carves, and rotations so they "
+                        + "can be labeled and compared later."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+                Text(
+                    "Begin with neutral balance, then controlled movement. "
+                        + "Use the Watch sync cues and a clear, unobstructed "
+                        + "fall zone. Voice start, automatic DJI control, "
+                        + "muscle-force inference, and continuous freestyle "
+                        + "recording are not qualified in this mode."
+                )
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+            }
+            .padding(.top, 10)
+        } label: {
+            Label("Research recording guide", systemImage: "checklist")
+                .font(.subheadline.weight(.semibold))
         }
         .tint(.secondary)
         .cardStyle()

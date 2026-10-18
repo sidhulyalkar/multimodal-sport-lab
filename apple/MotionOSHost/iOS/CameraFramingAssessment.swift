@@ -174,11 +174,11 @@ struct CameraFramingAssessment: Equatable, Sendable {
         return CameraFramingAssessment(
             state: .ready,
             score: 100,
-            title: "Camera is ready",
+            title: "Body framing is ready",
             instruction:
-                "Full body, feet, movement margin, and pose confidence look usable.",
+                "Visible joints, feet, and movement margins look usable.",
             detail:
-                "You can start the Indo Board session without touching the camera again."
+                "Check board/roller visibility, lighting, and sharpness manually. Framing alone does not certify them."
         )
     }
 
