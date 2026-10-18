@@ -47,7 +47,9 @@ def build_indo_session_report(
         metrics.update(body_values)
         confidence.update(body_confidence)
         if body_values:
-            channels.update({"body_pose_2d", "body_pose_3d"})
+            # indo_pose_metrics derives these values from image-space 2D joints.
+            # Never advertise a 3D source without separately qualified 3D evidence.
+            channels.add("body_pose_2d")
         evidence.append(
             {
                 "source": "camera_body_pose",
