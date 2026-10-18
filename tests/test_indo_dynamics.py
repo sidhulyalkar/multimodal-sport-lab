@@ -97,3 +97,12 @@ def test_cli_writes_source_bound_report(tmp_path):
     assert result["source_sha256"] == hashlib.sha256(source.read_bytes()).hexdigest()
     assert result["status"] == "descriptive_only"
     assert result["metrics"]["center_time_fraction"] == 1.0
+
+
+def test_leading_and_trailing_tracking_loss_counts_against_coverage():
+    frames = [frame(i * 0.1, 0) for i in range(21)]
+    result = analyze_indo_dynamics(frames, config=cfg(), capture_span_s=10.0)
+    assert result["quality"]["observed_fraction"] == pytest.approx(0.2)
+    assert result["status"] == "insufficient_evidence"
+    with pytest.raises(ValueError, match="capture_span_s"):
+        analyze_indo_dynamics(frames, config=cfg(), capture_span_s=1.0)
