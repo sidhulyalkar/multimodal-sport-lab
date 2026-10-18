@@ -89,6 +89,13 @@ final class CameraCaptureController: ObservableObject {
     }
 
     func prepare() async {
+        // Never reset the live capture identity or stop polling while a
+        // recording is active/finalizing. Also reject re-entrant preparation.
+        guard phase != .recording
+                && phase != .finalizing
+                && phase != .authorizing
+        else { return }
+        phase = .authorizing
         stopLivePolling()
         errorMessage = nil
 
@@ -113,6 +120,10 @@ final class CameraCaptureController: ObservableObject {
     }
 
     func startRecording() async {
+        // A second tap (or overlapping async task) must not clear the first
+        // recording's sessionID, journal, evidence or live polling state.
+        guard phase == .ready || phase == .evidenceReady else { return }
+        phase = .authorizing
         stopLivePolling()
         errorMessage = nil
         resetCaptureOpportunityState()
