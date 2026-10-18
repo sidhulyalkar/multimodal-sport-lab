@@ -44,10 +44,8 @@ def test_session_report_works_with_camera_only():
         },
     )
 
-    assert report["available_channels"] == [
-        "body_pose_2d",
-        "body_pose_3d",
-    ]
+    assert report["available_channels"] == ["body_pose_2d"]
+    assert "body_pose_3d" not in report["available_channels"]
     assert report["primary_coaching"]["rule_id"] == (
         "stiff_knee_strategy"
     )
