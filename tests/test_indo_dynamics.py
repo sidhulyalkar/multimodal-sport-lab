@@ -1,9 +1,11 @@
+import hashlib
+import json
 import math
 
 import pytest
 
 from motionos.indo_board_state import BoardFrameState
-from motionos.indo_dynamics import DynamicsConfig, analyze_indo_dynamics
+from motionos.indo_dynamics import DynamicsConfig, analyze_indo_dynamics, main
 
 
 def frame(t, x, confidence=0.95):
@@ -11,7 +13,7 @@ def frame(t, x, confidence=0.95):
 
 
 def cfg(**overrides):
-    return DynamicsConfig(**{**dict(min_frames=2, min_exposure_s=0.5), **overrides})
+    return DynamicsConfig(**({"min_frames": 2, "min_exposure_s": 0.5} | overrides))
 
 
 def test_time_fraction_uses_elapsed_time_not_frame_count():
@@ -77,10 +79,6 @@ def test_no_data_abstains_and_nonfinite_confidence_cannot_pass():
 
 
 def test_cli_writes_source_bound_report(tmp_path):
-    from motionos.indo_dynamics import main
-    import hashlib
-    import json
-
     def raw_frame(t):
         return {
             "time_s": t,
