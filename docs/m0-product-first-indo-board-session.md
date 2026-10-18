@@ -28,6 +28,8 @@ after the MotionOS session.
 
 ## Build under test
 
+For the current capture branch and exact first-run procedure, use [the first research recording guide](indo-board-first-research-recording.md) instead of the historical release-candidate branch below. The earlier commands remain as a record of the original product beta:
+
 Use the release-candidate branch after its CI is green:
 
 ```bash
@@ -89,7 +91,7 @@ Do not begin if a tripod or phone position creates a fall hazard.
 
 ## Gate 3 · Complete 120 second session
 
-Press **Start Complete Session**. The complete-session path is hands-free after
+Press **Start Session**. The complete-session path is hands-free after
 start unless you intentionally finish early.
 
 MotionOS should:
@@ -108,17 +110,18 @@ The current product protocol is:
 
 | Time | Product block |
 | ---: | --- |
-| 0–20 s | neutral settle |
-| 20–55 s | natural free balance |
-| 55–95 s | five comfortable tilt-and-recover cycles |
-| 95–110 s | natural free balance |
-| 110–120 s | neutral finish |
+| 0–15 s | neutral settle |
+| 15–35 s | natural free balance |
+| 35–60 s | five slow left/right shifts |
+| 60–85 s | three shallow partial squats |
+| 85–105 s | natural balance repeat |
+| 105–120 s | neutral finish |
 
 SYNC windows are intentionally separate from board perturbations:
 
-- START: preferred ~12 s;
-- MIDDLE: preferred ~50 s;
-- END: preferred ~110 s.
+- START: 8–14 s window, preferred ~10 s;
+- MIDDLE: 61–66 s window, preferred ~63 s;
+- END: 110–119 s window, preferred ~114 s.
 
 When the Watch presents **SYNC · MOVE NOW**, make one sharp arm gesture while
 trying to keep the board near neutral. The Watch acknowledgment counts only
