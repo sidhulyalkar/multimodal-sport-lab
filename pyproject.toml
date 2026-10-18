@@ -18,6 +18,7 @@ mcap = ["mcap>=1.2"]
 
 [project.scripts]
 motionos = "motionos.cli:main"
+motionos-balance-study = "motionos.indo_dynamics:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
