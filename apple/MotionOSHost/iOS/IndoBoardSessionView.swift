@@ -352,7 +352,7 @@ struct IndoBoardSessionView: View {
                 if let configuration = camera.configuration {
                     Text(
                         "Actual prepared format: "
-                            + "\\(configuration.formatWidth)×\\(configuration.formatHeight), "
+                            + "\(configuration.formatWidth)×\(configuration.formatHeight), "
                             + String(format: "%.0f fps", configuration.configuredFrameRate)
                     )
                     .font(.caption.monospacedDigit())
