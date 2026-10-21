@@ -27,6 +27,40 @@ enum ProductSessionCoachUsefulness:
     }
 }
 
+enum ProductSessionIntent: String, Codable, CaseIterable, Identifiable, Sendable {
+    case practice
+    case warmup
+    case activeRecovery = "active_recovery"
+    case rehabTracking = "rehab_tracking"
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .practice: "Skill practice"
+        case .warmup: "Warm-up"
+        case .activeRecovery: "Active recovery"
+        case .rehabTracking: "Rehab tracking"
+        }
+    }
+}
+
+enum ProductSessionPriorLoad: String, Codable, CaseIterable, Identifiable, Sendable {
+    case fresh
+    case moderate
+    case strenuous
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .fresh: "Fresh"
+        case .moderate: "Some earlier exercise"
+        case .strenuous: "After hard exercise"
+        }
+    }
+}
+
 struct ProductSessionFeedback: Codable, Equatable, Sendable {
     static let schemaVersion =
         "motionos.product-session-feedback.v1"
@@ -36,6 +70,8 @@ struct ProductSessionFeedback: Codable, Equatable, Sendable {
     let recordedAtUTC: String
     let perceivedStability: Int
     let perceivedEffort: Int
+    let trainingIntent: ProductSessionIntent?
+    let priorLoad: ProductSessionPriorLoad?
     let movementNotes: String
     let productNotes: String
     let coachUsefulness: ProductSessionCoachUsefulness?
@@ -46,6 +82,8 @@ struct ProductSessionFeedback: Codable, Equatable, Sendable {
         runID: String,
         perceivedStability: Int,
         perceivedEffort: Int,
+        trainingIntent: ProductSessionIntent? = nil,
+        priorLoad: ProductSessionPriorLoad? = nil,
         movementNotes: String,
         productNotes: String,
         coachUsefulness: ProductSessionCoachUsefulness? = nil,
@@ -63,6 +101,8 @@ struct ProductSessionFeedback: Codable, Equatable, Sendable {
             5,
             max(1, perceivedEffort)
         )
+        self.trainingIntent = trainingIntent
+        self.priorLoad = priorLoad
         self.movementNotes = movementNotes
             .trimmingCharacters(in: .whitespacesAndNewlines)
         self.productNotes = productNotes

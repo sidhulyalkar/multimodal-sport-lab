@@ -27,6 +27,10 @@ struct ObserveHomeView: View {
                     onOpenDevices: { showDevices = true }
                 )
 
+                if !indoBoardActive {
+                    IndoBoardTodayFocusCard(selectedTab: $selectedTab)
+                }
+
                 if indoBoardActive {
                     activeProductSession
                 } else if inbox.latestSessionID != nil

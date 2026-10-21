@@ -9,6 +9,8 @@ struct ProductRunRecord: Identifiable, Equatable, Sendable {
     let protocolVersion: String
     let outcome: ProductSessionOutcome
     let captureMode: String?
+    let trainingIntent: ProductSessionIntent?
+    let priorLoad: ProductSessionPriorLoad?
     let startedAt: Date?
     let sealedAt: Date?
     let completedBlockIDs: [String]
@@ -327,6 +329,20 @@ final class ProductRunLibrary: ObservableObject {
             let failureCount = int(
                 metadata["failure_note_count"]
             ) ?? 0
+            let feedbackURL = existingURL(
+                directory.appendingPathComponent("product-feedback.json"),
+                manager: manager
+            )
+            let feedback: ProductSessionFeedback?
+            if let feedbackURL,
+               let feedbackData = try? Data(contentsOf: feedbackURL) {
+                feedback = try? decoder.decode(
+                    ProductSessionFeedback.self,
+                    from: feedbackData
+                )
+            } else {
+                feedback = nil
+            }
             let outcome =
                 productManifest?.resolvedOutcome
                 ?? ProductSessionOutcome(
@@ -347,6 +363,8 @@ final class ProductRunLibrary: ObservableObject {
                         ?? "unknown",
                 outcome: outcome,
                 captureMode: productManifest?.captureMode,
+                trainingIntent: feedback?.trainingIntent,
+                priorLoad: feedback?.priorLoad,
                 startedAt: date(
                     metadata["started_at_utc"],
                     formatter: formatter
@@ -391,12 +409,7 @@ final class ProductRunLibrary: ObservableObject {
                             ),
                         manager: manager
                     ),
-                feedbackURL: existingURL(
-                    directory.appendingPathComponent(
-                        "product-feedback.json"
-                    ),
-                    manager: manager
-                )
+                feedbackURL: feedbackURL
             )
         }
         .sorted {

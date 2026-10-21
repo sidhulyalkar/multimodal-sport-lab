@@ -196,6 +196,7 @@ struct ProgressHomeView: View {
         ScrollView {
             LazyVStack(spacing: MotionOSDesign.pageSpacing) {
                 progressIntro
+                IndoBoardControlProgressCard()
                 MovementTrendsCard()
                 comparisonPrinciple
             }
