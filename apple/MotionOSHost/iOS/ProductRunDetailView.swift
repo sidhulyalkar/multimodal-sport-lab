@@ -35,6 +35,11 @@ struct ProductRunDetailView: View {
                     PreviousRunComparisonCard(run: run)
                 }
 
+                if run.protocolKind == FieldProtocolKind.indoBoard.rawValue,
+                   run.productManifest?.coachSummary != nil {
+                    IndoBoardControlInsightsCard(run: run)
+                }
+
                 if let coach = run.productManifest?.coachSummary {
                     coachSummary(coach)
 
