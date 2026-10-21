@@ -735,6 +735,45 @@ public final class IndoBoardCoachEngine {
                 at: min(2, metrics.count)
             )
         }
+        // Compare only the two matched natural-balance blocks. Intentional
+        // shifts and squats must not be mislabeled as control degradation.
+        if boardCoverageFirstBalance >= IndoBoardEvidenceQualityThresholds.minimumBlockCoverage,
+           boardCoverageSecondBalance >= IndoBoardEvidenceQualityThresholds.minimumBlockCoverage {
+            let observations: [IndoBoardControlObservation] = samples.compactMap { sample in
+                guard let position = sample.rollerAlongDeck,
+                      let stateConfidence = sample.boardStateConfidence
+                else { return nil }
+                return IndoBoardControlObservation(
+                    blockID: sample.blockID,
+                    elapsedSeconds: sample.elapsedSeconds,
+                    rollerAlongDeck: position,
+                    confidence: stateConfidence
+                )
+            }
+            if let profile = IndoBoardControlAnalyzer.analyze(observations) {
+                numericMetrics["board_control_early_center_fraction"] =
+                    profile.earlyCenterFraction
+                numericMetrics["board_control_repeat_center_fraction"] =
+                    profile.repeatCenterFraction
+                numericMetrics["board_control_center_change_pp"] =
+                    profile.centerChangePercentagePoints
+                numericMetrics["board_control_early_reversals_per_min"] =
+                    profile.earlyReversalsPerMinute
+                numericMetrics["board_control_repeat_reversals_per_min"] =
+                    profile.repeatReversalsPerMinute
+                numericMetrics["board_control_early_observed_s"] =
+                    profile.earlyObservedSeconds
+                numericMetrics["board_control_repeat_observed_s"] =
+                    profile.repeatObservedSeconds
+                numericMetrics["board_control_directional_samples"] =
+                    Double(profile.directionalObservationCount)
+                if let positiveExposure = profile.positiveSideExposureFraction {
+                    numericMetrics["board_control_positive_side_fraction"] =
+                        positiveExposure
+                }
+            }
+        }
+
         if let medianKnee {
             numericMetrics["median_knee_flexion_deg"] =
                 medianKnee
