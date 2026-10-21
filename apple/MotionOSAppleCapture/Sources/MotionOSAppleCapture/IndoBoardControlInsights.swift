@@ -59,8 +59,8 @@ public struct IndoBoardControlInsights: Sendable, Equatable {
 /// Long gaps, duplicate timestamps, or low-confidence board estimates must not
 /// be treated as continuously observed motion.
 public enum IndoBoardControlAnalyzer {
-    private static let minimumSamplesPerBlock = 30
-    private static let minimumObservedSeconds = 6.0
+    private static let minimumSamplesPerBlock = 50
+    private static let minimumObservedSeconds = 12.0
     private static let maximumSampleGap = 0.50
     private static let minimumSpeed = 0.20
     private static let sideThreshold = 0.20
@@ -77,12 +77,12 @@ public enum IndoBoardControlAnalyzer {
                 && $0.confidence >=
                     IndoBoardEvidenceQualityThresholds.minimumStateConfidence
         }
-        let early = valid.filter {
-            $0.blockID == "free-balance-a"
-        }.sorted { $0.elapsedSeconds < $1.elapsedSeconds }
-        let later = valid.filter {
-            $0.blockID == "free-balance-b"
-        }.sorted { $0.elapsedSeconds < $1.elapsedSeconds }
+        let early = sortedUnique(
+            valid.filter { $0.blockID == "free-balance-a" }
+        )
+        let later = sortedUnique(
+            valid.filter { $0.blockID == "free-balance-b" }
+        )
 
         guard early.count >= minimumSamplesPerBlock,
               later.count >= minimumSamplesPerBlock
@@ -101,11 +101,24 @@ public enum IndoBoardControlAnalyzer {
         let exposures = (early + later).filter {
             abs($0.rollerAlongDeck) > sideThreshold
         }
-        let positiveFraction: Double? = exposures.count >= 20
-            ? Double(
-                exposures.filter { $0.rollerAlongDeck > 0 }.count
-            ) / Double(exposures.count)
-            : nil
+        let offCenterSeconds =
+            measuredDuration(early, where: {
+                abs($0.rollerAlongDeck) > sideThreshold
+            })
+            + measuredDuration(later, where: {
+                abs($0.rollerAlongDeck) > sideThreshold
+            })
+        let positiveSeconds =
+            measuredDuration(early, where: {
+                $0.rollerAlongDeck > sideThreshold
+            })
+            + measuredDuration(later, where: {
+                $0.rollerAlongDeck > sideThreshold
+            })
+        let positiveFraction: Double? =
+            exposures.count >= 20 && offCenterSeconds >= 3
+                ? positiveSeconds / offCenterSeconds
+                : nil
 
         let earlyCenter = centerFraction(early)
         let laterCenter = centerFraction(later)
@@ -126,18 +139,44 @@ public enum IndoBoardControlAnalyzer {
     private static func centerFraction(
         _ samples: [IndoBoardControlObservation]
     ) -> Double {
-        Double(samples.filter {
+        measuredDuration(samples, where: {
             abs($0.rollerAlongDeck) <= IndoBoardBalanceThresholds.centerZone
-        }.count) / Double(samples.count)
+        }) / observedSeconds(samples)
+    }
+
+    private static func sortedUnique(
+        _ samples: [IndoBoardControlObservation]
+    ) -> [IndoBoardControlObservation] {
+        let ranked = samples.sorted {
+            if $0.elapsedSeconds == $1.elapsedSeconds {
+                return $0.confidence > $1.confidence
+            }
+            return $0.elapsedSeconds < $1.elapsedSeconds
+        }
+        var lastTime: Double?
+        return ranked.filter { sample in
+            guard sample.elapsedSeconds != lastTime else { return false }
+            lastTime = sample.elapsedSeconds
+            return true
+        }
     }
 
     private static func observedSeconds(
         _ samples: [IndoBoardControlObservation]
     ) -> Double {
+        measuredDuration(samples, where: { _ in true })
+    }
+
+    private static func measuredDuration(
+        _ samples: [IndoBoardControlObservation],
+        where included: (IndoBoardControlObservation) -> Bool
+    ) -> Double {
         zip(samples, samples.dropFirst()).reduce(0.0) { result, pair in
             let dt = pair.1.elapsedSeconds - pair.0.elapsedSeconds
-            return result
-                + (dt > 0 && dt <= maximumSampleGap ? dt : 0)
+            guard dt > 0, dt <= maximumSampleGap, included(pair.0) else {
+                return result
+            }
+            return result + dt
         }
     }
 
