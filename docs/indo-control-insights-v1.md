@@ -14,12 +14,12 @@ natural-balance reference. It emits:
 
 | Numeric key | Meaning |
 |---|---|
-| `board_control_early_center_fraction` | Fraction of accepted roller samples in the central ±0.20 zone during the first free-balance block |
-| `board_control_repeat_center_fraction` | Same fraction during the repeat free-balance block |
+| `board_control_early_center_fraction` | Fraction of observed valid time in the central ±0.20 roller zone during the first free-balance block |
+| `board_control_repeat_center_fraction` | Same time fraction during the repeat free-balance block |
 | `board_control_center_change_pp` | Repeat minus first, in percentage points |
 | `board_control_early_reversals_per_min` | Motion-sign reversals normalized by observed seconds in the first balance block |
 | `board_control_repeat_reversals_per_min` | Same during repeat block |
-| `board_control_positive_side_fraction` | Fraction of sufficiently off-center samples on the positive image-plane deck axis, **not foot loading** |
+| `board_control_positive_side_fraction` | Fraction of valid off-center observed time on the positive image-plane deck axis, **not foot loading** |
 | `board_control_directional_samples` | Number of off-center samples used for the direction fraction |
 | `board_control_early_observed_s` | Accumulated consecutive valid timestamp spans for the first block |
 | `board_control_repeat_observed_s` | Accumulated consecutive valid timestamp spans for the repeat block |
@@ -30,12 +30,12 @@ natural-balance reference. It emits:
   the pose-observation timeline.
 - Minimum board-state confidence is 0.55; nonfinite and out-of-range
   positions or timestamps are discarded.
-- At least 30 valid samples and at least 6 seconds of valid consecutive time
+- At least 50 unique valid samples and at least 12 seconds of valid consecutive time
   per matched block are required.
 - Reversal-rate calculations ignore adjacent samples separated by >0.5 seconds,
   zero or negative timestamp deltas, and roller velocity <0.20
   normalized deck-half-lengths/second.
-- The directional fraction requires at least 20 off-center samples.
+- The directional fraction requires at least 20 off-center samples and 3 seconds of usable off-center intervals.
 - Recovery P90 in Session Detail is shown only when at least 3 recoveries are
   available and the matched-block insight gate has passed.
 
@@ -43,7 +43,7 @@ Existing session manifests and raw evidence remain unchanged. Derived values
 are added to the optional `coachSummary.numericMetrics` dictionary. Sessions
 created before this change continue to decode and show a clear unavailable state.
 
-**Important:** These are sample-weighted image-plane proxies, not true time-weighted
+**Important:** These are timestamp-weighted image-plane proxies, not true time-weighted
 force, balance recovery in 3D, EMG, fatigue diagnoses, or verified rehabilitation
 metrics. Comparison after exercise may reflect many factors beyond fatigue.
 
