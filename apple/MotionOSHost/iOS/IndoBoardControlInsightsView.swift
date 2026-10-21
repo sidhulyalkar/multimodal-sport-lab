@@ -236,6 +236,8 @@ struct IndoBoardControlProgressCard: View {
         }
         return candidates.filter {
             $0.captureMode == mostRecent.captureMode
+                && $0.trainingIntent == mostRecent.trainingIntent
+                && $0.priorLoad == mostRecent.priorLoad
         }
     }
 
@@ -258,7 +260,7 @@ struct IndoBoardControlProgressCard: View {
         VStack(alignment: .leading, spacing: 13) {
             MotionOSSectionHeader(
                 title: "Balance over time",
-                subtitle: "Qualified, protocol-matched Indo Board sessions",
+                subtitle: "Tracking-gated, context-matched Indo Board sessions",
                 systemImage: "chart.xyaxis.line",
                 accent: .indigo
             )
@@ -312,8 +314,8 @@ struct IndoBoardControlProgressCard: View {
             }
 
             Text(
-                "These are roller-motion proxies from comparable capture modes, " +
-                "not population scores. Camera geometry, task difficulty, and " +
+                "These are roller-motion proxies from comparable capture modes and " +
+                "recorded session contexts, not population scores. Camera geometry and " +
                 "ordinary day-to-day variation may affect the trend."
             )
             .font(.caption2)
