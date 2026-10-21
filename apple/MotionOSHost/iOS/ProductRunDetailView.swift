@@ -9,6 +9,8 @@ struct ProductRunDetailView: View {
 
     @State private var perceivedStability = 3
     @State private var perceivedEffort = 3
+    @State private var trainingIntent: ProductSessionIntent?
+    @State private var priorLoad: ProductSessionPriorLoad?
     @State private var movementNotes = ""
     @State private var productNotes = ""
     @State private var coachUsefulness:
@@ -876,6 +878,15 @@ struct ProductRunDetailView: View {
             )
 
             if let savedFeedback {
+                if let intent = savedFeedback.trainingIntent {
+                    Label("Purpose: " + intent.label, systemImage: "scope")
+                        .font(.caption.weight(.semibold))
+                }
+                if let load = savedFeedback.priorLoad {
+                    Label("Earlier activity: " + load.label, systemImage: "figure.run")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 HStack(spacing: 8) {
                     feedbackBadge(
                         "Stability",
@@ -933,7 +944,26 @@ struct ProductRunDetailView: View {
                 Text(savedFeedback.claimBoundary)
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
+
+                Button("Edit session context") {
+                    self.savedFeedback = nil
+                }
+                .font(.caption.weight(.semibold))
             } else {
+                Picker("Session purpose", selection: $trainingIntent) {
+                    Text("Not specified").tag(nil as ProductSessionIntent?)
+                    ForEach(ProductSessionIntent.allCases) { intent in
+                        Text(intent.label).tag(Optional(intent))
+                    }
+                }
+
+                Picker("Earlier exercise", selection: $priorLoad) {
+                    Text("Not specified").tag(nil as ProductSessionPriorLoad?)
+                    ForEach(ProductSessionPriorLoad.allCases) { load in
+                        Text(load.label).tag(Optional(load))
+                    }
+                }
+
                 rating(
                     title: "Perceived stability",
                     value: $perceivedStability,
@@ -1270,6 +1300,8 @@ struct ProductRunDetailView: View {
             runID: run.runID,
             perceivedStability: perceivedStability,
             perceivedEffort: perceivedEffort,
+            trainingIntent: trainingIntent,
+            priorLoad: priorLoad,
             movementNotes: movementNotes,
             productNotes: productNotes,
             coachUsefulness: coachUsefulness,
@@ -1301,6 +1333,8 @@ struct ProductRunDetailView: View {
             savedFeedback = value
             perceivedStability = value.perceivedStability
             perceivedEffort = value.perceivedEffort
+            trainingIntent = value.trainingIntent
+            priorLoad = value.priorLoad
             movementNotes = value.movementNotes
             productNotes = value.productNotes
             coachUsefulness = value.coachUsefulness
