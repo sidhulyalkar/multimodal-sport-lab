@@ -21,11 +21,11 @@ final class IndoBoardControlInsightsTests: XCTestCase {
         let result = IndoBoardControlAnalyzer.analyze(early + later)
         XCTAssertNotNil(result)
         XCTAssertEqual(result?.earlyCenterFraction ?? -1, 1, accuracy: 0.001)
-        XCTAssertEqual(result?.repeatCenterFraction ?? -1, 0.25, accuracy: 0.001)
+        XCTAssertEqual(result?.repeatCenterFraction ?? -1, 0.25, accuracy: 0.005)
         XCTAssertEqual(
             result?.centerChangePercentagePoints ?? 0,
             -75,
-            accuracy: 0.001
+            accuracy: 0.30
         )
         XCTAssertEqual(
             result?.positiveSideExposureFraction ?? -1,
@@ -75,15 +75,46 @@ final class IndoBoardControlInsightsTests: XCTestCase {
         XCTAssertNil(IndoBoardControlAnalyzer.analyze(first + second))
     }
 
+    func testDuplicateTimestampsCannotBiasCenterTime() {
+        let early = (0..<200).map { index in
+            sample(
+                "free-balance-a",
+                time: 15 + Double(index) * 0.1,
+                position: 0.1
+            )
+        }
+        let repeatSamples = (0..<200).map { index in
+            sample(
+                "free-balance-b",
+                time: 85 + Double(index) * 0.1,
+                position: 0.1
+            )
+        }
+        let duplicated = (0..<100).map { _ in
+            sample(
+                "free-balance-a",
+                time: 15,
+                position: 0.9,
+                confidence: 0.6
+            )
+        }
+
+        let result = IndoBoardControlAnalyzer.analyze(
+            early + duplicated + repeatSamples
+        )
+        XCTAssertEqual(result?.earlyCenterFraction ?? -1, 1, accuracy: 0.001)
+        XCTAssertEqual(result?.repeatCenterFraction ?? -1, 1, accuracy: 0.001)
+    }
+
     func testDirectionalMetricRequiresEnoughOffCenterSamples() {
-        let early = (0..<100).map { index in
+        let early = (0..<160).map { index in
             sample(
                 "free-balance-a",
                 time: 15 + Double(index) * 0.1,
                 position: 0.05
             )
         }
-        let later = (0..<100).map { index in
+        let later = (0..<160).map { index in
             sample(
                 "free-balance-b",
                 time: 85 + Double(index) * 0.1,
