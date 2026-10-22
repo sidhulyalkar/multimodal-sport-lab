@@ -28,18 +28,26 @@ after the MotionOS session.
 
 ## Build under test
 
-Use the release-candidate branch after its CI is green:
+Use the field-guide branch for the first physical run once its CI is green.
+From your existing repository checkout:
 
 ```bash
-cd ~/Documents/Projects/multimodal-sport-lab
-git switch product/motionos-m0-release-candidate-v3
-git pull --ff-only
-open apple/MotionOSHost/MotionOSHost.xcodeproj
+git status --short
+git fetch origin
+git switch feat/first-indo-field-guide
+git pull --ff-only origin feat/first-indo-field-guide
+cd apple/MotionOSHost
+bash bootstrap.sh --no-open
+open MotionOSHost.xcodeproj
 ```
 
-Do not run `bootstrap.sh --reset-packages` as part of this physical pass.
-Preserve the locally selected Development Team unless regeneration is actually
-required.
+If `git status --short` shows your own uncommitted edits, preserve them
+before switching branches. Bootstrap regenerates the XcodeGen project after
+new Swift sources are added, but does not use `--reset-packages` by default.
+If the repository lives under Documents/Desktop/Downloads, the bootstrap
+guard may ask you to move it under `~/Developer` or explicitly opt in to
+the macOS protected-folder permission prompts. Do not bypass that guard
+unintentionally. Confirm both targets still use your Development Team.
 
 In Xcode:
 
@@ -66,7 +74,11 @@ status.
 
 Open **Capture → Indo Board**.
 
-For the first pass choose **Standard / Watch + iPhone**.
+For the first pass choose **Watch + iPhone**. You do not need an
+external camera, insole, printed markers, or body scan to get a useful
+first-session capture. The optional **First recording guide** in the app
+summarizes the physical setup, while device readiness remains a separate
+automatic preflight.
 
 Run preflight and require:
 
@@ -89,7 +101,7 @@ Do not begin if a tripod or phone position creates a fall hazard.
 
 ## Gate 3 · Complete 120 second session
 
-Press **Start Complete Session**. The complete-session path is hands-free after
+Press **Start Session**. The complete-session path is hands-free after
 start unless you intentionally finish early.
 
 MotionOS should:
@@ -108,17 +120,22 @@ The current product protocol is:
 
 | Time | Product block |
 | ---: | --- |
-| 0–20 s | neutral settle |
-| 20–55 s | natural free balance |
-| 55–95 s | five comfortable tilt-and-recover cycles |
-| 95–110 s | natural free balance |
-| 110–120 s | neutral finish |
+| 0–15 s | neutral settle |
+| 15–35 s | natural free balance A |
+| 35–60 s | five slow side shifts with clear center pauses |
+| 60–85 s | three shallow controlled squats |
+| 85–105 s | natural free balance B |
+| 105–120 s | neutral finish |
 
-SYNC windows are intentionally separate from board perturbations:
+The table reflects the canonical `IndoBoardProductProtocol` version
+`motionos.indo-board-product-session.v2`, which is authoritative if
+the app's protocol changes. Keep movements within a comfortable range.
 
-- START: preferred ~12 s;
-- MIDDLE: preferred ~50 s;
-- END: preferred ~110 s.
+SYNC windows are separate cues, not new blocks:
+
+- START: 8–14 s (preferred 10 s);
+- MIDDLE: 61–66 s (preferred 63 s, near the start of squats);
+- END: 110–119 s (preferred 114 s).
 
 When the Watch presents **SYNC · MOVE NOW**, make one sharp arm gesture while
 trying to keep the board near neutral. The Watch acknowledgment counts only
@@ -243,6 +260,29 @@ original session creation time and already-sealed source hashes.
 This product pass proves capture/provenance UX only. Full multiview clock fit,
 camera calibration, 3D skeleton, Indo Board pose, and the five camera-rich M0
 metrics remain separate downstream qualification work.
+
+## First-session evidence handoff
+
+Once the run is sealed, save the original evidence before editing or cropping
+any video. In **Sessions**, confirm:
+
+- one new run appears with the expected completion/abort state;
+- the iPhone video opens and covers the full body, board, and recovery motion;
+- Watch journal transfer reaches a verified state, or record the exact pending state;
+- start/middle/end sync cues were captured where possible;
+- the original Action 4 MP4 was imported into the same run if Multiview was used;
+- your short perceived-effort/stability note and camera position are captured.
+
+If an app control fails, send a screenshot of the **Capture** preflight,
+**active Watch** status, or **Sessions** evidence detail and the exact first
+error message. Do not delete or overwrite an unverified original just because
+an export or sync step fails.
+
+For research interpretation, a standard Watch + camera run supplies video,
+pose and IMU evidence but **not** independently measured EMG, plantar load,
+muscle force, body composition or fatigue. Those need separate reference
+measurements and qualification. The initial run is valuable for capture
+reliability, pose coverage, technique observation and repeatable baseline work.
 
 ## Feedback to capture after the run
 
