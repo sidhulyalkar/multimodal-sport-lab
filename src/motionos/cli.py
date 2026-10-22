@@ -8,6 +8,10 @@ from .annotation_contract import (
     validate_annotation_manifest,
     validate_teacher_labels,
 )
+from .bilateral_load_series import (
+    build_bilateral_load_series,
+    verify_bilateral_load_series,
+)
 from .body_authoring import (
     build_body_model_from_spec,
     write_body_registration_report,
@@ -550,6 +554,19 @@ def _parser() -> argparse.ArgumentParser:
         help="recheck video/teacher candidate index provenance and artifact hashes",
     )
     video_teacher_verify.add_argument("index")
+
+    bilateral = sub.add_parser(
+        "build-bilateral-load-series",
+        help="materialize source-bound private pressure labels with missingness masks",
+    )
+    bilateral.add_argument("spec")
+    bilateral.add_argument("output")
+
+    bilateral_verify = sub.add_parser(
+        "verify-bilateral-load-series",
+        help="recompute insole force fractions and verify original source evidence",
+    )
+    bilateral_verify.add_argument("series")
 
     source_qualification = sub.add_parser(
         "qualify-teacher-sources",
@@ -1415,6 +1432,20 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "verify-video-teacher-index":
         result = verify_video_teacher_index(args.index)
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+
+    if args.command == "build-bilateral-load-series":
+        result = build_bilateral_load_series(args.spec, args.output)
+        print(json.dumps({
+            "schema_version": result["schema_version"],
+            "series_count": result["series_count"],
+            "training_ready": result["training_ready"],
+        }, indent=2, sort_keys=True))
+        return 0
+
+    if args.command == "verify-bilateral-load-series":
+        result = verify_bilateral_load_series(args.series)
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0
 
