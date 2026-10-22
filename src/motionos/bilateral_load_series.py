@@ -274,7 +274,12 @@ def build_bilateral_load_series(spec_path: str | Path, output_path: str | Path) 
     if spec == destination:
         raise ValueError("output must not overwrite source spec")
     if destination.exists():
-        previous = _read(destination)
+        try:
+            previous = _read(destination)
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise FileExistsError(
+                "refusing to overwrite existing non-series evidence"
+            ) from exc
         if previous.get("schema_version") != VERSION:
             raise FileExistsError("refusing to overwrite existing non-series evidence")
     output = _build(spec, destination)
