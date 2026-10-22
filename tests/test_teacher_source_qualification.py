@@ -227,6 +227,9 @@ def test_clock_receipt_must_recompute_and_match_source_session(tmp_path):
     receipt = json.loads(path.read_text())
     receipt["target"]["bundle_sha256"] = "0" * 64
     path.write_text(json.dumps(receipt))
+    build_video_teacher_index(
+        tmp_path / "candidate-spec.json", tmp_path / "candidate-index.json"
+    )
     with pytest.raises(ValueError, match="bundle hash mismatch"):
         build_teacher_source_qualification(spec, out)
 
