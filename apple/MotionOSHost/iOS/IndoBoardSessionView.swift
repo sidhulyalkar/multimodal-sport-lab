@@ -134,6 +134,9 @@ struct IndoBoardSessionView: View {
         switch session.phase {
         case .idle, .preparing, .ready, .failed:
             captureModeCard
+            IndoBoardFirstCaptureGuideCard(
+                externalCamera: session.requiresExternalCamera
+            )
             sourcePreflight
 
             if camera.phase == .ready
