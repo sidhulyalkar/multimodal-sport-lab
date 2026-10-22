@@ -263,3 +263,20 @@ def test_report_edit_is_detected(tmp_path):
     out.write_text(json.dumps(report))
     with pytest.raises(ValueError, match="report differs"):
         verify_teacher_source_qualification(out)
+
+def test_report_cannot_overwrite_original_video(tmp_path):
+    spec, _ = _fixture(tmp_path)
+    original = tmp_path / "original.mov"
+    before = original.read_bytes()
+    with pytest.raises(FileExistsError, match="refusing to overwrite"):
+        build_teacher_source_qualification(spec, original)
+    assert original.read_bytes() == before
+
+
+def test_report_cannot_overwrite_candidate_index(tmp_path):
+    spec, _ = _fixture(tmp_path)
+    original = tmp_path / "candidate-index.json"
+    before = original.read_bytes()
+    with pytest.raises(FileExistsError, match="refusing to overwrite"):
+        build_teacher_source_qualification(spec, original)
+    assert original.read_bytes() == before
