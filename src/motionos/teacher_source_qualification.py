@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
@@ -123,7 +124,7 @@ def _binding(spec: dict[str, object], sample: dict[str, object], base: Path,
 
         info = target.index.get("streams", {}).get(stream)
         if not isinstance(info, dict):
-            raise ValueError(f"{sample_id}: sensor stream is missing")
+            raise TypeError(f"{sample_id}: sensor stream is missing")
         raw_path = _file(info.get("path"), target_root, "indexed sensor stream")
         if not raw_path.is_relative_to(target_root):
             raise ValueError(f"{sample_id}: sensor stream path escapes its session")
@@ -139,7 +140,7 @@ def _binding(spec: dict[str, object], sample: dict[str, object], base: Path,
         if any(
             current.sequence <= previous.sequence
             or current.device_time_ns <= previous.device_time_ns
-            for previous, current in zip(events, events[1:])
+            for previous, current in pairwise(events)
         ):
             raise ValueError(f"{sample_id}: non-monotonic or duplicate sensor timestamps")
 
@@ -148,19 +149,20 @@ def _binding(spec: dict[str, object], sample: dict[str, object], base: Path,
         mapped: list[int] = []
         for event in events:
             reference_ns = clock.map(event.device_time_ns)
-            if label["time_axis"] == "reference_ns":
-                if (event.session_time_ns is None
-                    or abs(event.session_time_ns - reference_ns) > MAX_CLOCK_RMS_NS):
-                    raise ValueError(
-                        f"{sample_id}: declared reference time is absent or inconsistent"
-                    )
+            if label["time_axis"] == "reference_ns" and (
+                event.session_time_ns is None
+                or abs(event.session_time_ns - reference_ns) > MAX_CLOCK_RMS_NS
+            ):
+                raise ValueError(
+                    f"{sample_id}: declared reference time is absent or inconsistent"
+                )
             if start <= reference_ns <= end:
                 mapped.append(reference_ns)
 
         if len(mapped) < MIN_SENSOR_SAMPLES:
             raise ValueError(f"{sample_id}: insufficient samples in video window")
         observed_ns = sum(
-            b - a for a, b in zip(mapped, mapped[1:])
+            b - a for a, b in pairwise(mapped)
             if 0 < b - a <= MAX_SENSOR_GAP_NS
         )
         fraction = observed_ns / (end - start)
