@@ -245,6 +245,15 @@ def build_teacher_source_qualification(
     output = Path(output_path).resolve()
     if spec == output:
         raise ValueError("output must not overwrite qualification spec")
+    if output.exists():
+        try:
+            previous = json.loads(output.read_text(encoding="utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            previous = None
+        if not isinstance(previous, dict) or previous.get("schema_version") != REPORT_VERSION:
+            raise FileExistsError(
+                "refusing to overwrite a non-qualification artifact (possibly raw evidence)"
+            )
     result = _build(spec, output)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(
