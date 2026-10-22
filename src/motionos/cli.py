@@ -123,6 +123,10 @@ from .replay_review import build_replay_review_queue
 from .reviewed_labels import materialize_reviewed_labels
 from .session import SessionReader
 from .simulate import simulate_session
+from .teacher_source_qualification import (
+    build_teacher_source_qualification,
+    verify_teacher_source_qualification,
+)
 from .validate import validate_m0_session
 from .video_alignment import write_video_alignment
 from .video_teacher_dataset import (
@@ -546,6 +550,19 @@ def _parser() -> argparse.ArgumentParser:
         help="recheck video/teacher candidate index provenance and artifact hashes",
     )
     video_teacher_verify.add_argument("index")
+
+    source_qualification = sub.add_parser(
+        "qualify-teacher-sources",
+        help="validate source-bound video and sensor synchronization evidence",
+    )
+    source_qualification.add_argument("spec")
+    source_qualification.add_argument("output")
+
+    verify_sources = sub.add_parser(
+        "verify-teacher-sources",
+        help="recompute original-source hashes and sensor/video clock bindings",
+    )
+    verify_sources.add_argument("report")
 
     grouped_split = sub.add_parser(
         "build-grouped-split",
@@ -1398,6 +1415,21 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "verify-video-teacher-index":
         result = verify_video_teacher_index(args.index)
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+
+    if args.command == "qualify-teacher-sources":
+        result = build_teacher_source_qualification(args.spec, args.output)
+        print(json.dumps({
+            "schema_version": result["schema_version"],
+            "sample_count": result["sample_count"],
+            "source_binding_passed": result["source_binding_passed"],
+            "training_ready": result["training_ready"],
+        }, indent=2, sort_keys=True))
+        return 0
+
+    if args.command == "verify-teacher-sources":
+        result = verify_teacher_source_qualification(args.report)
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0
 
