@@ -122,11 +122,11 @@ from .replay_annotation import build_replay_annotation_worklist
 from .replay_review import build_replay_review_queue
 from .reviewed_labels import materialize_reviewed_labels
 from .session import SessionReader
+from .simulate import simulate_session
 from .teacher_source_qualification import (
     build_teacher_source_qualification,
     verify_teacher_source_qualification,
 )
-from .simulate import simulate_session
 from .validate import validate_m0_session
 from .video_alignment import write_video_alignment
 from .video_teacher_dataset import (
