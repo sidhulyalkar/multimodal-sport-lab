@@ -21,7 +21,7 @@ from motionos.video_alignment import VideoAlignmentAnchor, build_video_alignment
 from motionos.video_teacher_dataset import build_video_teacher_index
 
 
-def _session(tmp_path, name, *, sensor=False, incomplete=False):
+def _session(tmp_path, name, *, sensor=False, incomplete=False, bad_right_clock=False):
     root = tmp_path / "sessions"
     left_times = [i * 100_000_000 for i in range(41)]
     times = left_times if sensor else [t + 40_000_000 for t in left_times]
@@ -57,7 +57,11 @@ def _session(tmp_path, name, *, sensor=False, incomplete=False):
                     force = -2.0
                 payload = {
                     "source": "moticon_opengo_text_export",
-                    "timestamp_basis": "opengo_export_relative_time",
+                    "timestamp_basis": (
+                        "unverified_right_clock"
+                        if bad_right_clock and side == "right"
+                        else "opengo_export_relative_time"
+                    ),
                     "pressure_units": {"raw": "N/cm^2", "canonical": "kPa"},
                     "pressure_kpa": [10.0] * 16,
                     "normal_force_n": force,
@@ -73,9 +77,12 @@ def _session(tmp_path, name, *, sensor=False, incomplete=False):
     return root / name
 
 
-def _fixture(tmp_path: Path, *, incomplete=False):
+def _fixture(tmp_path: Path, *, incomplete=False, bad_right_clock=False):
     reference = _session(tmp_path, "watch-reference")
-    pressure = _session(tmp_path, "opengo-reference", sensor=True, incomplete=incomplete)
+    pressure = _session(
+        tmp_path, "opengo-reference",
+        sensor=True, incomplete=incomplete, bad_right_clock=bad_right_clock,
+    )
     watch = SessionReader(reference)
     insoles = SessionReader(pressure)
 
@@ -225,7 +232,7 @@ def test_refuses_to_overwrite_canonical_source_video(tmp_path):
     spec, _ = _fixture(tmp_path)
     video = tmp_path / "original.mov"
     before = video.read_bytes()
-    with pytest.raises((FileExistsError, UnicodeDecodeError, ValueError)):
+    with pytest.raises(FileExistsError, match="refusing to overwrite"):
         build_bilateral_load_series(spec, video)
     assert video.read_bytes() == before
 
@@ -234,3 +241,28 @@ def test_cli_build_verify(tmp_path, capsys):
     spec, out = _fixture(tmp_path)
     assert main(["build-bilateral-load-series", str(spec), str(out)]) == 0
     assert main(["verify-bilateral-load-series", str(out)]) == 0
+
+
+def test_different_right_sensor_clock_fails_closed(tmp_path):
+    spec, out = _fixture(tmp_path, bad_right_clock=True)
+    with pytest.raises(ValueError, match="unqualified timebase"):
+        build_bilateral_load_series(spec, out)
+
+
+def test_calibration_receipt_is_hash_bound_but_not_physically_approved(tmp_path):
+    spec, out = _fixture(tmp_path)
+    calibration_path = tmp_path / "calibration.json"
+    calibration_path.write_text(json.dumps({
+        "kind": "synthetic-calibration-placeholder",
+        "physically_verified": False,
+    }))
+    request = json.loads(spec.read_text())
+    request["samples"][0]["calibration_receipt"] = "calibration.json"
+    spec.write_text(json.dumps(request))
+    result = build_bilateral_load_series(spec, out)["series"][0]
+    assert result["calibration_reference"]["sha256"]
+    assert result["calibration_verified"] is False
+    assert verify_bilateral_load_series(out)["passed"] is True
+    calibration_path.write_text(json.dumps({"kind": "modified"}))
+    with pytest.raises(ValueError, match="no longer matches"):
+        verify_bilateral_load_series(out)
