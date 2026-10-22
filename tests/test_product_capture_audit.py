@@ -149,3 +149,30 @@ def test_output_is_not_allowed_inside_original_evidence(tmp_path):
     assert write_product_capture_audit(run, report_path)["status"] == "export_hashes_verified"
     with pytest.raises(FileExistsError, match="refusing to overwrite"):
         write_product_capture_audit(run, report_path)
+
+
+def test_interleaved_frame_pose_streams_have_independent_sequences(tmp_path):
+    run, docs = _fixture(tmp_path)
+    frames = (
+        '{"stream":"/camera/frame","sequence":0}\n'
+        '{"stream":"/camera/pose","sequence":0}\n'
+        '{"stream":"/camera/frame","sequence":1}\n'
+        '{"stream":"/camera/pose","sequence":1}\n'
+    ).encode()
+    frame_hash = _write(
+        docs, "MotionOSCamera/camera-123/camera-frames.jsonl", frames
+    )
+    manifest = json.loads((run / "product-session.json").read_text())
+    manifest["cameraJournalSHA256"] = frame_hash
+    (run / "product-session.json").write_text(json.dumps(manifest))
+    assert build_product_capture_audit(run)["status"] == "export_hashes_verified"
+
+    duplicated = frames + b'{"stream":"/camera/pose","sequence":1}\n'
+    new_hash = _write(
+        docs, "MotionOSCamera/camera-123/camera-frames.jsonl", duplicated
+    )
+    manifest["cameraJournalSHA256"] = new_hash
+    (run / "product-session.json").write_text(json.dumps(manifest))
+    report = build_product_capture_audit(run)
+    assert report["status"] == "integrity_problem"
+    assert "camera_journal_invalid_jsonl" in report["issues"]
