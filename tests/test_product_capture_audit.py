@@ -154,11 +154,11 @@ def test_output_is_not_allowed_inside_original_evidence(tmp_path):
 def test_interleaved_frame_pose_streams_have_independent_sequences(tmp_path):
     run, docs = _fixture(tmp_path)
     frames = (
-        '{"stream":"/camera/frame","sequence":0}\n'
-        '{"stream":"/camera/pose","sequence":0}\n'
-        '{"stream":"/camera/frame","sequence":1}\n'
-        '{"stream":"/camera/pose","sequence":1}\n'
-    ).encode()
+        b'{"stream":"/camera/frame","sequence":0}\n'
+        b'{"stream":"/camera/pose","sequence":0}\n'
+        b'{"stream":"/camera/frame","sequence":1}\n'
+        b'{"stream":"/camera/pose","sequence":1}\n'
+    )
     frame_hash = _write(
         docs, "MotionOSCamera/camera-123/camera-frames.jsonl", frames
     )
