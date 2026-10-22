@@ -76,7 +76,7 @@ def _valid_jsonl(path: Path, *, run_id: str | None = None) -> dict[str, Any]:
     if not path.is_file():
         return {"valid": False, "reason": "missing"}
     count = 0
-    previous: int | None = None
+    previous_by_stream: dict[str, int] = {}
     try:
         with path.open("r", encoding="utf-8") as handle:
             for line in handle:
@@ -89,9 +89,13 @@ def _valid_jsonl(path: Path, *, run_id: str | None = None) -> dict[str, Any]:
                     return {"valid": False, "reason": "run_id_mismatch"}
                 seq = row.get("sequence")
                 if type(seq) is int:
+                    stream = row.get("stream", "__single_journal__")
+                    if not isinstance(stream, str):
+                        return {"valid": False, "reason": "invalid_stream"}
+                    previous = previous_by_stream.get(stream)
                     if previous is not None and seq <= previous:
                         return {"valid": False, "reason": "sequence_not_increasing"}
-                    previous = seq
+                    previous_by_stream[stream] = seq
                 count += 1
     except (OSError, UnicodeDecodeError, json.JSONDecodeError):
         return {"valid": False, "reason": "invalid_jsonl"}
