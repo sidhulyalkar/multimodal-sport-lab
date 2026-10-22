@@ -125,6 +125,10 @@ from .session import SessionReader
 from .simulate import simulate_session
 from .validate import validate_m0_session
 from .video_alignment import write_video_alignment
+from .video_teacher_dataset import (
+    build_video_teacher_index,
+    verify_video_teacher_index,
+)
 from .world_geometry import (
     build_camera_rig_receipt,
     triangulate_multiview,
@@ -529,6 +533,19 @@ def _parser() -> argparse.ArgumentParser:
         help="recompute hashes and target eligibility for an M1 experiment",
     )
     experiment_verify.add_argument("manifest")
+
+    video_teacher = sub.add_parser(
+        "build-video-teacher-index",
+        help="index consented video and independent sensor labels without copying evidence",
+    )
+    video_teacher.add_argument("spec")
+    video_teacher.add_argument("output")
+
+    video_teacher_verify = sub.add_parser(
+        "verify-video-teacher-index",
+        help="recheck video/teacher candidate index provenance and artifact hashes",
+    )
+    video_teacher_verify.add_argument("index")
 
     grouped_split = sub.add_parser(
         "build-grouped-split",
@@ -1366,6 +1383,21 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "verify-experiment-manifest":
         result = verify_experiment_manifest(args.manifest)
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+
+    if args.command == "build-video-teacher-index":
+        result = build_video_teacher_index(args.spec, args.output)
+        print(json.dumps({
+            "schema_version": result["schema_version"],
+            "sample_count": result["sample_count"],
+            "measured_candidate_count": result["measured_candidate_count"],
+            "training_ready": result["training_ready"],
+        }, indent=2, sort_keys=True))
+        return 0
+
+    if args.command == "verify-video-teacher-index":
+        result = verify_video_teacher_index(args.index)
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0
 
