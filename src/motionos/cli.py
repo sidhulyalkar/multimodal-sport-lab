@@ -114,6 +114,7 @@ from .p1 import (
 )
 from .personal_baseline import build_personal_movement_baseline
 from .personal_delta import build_personal_session_delta
+from .product_capture_audit import write_product_capture_audit
 from .public_data import index_totalcapture
 from .public_video import build_public_video_catalog
 from .qc import session_qc
@@ -510,6 +511,14 @@ def _parser() -> argparse.ArgumentParser:
         "--receipt",
         default="p2-physical-receipt.json",
     )
+
+    product_audit = sub.add_parser(
+        "audit-product-run",
+        help="read-only integrity audit of an exported iPhone MotionOS product run",
+    )
+    product_audit.add_argument("run_directory")
+    product_audit.add_argument("--documents-directory")
+    product_audit.add_argument("--report", required=True)
 
     observability = sub.add_parser(
         "validate-observability",
@@ -1330,6 +1339,22 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(json.dumps(receipt.to_dict(), indent=2, sort_keys=True))
         return 0 if receipt.passed else 2
+
+    if args.command == "audit-product-run":
+        result = write_product_capture_audit(
+            args.run_directory,
+            args.report,
+            documents_directory=args.documents_directory,
+        )
+        print(json.dumps({
+            "schema_version": result["schema_version"],
+            "run_id": result["run_id"],
+            "status": result["status"],
+            "issues": result["issues"],
+            "warnings": result["warnings"],
+            "physical_capture_qualified": result["physical_capture_qualified"],
+        }, indent=2, sort_keys=True))
+        return 0 if result["status"] == "export_hashes_verified" else 2
 
     if args.command == "validate-observability":
         registry = load_observability_registry(args.registry)
