@@ -189,7 +189,7 @@ def _derive_sample(
     valid = sum(row["valid"] for row in rows)
     calibration = None
     if record.get("calibration_receipt") is not None:
-        path = _file(output_dir.parent, record["calibration_receipt"], "calibration receipt")
+        path = _file(output_dir, record["calibration_receipt"], "calibration receipt")
         calibration = {"path": _portable(path, output_dir), "sha256": sha256_file(path)}
     return {
         "sample_id": sample_id,
