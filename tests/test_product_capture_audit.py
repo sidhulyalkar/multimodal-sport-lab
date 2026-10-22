@@ -42,9 +42,8 @@ def _fixture(tmp_path, *, watch=True, action4=False):
     )
     watch_id = "watch-123"
     watch_blob = b'{"sequence":0,"kind":"watch"}\n'
-    watch_hash = None
     if watch:
-        watch_hash = _write(
+        _write(
             docs, f"MotionOSInbox/{watch_id}/watch.jsonl", watch_blob
         )
 
@@ -112,7 +111,7 @@ def test_original_camera_mutation_produces_integrity_failure(tmp_path):
 
 
 def test_wrong_operator_run_identity_and_duplicates_are_detected(tmp_path):
-    run, docs = _fixture(tmp_path)
+    run, _ = _fixture(tmp_path)
     (run / "operator-metadata.json").write_text('{"run_id":"different"}')
     report = build_product_capture_audit(run)
     assert report["status"] == "integrity_problem"
@@ -132,7 +131,7 @@ def test_external_video_bound_only_when_expected_and_imported(tmp_path):
 
 
 def test_bad_sibling_directory_does_not_get_misread(tmp_path):
-    run, docs = _fixture(tmp_path)
+    _, docs = _fixture(tmp_path)
     with pytest.raises(ValueError, match="expected iPhone Documents"):
         build_product_capture_audit(docs)
 
