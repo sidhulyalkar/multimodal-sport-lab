@@ -68,7 +68,8 @@ def test_build_and_verify_measured_candidates_do_not_claim_ground_truth(tmp_path
     assert index["measured_candidate_count"] == 1
     label = index["samples"][0]["labels"][0]
     assert label["teacher_eligibility"] == "candidate_requires_physical_sync_review"
-    assert not Path(target.parent / label["source"]["path"]).is_absolute()
+    assert not Path(label["source"]["path"]).is_absolute()
+    assert (target.parent / label["source"]["path"]).is_file()
     assert verify_video_teacher_index(target)["passed"] is True
 
 
