@@ -228,7 +228,7 @@ def verify_video_teacher_index(index_path: str | Path) -> dict[str, object]:
         raise ValueError("unsupported video-teacher index schema")
     spec = existing.get("spec")
     if not isinstance(spec, dict):
-        raise ValueError("index missing spec reference")
+        raise TypeError("index missing spec reference")
     source = (index.parent / _text(spec.get("path"), "spec.path")).resolve()
     regenerated = _catalog(source, index)
     if existing != regenerated:
