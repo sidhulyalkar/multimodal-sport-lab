@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from motionos.kinematic_joint_map import build_kinematic_joint_map
 from motionos.personalized_kinematics import build_personalized_kinematics
 from motionos.provenance import sha256_file
 
@@ -228,3 +229,61 @@ def test_no_input_file_overwrite(tmp_path: Path) -> None:
             paths["map"],
             paths["geometry"],
         )
+
+
+def test_joint_map_to_kinematics_end_to_end(tmp_path: Path) -> None:
+    paths = _fixture(tmp_path)
+    geometry = json.loads(paths["geometry"].read_text())
+    correspondence = _write(
+        tmp_path / "real-schema-correspondences.json",
+        {
+            "schema_version": "motionos.multiview-correspondences.v1",
+            "rig_id": geometry["rig_id"],
+            "rig_receipt_sha256": geometry["rig_receipt_sha256"],
+            "frozen_before_geometry_review": True,
+            "points": [
+                {
+                    "point_id": item["point_id"],
+                    "reference_time_ns": item["reference_time_ns"],
+                    "joint_name": item["point_id"].split(":", 1)[1],
+                    "observations": {},
+                }
+                for item in geometry["points"]
+            ],
+        },
+    )
+    geometry["correspondences_sha256"] = sha256_file(correspondence)
+    _write(paths["geometry"], geometry)
+    output_map = tmp_path / "auto-map.json"
+    created_map = build_kinematic_joint_map(
+        paths["geometry"],
+        correspondence,
+        output_map,
+        subject_id="participant-A",
+    )
+    assert created_map["frame_count"] == 3
+    assert created_map["joint_labels_fully_reviewed"] is False
+
+    report = build_personalized_kinematics(
+        paths["geometry"],
+        paths["rig"],
+        paths["world"],
+        paths["body"],
+        output_map,
+        tmp_path / "auto-kinematics.json",
+        trc_path=tmp_path / "auto-kinematics.trc",
+    )
+    assert report["frame_count"] == 3
+    assert report["joint_labels_fully_reviewed"] is False
+    assert report["joint_label_review_counts"]["model_proposed"] == 18
+    assert report["frames"][1]["joint_label_status"]["leftKnee"] == "model_proposed"
+    assert (tmp_path / "auto-kinematics.trc").exists()
+
+
+def test_joint_map_cannot_substitute_other_correspondences(tmp_path: Path) -> None:
+    paths = _fixture(tmp_path)
+    mapping = json.loads(paths["map"].read_text())
+    mapping["source_correspondences_sha256"] = "0" * 64
+    _write(paths["map"], mapping)
+    with pytest.raises(ValueError, match="source correspondences hash mismatch"):
+        _run(paths, tmp_path)
