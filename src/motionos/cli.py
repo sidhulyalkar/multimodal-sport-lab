@@ -103,6 +103,7 @@ from .insole import (
     write_p2_capture_receipt,
     write_p2_physical_receipt,
 )
+from .kinematic_joint_map import build_kinematic_joint_map
 from .mcap_io import export_mcap
 from .observability import load_observability_registry
 from .operator_evidence import write_operator_evidence_receipt
@@ -114,6 +115,7 @@ from .p1 import (
 )
 from .personal_baseline import build_personal_movement_baseline
 from .personal_delta import build_personal_session_delta
+from .personalized_kinematics import build_personalized_kinematics
 from .public_data import index_totalcapture
 from .public_video import build_public_video_catalog
 from .qc import session_qc
@@ -440,6 +442,33 @@ def _parser() -> argparse.ArgumentParser:
     )
     body_model.add_argument("profile")
     body_model.add_argument("--source-artifact")
+
+    joint_map = sub.add_parser(
+        "build-kinematic-joint-map",
+        help="map frozen, labeled multiview source points to anatomical joints",
+    )
+    joint_map.add_argument("geometry_report")
+    joint_map.add_argument("correspondences")
+    joint_map.add_argument("output")
+    joint_map.add_argument("--subject-id", required=True)
+    joint_map.add_argument("--reviewed-annotations")
+
+    kinematics = sub.add_parser(
+        "build-personalized-kinematics",
+        help="validate multiview 3D marker evidence and export a personal motion timeline",
+    )
+    kinematics.add_argument("geometry_report")
+    kinematics.add_argument("rig_receipt")
+    kinematics.add_argument("world_frame")
+    kinematics.add_argument("body_profile")
+    kinematics.add_argument("joint_map")
+    kinematics.add_argument("output")
+    kinematics.add_argument("--trc", help="optional OpenSim marker TRC export (uniform grid only)")
+    kinematics.add_argument("--body-source-artifact")
+    kinematics.add_argument("--max-reprojection-px", type=float, default=8.0)
+    kinematics.add_argument("--max-ray-disagreement-m", type=float, default=0.04)
+    kinematics.add_argument("--max-segment-deviation-fraction", type=float, default=0.25)
+    kinematics.add_argument("--max-contiguous-gap-s", type=float, default=0.15)
 
     camera_import = sub.add_parser(
         "import-camera-evidence",
@@ -1268,6 +1297,48 @@ def main(argv: list[str] | None = None) -> int:
                 sort_keys=True,
             )
         )
+        return 0
+
+    if args.command == "build-kinematic-joint-map":
+        report = build_kinematic_joint_map(
+            args.geometry_report,
+            args.correspondences,
+            args.output,
+            subject_id=args.subject_id,
+            reviewed_annotations_path=args.reviewed_annotations,
+        )
+        print(json.dumps({
+            "frame_count": report["frame_count"],
+            "labeled_point_count": report["labeled_point_count"],
+            "human_reviewed_point_count": report["human_reviewed_point_count"],
+            "unlabeled_point_count": report["unlabeled_point_count"],
+        }, indent=2, sort_keys=True))
+        return 0
+
+    if args.command == "build-personalized-kinematics":
+        report = build_personalized_kinematics(
+            args.geometry_report,
+            args.rig_receipt,
+            args.world_frame,
+            args.body_profile,
+            args.joint_map,
+            args.output,
+            trc_path=args.trc,
+            body_source_artifact_path=args.body_source_artifact,
+            max_reprojection_px=args.max_reprojection_px,
+            max_ray_disagreement_m=args.max_ray_disagreement_m,
+            max_segment_deviation_fraction=args.max_segment_deviation_fraction,
+            max_contiguous_gap_s=args.max_contiguous_gap_s,
+        )
+        print(json.dumps({
+            "schema_version": report["schema_version"],
+            "frame_count": report["frame_count"],
+            "rejected_joint_observations": report["rejected_joint_observations"],
+            "discontinuity_count": len(report["discontinuities"]),
+            "body_model_personalized_source_verified":
+                report["body_model_personalized_source_verified"],
+            "trc_sha256": report["trc_sha256"],
+        }, indent=2, sort_keys=True))
         return 0
 
     if args.command == "import-camera-evidence":
