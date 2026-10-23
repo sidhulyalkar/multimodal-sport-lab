@@ -64,6 +64,80 @@ report's point IDs and reference timestamps. Unknown, duplicate, reused or
 time-mismatched point IDs fail closed. Omit a marker from a frame if it is
 unobserved; missing joints will not be synthesized.
 
+## New: build the joint map from frozen multiview observations
+
+The first version required manually constructing the joint timeline. The new
+builder replaces that repetitive step when the upstream pose/correspondence
+producer provides **explicit** anatomical labels.
+
+In the *original* motionos.multiview-correspondences.v1 artifact, a point may
+have:
+
+    {
+      "point_id": "frame-000012-leftKnee",
+      "reference_time_ns": 1740000000000,
+      "joint_name": "leftKnee",
+      "observations": {
+        "...": "existing calibrated camera observations, unchanged"
+      }
+    }
+
+This example shows the optional label field, not a full valid triangulation
+input. Add anatomical labels **before freezing and triangulating**: changing a
+source file afterward breaks its SHA-256 binding to the geometry report.
+
+Once the geometry report has been produced:
+
+    motionos build-kinematic-joint-map \
+      results/geometry.json \
+      results/frozen-correspondences.json \
+      results/joint-map.json \
+      --subject-id local-pseudonym
+
+The command verifies original source and geometry hashes, fixed rig ID, frozen
+status, exact point IDs and nanosecond timestamps, no duplicate joint within a
+frame, and approved landmark vocabulary. **It does not guess joint identity from
+the filename or point ID.** Unlabeled points are excluded and counted. Unknown
+or ambiguous labels fail explicitly.
+
+When the model's labels need human review, create an optional separate,
+immutably hash-bound annotation document:
+
+    {
+      "schema_version": "motionos.kinematic-joint-annotations.v1",
+      "geometry_report_sha256": "ACTUAL_GEOMETRY_SHA256",
+      "correspondences_sha256": "ACTUAL_CORRESPONDENCES_SHA256",
+      "review_status": "human_reviewed",
+      "labels": [
+        {"point_id": "frame-000012-leftKnee", "joint_name": "leftKnee"}
+      ]
+    }
+
+Then pass --reviewed-annotations results/reviewed-labels.json to the same
+mapping command. The labels document is a human-declared review receipt; this
+tool cannot independently prove that the anatomical assignment is correct.
+Any conflict with an upstream frozen label fails closed rather than silently
+overwriting raw evidence.
+
+Every mapped joint retains **human_reviewed** or **model_proposed** status.
+Legacy manual maps without such metadata remain **unverified**. The motion
+timeline preserves the review status per frame and summarizes the counts.
+Neither model proposals nor reviewed names certify true internal joint centers.
+
+For real offline use, the two commands are therefore:
+
+    motionos build-kinematic-joint-map \
+      results/geometry.json results/correspondences.json \
+      results/joint-map.json --subject-id local-pseudonym
+
+    motionos build-personalized-kinematics \
+      results/geometry.json results/rig.json results/world-frame.json \
+      profiles/body.json results/joint-map.json results/kinematics.json \
+      --trc results/markers.trc
+
+A real body profile with a source scan SHA-256 also requires the
+--body-source-artifact argument as documented below.
+
 ## CLI
 
     cd ~/Developer/multimodal-sport-lab
