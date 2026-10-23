@@ -11,6 +11,7 @@ import hashlib
 import json
 import math
 import statistics
+from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
@@ -49,7 +50,7 @@ KNEES = {
 def _object(path: Path, what: str) -> dict[str, Any]:
     data = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
-        raise ValueError(f"{what} must be a JSON object")
+        raise TypeError(f"{what} must be a JSON object")
     return data
 
 
@@ -61,7 +62,7 @@ def _nonnegative_int(value: object, what: str) -> int:
 
 def _positive(value: object, what: str) -> float:
     if isinstance(value, bool):
-        raise ValueError(f"{what} must be a positive finite number")
+        raise TypeError(f"{what} must be a positive finite number")
     try:
         number = float(value)
     except (TypeError, ValueError) as exc:
@@ -73,7 +74,7 @@ def _positive(value: object, what: str) -> float:
 
 def _nonnegative_float(value: object, what: str) -> float:
     if isinstance(value, bool):
-        raise ValueError(f"{what} must be a non-negative finite number")
+        raise TypeError(f"{what} must be a non-negative finite number")
     try:
         number = float(value)
     except (TypeError, ValueError) as exc:
@@ -122,7 +123,7 @@ def _trc(
     if len(frames) < 2:
         raise ValueError("TRC export requires two or more frames")
     seconds = [frame["time_s"] for frame in frames]
-    deltas = [b - a for a, b in zip(seconds, seconds[1:])]
+    deltas = [b - a for a, b in pairwise(seconds)]
     median_dt = statistics.median(deltas)
     if median_dt <= 0 or any(abs(dt - median_dt) > 0.02 * median_dt for dt in deltas):
         raise ValueError(
@@ -139,10 +140,10 @@ def _trc(
         axes.extend([f"X{index}", f"Y{index}", f"Z{index}"])
     lines = [
         f"PathFileType\t4\t(X/Y/Z)\t{name}",
-        "DataRate\tCameraRate\tNumFrames\tNumMarkers\tUnits\t"
-        "OrigDataRate\tOrigDataStartFrame\tOrigNumFrames",
-        f"{rate:.8f}\t{rate:.8f}\t{count}\t{len(marker_names)}\tm\t"
-        f"{rate:.8f}\t1\t{count}",
+        ("DataRate\tCameraRate\tNumFrames\tNumMarkers\tUnits\t"
+         "OrigDataRate\tOrigDataStartFrame\tOrigNumFrames"),
+        (f"{rate:.8f}\t{rate:.8f}\t{count}\t{len(marker_names)}\tm\t"
+         f"{rate:.8f}\t1\t{count}"),
         "\t".join(columns),
         "\t".join(axes),
         "",
@@ -248,7 +249,7 @@ def build_personalized_kinematics(
     point_index: dict[str, dict[str, Any]] = {}
     for index, raw in enumerate(points_raw):
         if not isinstance(raw, dict) or not isinstance(raw.get("point_id"), str):
-            raise ValueError(f"invalid geometry point at index {index}")
+            raise TypeError(f"invalid geometry point at index {index}")
         name = raw["point_id"]
         if not name or name in point_index:
             raise ValueError("geometry point IDs must be unique and nonempty")
@@ -266,7 +267,7 @@ def build_personalized_kinematics(
     rejected = 0
     for frame_index, raw in enumerate(frames_raw):
         if not isinstance(raw, dict):
-            raise ValueError("joint-map frames must be objects")
+            raise TypeError("joint-map frames must be objects")
         time_ns = _nonnegative_int(raw.get("reference_time_ns"), "reference_time_ns")
         if prev_ns is not None and time_ns <= prev_ns:
             raise ValueError("joint-map reference timestamps must strictly increase")
