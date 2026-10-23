@@ -113,8 +113,8 @@ from .p1 import (
     write_p1_receipt,
 )
 from .personal_baseline import build_personal_movement_baseline
-from .personalized_kinematics import build_personalized_kinematics
 from .personal_delta import build_personal_session_delta
+from .personalized_kinematics import build_personalized_kinematics
 from .public_data import index_totalcapture
 from .public_video import build_public_video_catalog
 from .qc import session_qc
