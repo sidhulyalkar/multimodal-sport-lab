@@ -71,6 +71,18 @@ def _positive(value: object, what: str) -> float:
     return number
 
 
+def _nonnegative_float(value: object, what: str) -> float:
+    if isinstance(value, bool):
+        raise ValueError(f"{what} must be a non-negative finite number")
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{what} must be a non-negative finite number") from exc
+    if not math.isfinite(number) or number < 0:
+        raise ValueError(f"{what} must be a non-negative finite number")
+    return number
+
+
 def _point(value: object, what: str) -> tuple[float, float, float]:
     if not isinstance(value, list) or len(value) != 3:
         raise ValueError(f"{what} must be a three-element array")
@@ -284,14 +296,14 @@ def build_personalized_kinematics(
             if _nonnegative_int(point_data.get("reference_time_ns"), "point time") != time_ns:
                 raise ValueError(f"joint {joint} source timestamp does not match frame")
             xyz = _point(point_data.get("world_position_m"), f"{point_id}.world_position_m")
-            reprojection = _positive(
-                point_data.get("mean_reprojection_residual_px", 0.0) + 1e-15,
+            reprojection = _nonnegative_float(
+                point_data.get("mean_reprojection_residual_px"),
                 f"{point_id}.mean_reprojection_residual_px",
-            ) - 1e-15
-            disagreement = _positive(
-                point_data.get("ray_disagreement_rms_m", 0.0) + 1e-15,
+            )
+            disagreement = _nonnegative_float(
+                point_data.get("ray_disagreement_rms_m"),
                 f"{point_id}.ray_disagreement_rms_m",
-            ) - 1e-15
+            )
             all_joint_names.add(joint)
             if reprojection > reproj_limit or disagreement > ray_limit:
                 rejected_joints[joint] = "geometry_quality_threshold"
