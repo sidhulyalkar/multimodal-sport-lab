@@ -103,6 +103,7 @@ from .insole import (
     write_p2_capture_receipt,
     write_p2_physical_receipt,
 )
+from .kinematic_joint_map import build_kinematic_joint_map
 from .mcap_io import export_mcap
 from .observability import load_observability_registry
 from .operator_evidence import write_operator_evidence_receipt
@@ -441,6 +442,16 @@ def _parser() -> argparse.ArgumentParser:
     )
     body_model.add_argument("profile")
     body_model.add_argument("--source-artifact")
+
+    joint_map = sub.add_parser(
+        "build-kinematic-joint-map",
+        help="map frozen, labeled multiview source points to anatomical joints",
+    )
+    joint_map.add_argument("geometry_report")
+    joint_map.add_argument("correspondences")
+    joint_map.add_argument("output")
+    joint_map.add_argument("--subject-id", required=True)
+    joint_map.add_argument("--reviewed-annotations")
 
     kinematics = sub.add_parser(
         "build-personalized-kinematics",
@@ -1286,6 +1297,22 @@ def main(argv: list[str] | None = None) -> int:
                 sort_keys=True,
             )
         )
+        return 0
+
+    if args.command == "build-kinematic-joint-map":
+        report = build_kinematic_joint_map(
+            args.geometry_report,
+            args.correspondences,
+            args.output,
+            subject_id=args.subject_id,
+            reviewed_annotations_path=args.reviewed_annotations,
+        )
+        print(json.dumps({
+            "frame_count": report["frame_count"],
+            "labeled_point_count": report["labeled_point_count"],
+            "human_reviewed_point_count": report["human_reviewed_point_count"],
+            "unlabeled_point_count": report["unlabeled_point_count"],
+        }, indent=2, sort_keys=True))
         return 0
 
     if args.command == "build-personalized-kinematics":
