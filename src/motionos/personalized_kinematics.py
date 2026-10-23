@@ -231,6 +231,11 @@ def build_personalized_kinematics(
         raise ValueError("unsupported kinematic joint-map schema")
     if mapping.get("geometry_report_sha256") != sha256_file(geometry_path):
         raise ValueError("joint map geometry hash mismatch")
+    if (
+        mapping.get("source_correspondences_sha256") is not None
+        and mapping["source_correspondences_sha256"] != geo.get("correspondences_sha256")
+    ):
+        raise ValueError("joint map source correspondences hash mismatch")
     if not isinstance(mapping.get("subject_id"), str) or not mapping["subject_id"].strip():
         raise ValueError("joint map requires a pseudonymous subject_id")
 
@@ -265,6 +270,11 @@ def build_personalized_kinematics(
     start_ns: int | None = None
     gaps: list[dict[str, Any]] = []
     rejected = 0
+    label_status_totals = {
+        "human_reviewed": 0,
+        "model_proposed": 0,
+        "unverified": 0,
+    }
     for frame_index, raw in enumerate(frames_raw):
         if not isinstance(raw, dict):
             raise TypeError("joint-map frames must be objects")
@@ -282,6 +292,19 @@ def build_personalized_kinematics(
         joints = raw.get("joints")
         if not isinstance(joints, dict) or not joints:
             raise ValueError(f"frame {frame_index} requires a nonempty joint mapping")
+        raw_label_status = raw.get("joint_label_status")
+        if raw_label_status is None:
+            label_status = dict.fromkeys(joints, "unverified")
+        else:
+            if not isinstance(raw_label_status, dict) or set(raw_label_status) != set(joints):
+                raise ValueError("joint label statuses must match this frame's joints")
+            label_status = {}
+            for joint, status in raw_label_status.items():
+                if status not in ("human_reviewed", "model_proposed"):
+                    raise ValueError(f"unsupported joint label review status: {status!r}")
+                label_status[joint] = status
+        for status in label_status.values():
+            label_status_totals[status] += 1
         accepted: dict[str, tuple[float, float, float]] = {}
         rejected_joints: dict[str, str] = {}
         observation_refs: dict[str, str] = {}
@@ -344,6 +367,7 @@ def build_personalized_kinematics(
             "time_s": round((time_ns - start_ns) / 1e9, 9),
             "markers_world_m": {k: list(v) for k, v in sorted(accepted.items())},
             "point_source_ids": dict(sorted(observation_refs.items())),
+            "joint_label_status": dict(sorted(label_status.items())),
             "rejected_joints": dict(sorted(rejected_joints.items())),
             "segment_length_relative_deviation": dict(sorted(deviations.items())),
             "joint_angles_deg": dict(sorted(angles.items())),
@@ -382,6 +406,12 @@ def build_personalized_kinematics(
             "max_contiguous_gap_s": gap_limit,
         },
         "marker_names": sorted(all_joint_names),
+        "joint_label_review_counts": label_status_totals,
+        "joint_labels_fully_reviewed": (
+            label_status_totals["human_reviewed"] > 0
+            and label_status_totals["model_proposed"] == 0
+            and label_status_totals["unverified"] == 0
+        ),
         "frame_count": len(output_frames),
         "rejected_joint_observations": rejected,
         "discontinuities": gaps,
