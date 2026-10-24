@@ -105,6 +105,7 @@ from .insole import (
 )
 from .kinematic_joint_map import build_kinematic_joint_map
 from .mcap_io import export_mcap
+from .multiview_pose_handoff import build_multiview_pose_correspondences
 from .observability import load_observability_registry
 from .operator_evidence import write_operator_evidence_receipt
 from .p0 import import_watch_journal, write_p0_receipt
@@ -442,6 +443,14 @@ def _parser() -> argparse.ArgumentParser:
     )
     body_model.add_argument("profile")
     body_model.add_argument("--source-artifact")
+
+    pose_handoff = sub.add_parser(
+        "build-multiview-pose-correspondences",
+        help="associate hash-bound, calibrated 2D pose tracks without interpolation",
+    )
+    pose_handoff.add_argument("spec")
+    pose_handoff.add_argument("output")
+    pose_handoff.add_argument("--audit")
 
     joint_map = sub.add_parser(
         "build-kinematic-joint-map",
@@ -1297,6 +1306,13 @@ def main(argv: list[str] | None = None) -> int:
                 sort_keys=True,
             )
         )
+        return 0
+
+    if args.command == "build-multiview-pose-correspondences":
+        report = build_multiview_pose_correspondences(
+            args.spec, args.output, audit_path=args.audit,
+        )
+        print(json.dumps(report, indent=2, sort_keys=True))
         return 0
 
     if args.command == "build-kinematic-joint-map":
