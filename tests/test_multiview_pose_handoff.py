@@ -102,6 +102,7 @@ def test_normalized_and_pixel_paths_triangulate_without_interpolation(tmp_path: 
     assert all(p["joint_name"] == "leftWrist" for p in result["points"])
     assert all(len(p["observations"]) == 2 for p in result["points"])
     assert result["points"][1]["observations"]["cam-b"]["source_frame_sequence"] == 3
+    assert result["points"][1]["observations"]["cam-a"]["confidence"] == 0.95
     geometry = triangulate_multiview(
         tmp_path / "rig.json",
         tmp_path / "correspondences.json",
@@ -257,3 +258,74 @@ def test_unqualified_anchor_frames_count_against_coverage(tmp_path: Path) -> Non
     with pytest.raises(ValueError, match="insufficient time-matched"):
         _run(spec, tmp_path)
     assert not (tmp_path / "correspondences.json").exists()
+
+
+def test_unobserved_frame_does_not_consume_future_valid_camera_match(
+    tmp_path: Path,
+) -> None:
+    spec, _ = _dataset(tmp_path)
+
+    def change_anchor(track):
+        track["frames"][0]["joints"] = [
+            {"id": "rightKnee", "x": 0.45, "y": 0.52, "confidence": 0.95}
+        ]
+        track["frames"][1]["source_frame_pts_ns"] = 1_006_000_000
+
+    def change_target(track):
+        track["frames"][0]["source_frame_pts_ns"] = 1_005_000_000
+
+    _update_track(spec, "cam-a", change_anchor)
+    _update_track(spec, "cam-b", change_target)
+    raw_spec = json.loads(spec.read_text())
+    raw_spec["min_matched_points"] = 1
+    raw_spec["min_matched_anchor_fraction"] = 0.5
+    _write(spec, raw_spec)
+    result = _run(spec, tmp_path)
+    assert result["point_count"] == 1
+    assert result["matched_anchor_frames"] == 1
+    assert result["reason_counts"]["no_shared_visible_joint"] == 1
+    points = json.loads((tmp_path / "correspondences.json").read_text())["points"]
+    assert points[0]["observations"]["cam-b"]["source_frame_sequence"] == 0
+
+
+def test_combined_clock_uncertainty_must_fit_frozen_rig_tolerance(
+    tmp_path: Path,
+) -> None:
+    spec, _ = _dataset(tmp_path)
+    # Each calibrated camera's 3-sigma uncertainty is ~4.24ms, less than
+    # 6ms, but their conservative combined bound exceeds 6ms.
+    rig_path = tmp_path / "rig.json"
+    rig = json.loads(rig_path.read_text())
+    rig["thresholds"]["max_correspondence_time_delta_ms"] = 6.0
+    _write(rig_path, rig)
+    value = json.loads(spec.read_text())
+    value["rig_receipt"]["sha256"] = sha256_file(rig_path)
+    _write(spec, value)
+    with pytest.raises(ValueError, match="insufficient time-matched"):
+        _run(spec, tmp_path)
+    assert not (tmp_path / "correspondences.json").exists()
+
+
+def test_existing_derived_output_is_not_silently_overwritten(
+    tmp_path: Path,
+) -> None:
+    spec, _ = _dataset(tmp_path)
+    (tmp_path / "correspondences.json").write_text("previous evidence")
+    with pytest.raises(FileExistsError, match="previous derived artifact"):
+        _run(spec, tmp_path)
+    assert (tmp_path / "correspondences.json").read_text() == "previous evidence"
+
+
+def test_duplicate_joint_is_rejected_even_when_confidence_is_low(
+    tmp_path: Path,
+) -> None:
+    spec, _ = _dataset(tmp_path)
+
+    def add_duplicate(track):
+        track["frames"][0]["joints"].append(
+            {"id": "leftAnkle", "x": 0.4, "y": 0.4, "confidence": 0.10}
+        )
+
+    _update_track(spec, "cam-a", add_duplicate)
+    with pytest.raises(ValueError, match="duplicate joint"):
+        _run(spec, tmp_path)
