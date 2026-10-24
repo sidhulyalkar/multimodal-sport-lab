@@ -251,8 +251,7 @@ def test_unqualified_anchor_frames_count_against_coverage(tmp_path: Path) -> Non
     spec, _ = _dataset(tmp_path)
 
     def push_one_frame_past_clock_support(track):
-        track["frames"][0]["source_frame_pts_ns"] = 2_100_000_000
-        track["frames"][1]["source_frame_pts_ns"] = 2_200_000_000
+        track["frames"][1]["source_frame_pts_ns"] = 2_100_000_000
 
     _update_track(spec, "cam-a", push_one_frame_past_clock_support)
     with pytest.raises(ValueError, match="insufficient time-matched"):
