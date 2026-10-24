@@ -43,6 +43,9 @@ Each camera has one `motionos.camera-pose-observations.v1` JSON file:
   "session_id": "camera-a-session",
   "session_bundle_sha256": "64-char session bundle digest from rig",
   "source_video_sha256": "64-char original video digest",
+  "source_video_start_pts_ns": 0,
+  "source_video_duration_ns": 120000000000,
+  "nominal_pose_sample_interval_ns": 100000000,
   "subject_id": "local-pseudonym",
   "image_size_px": [1920, 1080],
   "coordinate_frame": "source_image_normalized_origin_lower_left_after_orientation",
@@ -80,6 +83,7 @@ original video bytes; source hashes are verified by reading the files.
   "min_joint_confidence": 0.5,
   "min_matched_points": 10,
   "min_matched_anchor_fraction": 0.5,
+  "min_source_pose_coverage_fraction": 0.5,
   "rig_receipt": {
     "path": "rig-receipt.json",
     "sha256": "ACTUAL_RIG_SHA256"
@@ -151,7 +155,17 @@ When the personal body profile declares a physical source scan digest, add
   interpolation or carry-forward is performed across occlusions.
 - Clock predictive uncertainty must fit the time tolerance at 3 sigma.
 - Only joints above the stated confidence threshold and observed in at least
-  two cameras are exported.
+  two cameras are exported. Per-joint detector confidence remains in the
+  source observation for downstream analysis, but the existing triangulator
+  is **not** yet confidence-weighted.
+- Source pose coverage is counted against the original declared video span and
+  nominal sampling interval, not merely surviving detector frames. Empty pose
+  frames and repeated detections in one slot cannot inflate coverage.
+  This source timeline metadata is declared by the source decoder; independent
+  video-duration/media probing is still a separate verification gate.
+- Accepted per-camera matches share visible joints, pass a conservative joint
+  clock-uncertainty bound and remain mutually within the rig's time tolerance.
+  Camera frames without shared landmarks are not consumed for future matches.
 - Inadequate point count or anchor-frame coverage fails the run.
 - The separate audit records accepted-point coverage and failure reasons.
 - Model-labeled anatomical joints remain **proposed**, not anatomically
