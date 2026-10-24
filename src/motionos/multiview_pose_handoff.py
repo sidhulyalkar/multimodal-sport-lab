@@ -337,7 +337,9 @@ def build_multiview_pose_correspondences(
                 "reference_time_ns": time_ns,
                 "observations": dict(sorted(observations.items())),
             })
-    denominator = max(1, qualifying_anchor_frames)
+    # A missing/unsupported anchor frame is missing coverage, not a reason to
+    # shrink the denominator and make a weak study appear complete.
+    denominator = len(tracks[anchor_id])
     matched_anchor_frames = len({p["reference_time_ns"] for p in points})
     coverage = matched_anchor_frames / denominator
     if len(points) < minimum_points or coverage < minimum_fraction:
