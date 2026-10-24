@@ -168,7 +168,7 @@ def test_low_confidence_joint_filtered_and_gated(tmp_path: Path) -> None:
         for frame in track["frames"]:
             frame["joints"][0]["confidence"] = 0.10
     _update_track(spec, "cam-b", low_confidence)
-    with pytest.raises(ValueError, match="insufficient time-matched"):
+    with pytest.raises(ValueError, match="insufficient original-video pose coverage"):
         _run(spec, tmp_path)
     assert not (tmp_path / "correspondences.json").exists()
 
