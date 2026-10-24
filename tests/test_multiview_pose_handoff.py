@@ -60,6 +60,9 @@ def _dataset(tmp_path: Path) -> tuple[Path, dict[str, Path]]:
             "session_id": cam["session_id"],
             "session_bundle_sha256": cam["session_bundle_sha256"],
             "source_video_sha256": video_sha,
+            "source_video_start_pts_ns": 1_000_000_000,
+            "source_video_duration_ns": 200_000_000,
+            "nominal_pose_sample_interval_ns": 100_000_000,
             "subject_id": "participant-01",
             "image_size_px": [1920, 1080],
             "coordinate_frame": mode,
@@ -80,6 +83,7 @@ def _dataset(tmp_path: Path) -> tuple[Path, dict[str, Path]]:
         "min_joint_confidence": 0.50,
         "min_matched_points": 2,
         "min_matched_anchor_fraction": 1.0,
+        "min_source_pose_coverage_fraction": 0.5,
         "rig_receipt": {"path": str(rig_path), "sha256": sha256_file(rig_path)},
         "camera_tracks": refs,
     })
@@ -97,6 +101,8 @@ def test_normalized_and_pixel_paths_triangulate_without_interpolation(tmp_path: 
     audit = _run(spec, tmp_path)
     assert audit["point_count"] == 2
     assert audit["matched_anchor_fraction"] == 1.0
+    assert audit["source_pose_coverage"]["cam-a"]["expected_pose_slots"] == 2
+    assert audit["source_pose_coverage"]["cam-a"]["observed_pose_slots"] == 2
     result = json.loads((tmp_path / "correspondences.json").read_text())
     assert len(result["points"]) == 2
     assert all(p["joint_name"] == "leftWrist" for p in result["points"])
@@ -170,6 +176,7 @@ def test_low_confidence_joint_filtered_and_gated(tmp_path: Path) -> None:
 def test_outside_clock_support_does_not_extrapolate(tmp_path: Path) -> None:
     spec, _ = _dataset(tmp_path)
     def shift_time(track):
+        track["source_video_start_pts_ns"] += 3_000_000_000
         for frame in track["frames"]:
             frame["source_frame_pts_ns"] += 3_000_000_000
     _update_track(spec, "cam-b", shift_time)
@@ -237,12 +244,14 @@ def test_ambiguous_nearest_sample_rejected(tmp_path: Path) -> None:
     # Arrange two target frames equidistant from the anchor (5ms either side)
     # within the rig's 10ms threshold. The anchor has two frames 100ms apart.
     def shift(track):
+        track["source_video_start_pts_ns"] = 995_000_000
         track["frames"][0]["source_frame_pts_ns"] = 995_000_000
         track["frames"][1]["source_frame_pts_ns"] = 1_005_000_000
     _update_track(spec, "cam-b", shift)
     value = json.loads(spec.read_text())
     value["min_matched_points"] = 1
     value["min_matched_anchor_fraction"] = 0.5
+    value["min_source_pose_coverage_fraction"] = 0.05
     _write(spec, value)
     with pytest.raises(ValueError, match="insufficient time-matched"):
         _run(spec, tmp_path)
@@ -252,9 +261,13 @@ def test_unqualified_anchor_frames_count_against_coverage(tmp_path: Path) -> Non
     spec, _ = _dataset(tmp_path)
 
     def push_one_frame_past_clock_support(track):
+        track["source_video_duration_ns"] = 1_200_000_000
         track["frames"][1]["source_frame_pts_ns"] = 2_100_000_000
 
     _update_track(spec, "cam-a", push_one_frame_past_clock_support)
+    source_spec = json.loads(spec.read_text())
+    source_spec["min_source_pose_coverage_fraction"] = 0.1
+    _write(spec, source_spec)
     with pytest.raises(ValueError, match="insufficient time-matched"):
         _run(spec, tmp_path)
     assert not (tmp_path / "correspondences.json").exists()
@@ -328,4 +341,36 @@ def test_duplicate_joint_is_rejected_even_when_confidence_is_low(
 
     _update_track(spec, "cam-a", add_duplicate)
     with pytest.raises(ValueError, match="duplicate joint"):
+        _run(spec, tmp_path)
+
+
+def test_sparse_pose_track_cannot_claim_full_recording_coverage(
+    tmp_path: Path,
+) -> None:
+    spec, _ = _dataset(tmp_path)
+    def sparse_long_recording(track):
+        track["source_video_duration_ns"] = 20_000_000_000
+    _update_track(spec, "cam-a", sparse_long_recording)
+    with pytest.raises(ValueError, match="insufficient original-video pose coverage"):
+        _run(spec, tmp_path)
+
+
+def test_poses_outside_original_video_span_fail_closed(tmp_path: Path) -> None:
+    spec, _ = _dataset(tmp_path)
+    def outside_source(track):
+        track["frames"][1]["source_frame_pts_ns"] = 1_500_000_000
+    _update_track(spec, "cam-a", outside_source)
+    with pytest.raises(ValueError, match="outside declared original-video span"):
+        _run(spec, tmp_path)
+
+
+def test_empty_pose_frames_do_not_inflate_recording_coverage(tmp_path: Path) -> None:
+    spec, _ = _dataset(tmp_path)
+    def remove_all_joints_from_one_frame(track):
+        track["frames"][1]["joints"] = []
+    _update_track(spec, "cam-a", remove_all_joints_from_one_frame)
+    value = json.loads(spec.read_text())
+    value["min_source_pose_coverage_fraction"] = 0.6
+    _write(spec, value)
+    with pytest.raises(ValueError, match="insufficient original-video pose coverage"):
         _run(spec, tmp_path)
