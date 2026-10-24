@@ -5,6 +5,9 @@ from pathlib import Path
 
 import pytest
 
+# Reuse the physically meaningful two-camera synthetic geometry fixture.
+from test_world_geometry import _fixture
+
 from motionos.multiview_pose_handoff import build_multiview_pose_correspondences
 from motionos.provenance import sha256_file
 from motionos.world_geometry import (
@@ -13,9 +16,6 @@ from motionos.world_geometry import (
     load_camera_calibration,
     triangulate_multiview,
 )
-
-# Reuse the physically meaningful two-camera synthetic geometry fixture.
-from test_world_geometry import _fixture
 
 
 def _write(path: Path, data: dict) -> Path:
