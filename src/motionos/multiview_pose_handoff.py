@@ -121,6 +121,19 @@ def _read_track(
     if not isinstance(raw_frames, list) or not raw_frames:
         raise ValueError(f"{cid} requires nonempty pose frames")
 
+    # Coverage denominators are the source video's declared capture span,
+    # not merely the detected pose frames that happened to survive.
+    start_pts = _nonnegative_int(
+        data.get("source_video_start_pts_ns"), "source_video_start_pts_ns"
+    )
+    duration = _nonnegative_int(
+        data.get("source_video_duration_ns"), "source_video_duration_ns"
+    )
+    sample_interval = _nonnegative_int(
+        data.get("nominal_pose_sample_interval_ns"), "nominal_pose_sample_interval_ns"
+    )
+    if duration <= 0 or sample_interval <= 0:
+        raise ValueError(f"{cid} video duration and pose sampling interval must be positive")
     parsed: list[dict[str, Any]] = []
     previous_pts = -1
     previous_sequence = -1
@@ -129,6 +142,8 @@ def _read_track(
             raise TypeError(f"{cid} frame {index} must be an object")
         sequence = _nonnegative_int(raw.get("source_frame_sequence"), "source_frame_sequence")
         pts = _nonnegative_int(raw.get("source_frame_pts_ns"), "source_frame_pts_ns")
+        if not start_pts <= pts < start_pts + duration:
+            raise ValueError(f"{cid} source pose PTS outside declared original-video span")
         if pts <= previous_pts or sequence <= previous_sequence:
             raise ValueError(f"{cid} duplicate or non-monotonic source frames")
         previous_pts = pts
@@ -178,6 +193,28 @@ def _read_track(
     return parsed
 
 
+def _source_pose_coverage(
+    data: dict[str, Any], frames: list[dict[str, Any]],
+) -> dict[str, int | float]:
+    start_pts = data["source_video_start_pts_ns"]
+    duration = data["source_video_duration_ns"]
+    interval = data["nominal_pose_sample_interval_ns"]
+    slots_expected = (duration + interval - 1) // interval
+    # Multiple detections in one nominal sampling slot count only once.
+    observed_slots = {
+        (frame["pts"] - start_pts) // interval
+        for frame in frames
+        if frame["joints"]
+    }
+    return {
+        "expected_pose_slots": slots_expected,
+        "observed_pose_slots": len(observed_slots),
+        "source_pose_coverage_fraction": round(
+            len(observed_slots) / slots_expected, 9
+        ),
+    }
+
+
 def build_multiview_pose_correspondences(
     spec_path: str | Path,
     output_path: str | Path,
@@ -204,6 +241,12 @@ def build_multiview_pose_correspondences(
     minimum_fraction = _number(spec.get("min_matched_anchor_fraction"), "min_matched_anchor_fraction")
     if not 0 < minimum_fraction <= 1:
         raise ValueError("min_matched_anchor_fraction must be within (0,1]")
+    minimum_source_coverage = _number(
+        spec.get("min_source_pose_coverage_fraction"),
+        "min_source_pose_coverage_fraction",
+    )
+    if not 0 < minimum_source_coverage <= 1:
+        raise ValueError("min_source_pose_coverage_fraction must be within (0,1]")
     base = spec_file.parent
 
     rig_path, rig_hash, rig = _read_bound(spec.get("rig_receipt"), base=base, label="rig")
@@ -231,6 +274,7 @@ def build_multiview_pose_correspondences(
 
     input_paths = {spec_file, rig_path}
     tracks: dict[str, list[dict[str, Any]]] = {}
+    track_coverage: dict[str, dict[str, int | float]] = {}
     track_hashes: dict[str, str] = {}
     media_hashes: dict[str, str] = {}
     for entry in entries:
@@ -259,10 +303,16 @@ def build_multiview_pose_correspondences(
             data, camera=rig_cam, subject_id=subject_id,
             media_sha256=media_hash, clock=clock, minimum_confidence=confidence,
         )
+        track_coverage[cid] = _source_pose_coverage(data, tracks[cid])
         track_hashes[cid] = track_hash
         media_hashes[cid] = media_hash
     if set(tracks) != set(by_camera):
         raise ValueError("tracks must exactly match rig cameras")
+    if any(
+        entry["source_pose_coverage_fraction"] < minimum_source_coverage
+        for entry in track_coverage.values()
+    ):
+        raise ValueError("insufficient original-video pose coverage")
     if output in input_paths or audit in input_paths or (audit is not None and audit == output):
         raise ValueError("outputs must not overwrite immutable input sources")
     if output.exists() or (audit is not None and audit.exists()):
@@ -397,6 +447,7 @@ def build_multiview_pose_correspondences(
         "points": points,
         "source_pose_tracks_sha256": dict(sorted(track_hashes.items())),
         "source_videos_sha256": dict(sorted(media_hashes.items())),
+        "source_pose_coverage": dict(sorted(track_coverage.items())),
         "operator_confirmed_single_person_identity": True,
         "min_joint_confidence": confidence,
         "claim_boundary": (
@@ -414,6 +465,8 @@ def build_multiview_pose_correspondences(
         "anchor_camera_id": anchor_id,
         "source_pose_tracks_sha256": dict(sorted(track_hashes.items())),
         "source_videos_sha256": dict(sorted(media_hashes.items())),
+        "source_pose_coverage": dict(sorted(track_coverage.items())),
+        "min_source_pose_coverage_fraction": minimum_source_coverage,
         "input_anchor_frames": len(tracks[anchor_id]),
         "clock_qualified_anchor_frames": qualifying_anchor_frames,
         "matched_anchor_frames": matched_anchor_frames,
