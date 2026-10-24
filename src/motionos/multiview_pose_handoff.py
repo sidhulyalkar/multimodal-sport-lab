@@ -123,30 +123,32 @@ def _read_track(
 
     parsed: list[dict[str, Any]] = []
     previous_pts = -1
-    seen_sequences: set[int] = set()
+    previous_sequence = -1
     for index, raw in enumerate(raw_frames):
         if not isinstance(raw, dict):
             raise TypeError(f"{cid} frame {index} must be an object")
         sequence = _nonnegative_int(raw.get("source_frame_sequence"), "source_frame_sequence")
         pts = _nonnegative_int(raw.get("source_frame_pts_ns"), "source_frame_pts_ns")
-        if pts <= previous_pts or sequence in seen_sequences:
+        if pts <= previous_pts or sequence <= previous_sequence:
             raise ValueError(f"{cid} duplicate or non-monotonic source frames")
         previous_pts = pts
-        seen_sequences.add(sequence)
+        previous_sequence = sequence
         if raw.get("subject_id") != subject_id:
             raise ValueError(f"{cid} frame {index} contains an unverified or different person")
         joints = raw.get("joints")
         if not isinstance(joints, list):
             raise TypeError(f"{cid} frame {index} joints must be a list")
         points: dict[str, tuple[float, float, float]] = {}
+        seen_joint_ids: set[str] = set()
         for entry in joints:
             if not isinstance(entry, dict):
                 raise TypeError(f"{cid} joint must be an object")
             name = _text(entry.get("id"), "joint id")
             if name not in ALLOWED_JOINTS:
                 raise ValueError(f"{cid} unsupported joint name {name}")
-            if name in points:
+            if name in seen_joint_ids:
                 raise ValueError(f"{cid} duplicate joint {name} in frame {index}")
+            seen_joint_ids.add(name)
             confidence = _number(entry.get("confidence"), f"{cid}.{name}.confidence")
             if not 0 <= confidence <= 1:
                 raise ValueError(f"{cid} joint confidence outside 0..1")
