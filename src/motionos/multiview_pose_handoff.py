@@ -267,7 +267,7 @@ def build_multiview_pose_correspondences(
         raise ValueError("outputs must not overwrite immutable input sources")
 
     other_ids = sorted(cid for cid in tracks if cid != anchor_id)
-    valid_other = {}
+    valid_other: dict[str, list[dict[str, Any]]] = {}
     for cid in other_ids:
         candidates = [
             f for f in tracks[cid]
@@ -304,6 +304,32 @@ def build_multiview_pose_correspondences(
             if not neighbours:
                 rejected["no_synchronized_frame"] += 1
                 continue
+            # Do not consume a sample that cannot contribute any observed joint.
+            neighbours = [
+                frame for frame in neighbours
+                if set(frame["joints"]) & set(anchor["joints"])
+            ]
+            if not neighbours:
+                rejected["no_shared_visible_joint"] += 1
+                continue
+            # If each camera is individually close to the anchor, two others
+            # could still be almost two tolerances apart. Require pairwise
+            # spread and a conservative 3-sigma combined clock bound.
+            neighbours = [
+                frame for frame in neighbours
+                if all(
+                    abs(frame["mapped_ns"] - selected["mapped_ns"])
+                    <= max_time_delta_ns
+                    and 3 * (
+                        frame["predictive_std_ns"]
+                        + selected["predictive_std_ns"]
+                    ) <= max_time_delta_ns
+                    for selected in matched.values()
+                )
+            ]
+            if not neighbours:
+                rejected["cross_camera_time_or_uncertainty"] += 1
+                continue
             neighbours.sort(key=lambda f: (abs(f["mapped_ns"] - anchor["mapped_ns"]), f["pts"]))
             if (
                 len(neighbours) > 1
@@ -313,9 +339,9 @@ def build_multiview_pose_correspondences(
                 rejected["ambiguous_nearest_frame"] += 1
                 continue
             selected = neighbours[0]
-            used_sequences[cid].add(selected["sequence"])
             matched[cid] = selected
 
+        contributing_camera_ids: set[str] = set()
         for joint in sorted(anchor["joints"]):
             observations: dict[str, dict[str, int | float]] = {}
             for cid, frame in matched.items():
@@ -337,6 +363,12 @@ def build_multiview_pose_correspondences(
                 "reference_time_ns": time_ns,
                 "observations": dict(sorted(observations.items())),
             })
+            contributing_camera_ids.update(observations)
+        # Reserve other-camera frames only after they actually contributed
+        # a valid cross-view point. No phantom consumption on occlusions.
+        for cid in other_ids:
+            if cid in contributing_camera_ids and cid in matched:
+                used_sequences[cid].add(matched[cid]["sequence"])
     # A missing/unsupported anchor frame is missing coverage, not a reason to
     # shrink the denominator and make a weak study appear complete.
     denominator = len(tracks[anchor_id])
