@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import math
-from bisect import bisect_left
+from bisect import bisect_left, bisect_right
 from collections import Counter
 from pathlib import Path
 from typing import Any
@@ -265,6 +265,10 @@ def build_multiview_pose_correspondences(
         raise ValueError("tracks must exactly match rig cameras")
     if output in input_paths or audit in input_paths or (audit is not None and audit == output):
         raise ValueError("outputs must not overwrite immutable input sources")
+    if output.exists() or (audit is not None and audit.exists()):
+        raise FileExistsError(
+            "a previous derived artifact already exists; choose fresh output paths"
+        )
 
     other_ids = sorted(cid for cid in tracks if cid != anchor_id)
     valid_other: dict[str, list[dict[str, Any]]] = {}
@@ -294,8 +298,11 @@ def build_multiview_pose_correspondences(
         matched: dict[str, dict[str, Any]] = {anchor_id: anchor}
         for cid in other_ids:
             times = available_times[cid]
-            pos = bisect_left(times, anchor["mapped_ns"])
-            neighbours = [valid_other[cid][idx] for idx in (pos - 1, pos) if 0 <= idx < len(times)]
+            # Inspect every eligible frame in the frozen tolerance window.
+            # A used immediate neighbor must not mask an unused second option.
+            low = bisect_left(times, anchor["mapped_ns"] - max_time_delta_ns)
+            high = bisect_right(times, anchor["mapped_ns"] + max_time_delta_ns)
+            neighbours = valid_other[cid][low:high]
             neighbours = [
                 frame for frame in neighbours
                 if frame["sequence"] not in used_sequences[cid]
@@ -347,11 +354,14 @@ def build_multiview_pose_correspondences(
             for cid, frame in matched.items():
                 if joint not in frame["joints"]:
                     continue
-                u, v, _confidence = frame["joints"][joint]
+                u, v, joint_confidence = frame["joints"][joint]
                 observations[cid] = {
                     "u_px": round(u, 6), "v_px": round(v, 6),
                     "source_frame_sequence": frame["sequence"],
                     "source_frame_pts_ns": frame["pts"],
+                    # Preserve detector confidence as metadata. The existing
+                    # triangulator is *not* confidence-weighted.
+                    "confidence": round(joint_confidence, 6),
                 }
             if len(observations) < 2:
                 rejected["joint_not_multiview_visible"] += 1
