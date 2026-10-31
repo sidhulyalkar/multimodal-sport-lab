@@ -11,8 +11,14 @@ original MotionOS camera timestamps, provenance, body calibration, and
 qualification gates. Run heavy OpenSim/CasADi calculations in an isolated
 offline environment, never as an iOS/Watch runtime dependency.
 
-The source repository is Apache-2.0. Dependencies, models, datasets and
-OpenCap hosted services can have their own license/terms.
+The `opencap-processing` and `opencap-core` repositories have Apache-2.0
+code licenses, but this does **not** authorize use of OpenCap's hosted web
+service in a commercial product. As of this review, OpenCap's published
+[service terms](https://www.opencap.ai/terms-conditions) limit its hosted
+service to noncommercial research/education by academic or nonprofit users
+and prohibit use by commercial entities absent separate permission.
+Third-party pose-estimation runtimes, model weights, datasets and CasADi may
+also carry independent license obligations; review each before distribution.
 
 ## Implemented
 
