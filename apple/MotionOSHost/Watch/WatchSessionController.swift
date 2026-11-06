@@ -72,6 +72,10 @@ final class WatchSessionController: ObservableObject {
     @Published private(set) var lastIndoRemoteAck:
         IndoBoardRemoteCommandAck?
     @Published private(set) var indoRemoteErrorMessage: String?
+    @Published private(set) var restPilotEnabled = false
+    @Published private(set) var restPilotSaving = false
+    @Published private(set) var restPilotState = IndoRestPilotRecorder()
+    @Published private(set) var restPilotErrorMessage: String?
     /// Operator diagnostics for late, foreign, or stale events that were not
     /// journaled. Not raw evidence.
     @Published private(set) var captureRejections = CaptureRejectionCounts()
@@ -86,6 +90,7 @@ final class WatchSessionController: ObservableObject {
     private var finalized = false
     private var heartRateSequence: UInt64 = 0
     private var sessionSyncSequence: UInt64 = 0
+    private var restPilotSequence: UInt64 = 0
     private var productCueTitle: String?
     private var linkedProductRunID: String?
     @Published private(set) var rejectedProductControlCount: UInt64 = 0
@@ -359,6 +364,11 @@ final class WatchSessionController: ObservableObject {
         visualTelemetryHistory = []
         heartRateSequence = 0
         sessionSyncSequence = 0
+        restPilotSequence = 0
+        restPilotEnabled = false
+        restPilotSaving = false
+        restPilotState = IndoRestPilotRecorder()
+        restPilotErrorMessage = nil
         productCueTitle = nil
         productCueInstruction = nil
         linkedProductRunID = nil
@@ -467,6 +477,68 @@ final class WatchSessionController: ObservableObject {
             motion.stop()
             fail(error)
             await finalizeAndTransfer()
+        }
+    }
+
+    /// A user-controlled research mode. All events remain local on Watch
+    /// until the already-existing verified Watch journal transfer succeeds.
+    func setRestPilotEnabled(_ enabled: Bool) {
+        guard (state == .running || state == .paused),
+              captureOrigin == .iPhone else {
+            restPilotErrorMessage = "Requires an active iPhone-launched workout."
+            return
+        }
+        if !enabled && (
+            restPilotState.activeBoutID != nil || restPilotState.isResting
+        ) {
+            restPilotErrorMessage = "Finish the current attempt or rest first."
+            return
+        }
+        restPilotEnabled = enabled
+        restPilotErrorMessage = nil
+    }
+
+    /// Persist the Watch source event before advancing the displayed state.
+    /// The Watch monotonic clock is deliberately NOT promoted to phone time.
+    @discardableResult
+    func markRestPilot(_ marker: IndoRestPilotMarker) async -> Bool {
+        guard !restPilotSaving else { return false }
+        guard restPilotEnabled,
+              (state == .running || state == .paused),
+              let watchSessionID = sessionID
+        else {
+            restPilotErrorMessage = "Recording is not active."
+            return false
+        }
+
+        restPilotSaving = true
+        defer { restPilotSaving = false }
+
+        var proposed = restPilotState
+        do {
+            let annotation = try proposed.accept(marker)
+            let event = IndoRestWatchJournal.envelope(
+                sessionID: watchSessionID,
+                runID: linkedProductRunID,
+                sequence: restPilotSequence,
+                deviceTimeNS: MonotonicClock.nowNS(),
+                eventID: UUID().uuidString,
+                event: annotation
+            )
+            guard await record(event) else {
+                restPilotErrorMessage = "Marker was not saved. Try again while recording."
+                WKInterfaceDevice.current().play(.failure)
+                return false
+            }
+            restPilotState = proposed
+            restPilotSequence &+= 1
+            restPilotErrorMessage = nil
+            WKInterfaceDevice.current().play(.click)
+            return true
+        } catch {
+            restPilotErrorMessage = "Invalid rest marker: " + String(describing: error)
+            WKInterfaceDevice.current().play(.failure)
+            return false
         }
     }
 

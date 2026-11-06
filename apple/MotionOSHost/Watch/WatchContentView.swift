@@ -6,6 +6,10 @@ struct WatchContentView: View {
     @State private var confirmStop = false
     @State private var confirmDelete = false
     @State private var showDetails = false
+    @State private var showRestPilot = false
+    @State private var chosenPilotPhase: IndoRestPilotPhase = .reference
+    @State private var chosenPilotStance = "comfortable"
+    @State private var pilotEffort = 5
 
     var body: some View {
         ScrollView {
@@ -794,6 +798,10 @@ struct WatchContentView: View {
                 protocolCueCard(cue)
             }
 
+            if controller.captureOrigin == .iPhone {
+                restPilotControl
+            }
+
             if controller.indoRemoteProductSessionActive {
                 Button {
                     _ = controller.sendIndoRemoteCommand(.finishSession)
@@ -906,6 +914,134 @@ struct WatchContentView: View {
             }
         }
         .panelStyle()
+    }
+
+    /// A compact, optional watch-only annotation surface. Riders should
+    /// operate it at a safe pause, never while actively balancing.
+    private var restPilotControl: some View {
+        VStack(spacing: 7) {
+            Button {
+                showRestPilot.toggle()
+            } label: {
+                HStack {
+                    Label("Rest study · experimental", systemImage: "pause.circle")
+                        .font(.caption2.weight(.semibold))
+                    Spacer(minLength: 0)
+                    Image(systemName: showRestPilot ? "chevron.up" : "chevron.down")
+                }
+            }
+            .buttonStyle(.bordered)
+
+            if showRestPilot {
+                VStack(spacing: 8) {
+                Toggle(
+                    "Record markers",
+                    isOn: Binding(
+                        get: { controller.restPilotEnabled },
+                        set: { controller.setRestPilotEnabled($0) }
+                    )
+                )
+                .font(.caption2)
+
+                if controller.restPilotEnabled {
+                    Text("Use only while off the board. Stored on Watch even offline.")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.secondary)
+
+                    if let activeID = controller.restPilotState.activeBoutID {
+                        Text("Attempt in progress")
+                            .font(.caption2.weight(.semibold))
+                        Button("Finish attempt") {
+                            Task {
+                                await controller.markRestPilot(
+                                    .boutFinished(id: activeID)
+                                )
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(controller.restPilotSaving)
+                    } else if controller.restPilotState.isResting {
+                        Text("Rest in progress")
+                            .font(.caption2.weight(.semibold))
+                        Button("Finish rest") {
+                            Task {
+                                await controller.markRestPilot(.restFinished)
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(controller.restPilotSaving)
+                    } else {
+                        Picker("Phase", selection: $chosenPilotPhase) {
+                            Text("Reference").tag(IndoRestPilotPhase.reference)
+                            Text("Later").tag(IndoRestPilotPhase.late)
+                            Text("After rest").tag(IndoRestPilotPhase.postRest)
+                        }
+                        Picker("Stance", selection: $chosenPilotStance) {
+                            Text("Comfortable").tag("comfortable")
+                            Text("Switch").tag("switch")
+                        }
+                        Button("Start attempt") {
+                            let context = IndoRestPilotContext(
+                                skillID: "neutral_balance_hold",
+                                setupID: "watch_setup_unverified",
+                                stanceID: chosenPilotStance,
+                                trackingMode: "watch_only"
+                            )
+                            Task {
+                                await controller.markRestPilot(
+                                    .boutStarted(
+                                        id: UUID().uuidString,
+                                        phase: chosenPilotPhase,
+                                        context: context
+                                    )
+                                )
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(controller.restPilotSaving)
+
+                        Button("Start rest") {
+                            Task {
+                                await controller.markRestPilot(.restStarted)
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(controller.restPilotSaving)
+                    }
+
+                    if let lastID = controller.restPilotState.lastFinishedBoutID,
+                       controller.restPilotState.activeBoutID == nil {
+                        Stepper(
+                            "Effort \\(pilotEffort)/10",
+                            value: $pilotEffort,
+                            in: 0...10
+                        )
+                        .font(.caption2)
+                        Button("Save effort") {
+                            Task {
+                                await controller.markRestPilot(
+                                    .effortReported(
+                                        boutID: lastID,
+                                        rating: pilotEffort
+                                    )
+                                )
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(controller.restPilotSaving)
+                    }
+                }
+
+                if let message = controller.restPilotErrorMessage {
+                    Text(message)
+                        .font(.system(size: 9))
+                        .foregroundStyle(.orange)
+                }
+            }
+                .padding(.top, 6)
+            }
+        }
+        .tint(.cyan)
     }
 
     private func protocolCueCard(
