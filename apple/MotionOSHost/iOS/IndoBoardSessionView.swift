@@ -14,6 +14,11 @@ struct IndoBoardSessionView: View {
     @State private var selectedExternalVideoItem: PhotosPickerItem?
     @State private var showMeasurementDetails = false
     @State private var showSessionOptions = false
+    @State private var recoveryPilotEnabled = false
+    @State private var pilotPhase: IndoRestPilotPhase = .reference
+    @State private var pilotSkillID = "neutral_balance_hold"
+    @State private var pilotStanceID = "comfortable"
+    @State private var pilotEffort = 5
 
     var body: some View {
         ScrollView {
@@ -152,6 +157,9 @@ struct IndoBoardSessionView: View {
             BodyMovementSceneCard()
             IndoBoardLiveSignalCard()
             liveProtocol
+            if recoveryPilotEnabled && session.phase == .running {
+                restPilotCard
+            }
 
         case .watchStopRequired:
             recoveryCard
@@ -267,6 +275,18 @@ struct IndoBoardSessionView: View {
                     }
                 }
                 .buttonStyle(.plain)
+
+                Divider()
+
+                Toggle("Experimental rest annotations", isOn: $recoveryPilotEnabled)
+                    .disabled(session.phase == .running || session.phase == .starting)
+
+                if recoveryPilotEnabled {
+                    Text("Research-only: an operator can mark attempts and breaks. "
+                            + "The standard two-minute workout and auto-stop are unchanged.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
 
                 Divider()
 
@@ -887,6 +907,99 @@ struct IndoBoardSessionView: View {
             )
             .font(.caption2)
             .foregroundStyle(.secondary)
+        }
+        .cardStyle()
+    }
+
+    /// Optional operator annotations for scientific pilot recording. These
+    /// buttons are not designed to be tapped while balancing on the board.
+    private var restPilotCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            MotionOSSectionHeader(
+                title: "Rest experiment · annotations",
+                subtitle: "Optional research evidence, not a fatigue score",
+                systemImage: "pause.circle",
+                accent: .cyan
+            )
+
+            Text("Use these controls only while safely off the board. "
+                    + "The regular 2-minute workout ends automatically.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Picker("Attempt phase", selection: $pilotPhase) {
+                Text("Reference").tag(IndoRestPilotPhase.reference)
+                Text("Later").tag(IndoRestPilotPhase.late)
+                Text("After rest").tag(IndoRestPilotPhase.postRest)
+            }
+            .pickerStyle(.segmented)
+
+            Picker("Movement", selection: $pilotSkillID) {
+                Text("Neutral hold").tag("neutral_balance_hold")
+                Text("Side shifts").tag("controlled_side_shift")
+            }
+            Picker("Your stance", selection: $pilotStanceID) {
+                Text("Comfortable").tag("comfortable")
+                Text("Switch").tag("switch")
+            }
+
+            if let activeID = fieldRun.indoRestPilot.activeBoutID {
+                Text("Recording attempt: " + String(activeID.prefix(8)))
+                    .font(.caption)
+                Button("Finish attempt") {
+                    fieldRun.recordIndoRestPilotMarker(.boutFinished(id: activeID))
+                }
+                .buttonStyle(.bordered)
+            } else if fieldRun.indoRestPilot.isResting {
+                Label("Rest in progress", systemImage: "pause.fill")
+                    .font(.subheadline)
+                Button("Finish rest") {
+                    fieldRun.recordIndoRestPilotMarker(.restFinished)
+                }
+                .buttonStyle(.bordered)
+            } else {
+                HStack {
+                    Button("Mark next attempt") {
+                        let context = IndoRestPilotContext(
+                            skillID: pilotSkillID,
+                            setupID: fieldRun.runID ?? "unknown-run",
+                            stanceID: pilotStanceID,
+                            trackingMode: camera.latestIndoBoardState == nil
+                                ? "body_only" : "board_roller"
+                        )
+                        fieldRun.recordIndoRestPilotMarker(
+                            .boutStarted(
+                                id: UUID().uuidString,
+                                phase: pilotPhase,
+                                context: context
+                            )
+                        )
+                    }
+                    .buttonStyle(.borderedProminent)
+
+                    Button("Start rest") {
+                        fieldRun.recordIndoRestPilotMarker(.restStarted)
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+
+            if let previous = fieldRun.indoRestPilot.lastFinishedBoutID,
+               fieldRun.indoRestPilot.activeBoutID == nil {
+                HStack {
+                    Stepper("Effort: \(pilotEffort)/10", value: $pilotEffort, in: 0...10)
+                    Button("Save") {
+                        fieldRun.recordIndoRestPilotMarker(
+                            .effortReported(boutID: previous, rating: pilotEffort)
+                        )
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+            Text("Pilot annotations are timestamped on the iPhone operator clock. "
+                    + "They do not replace camera/Watch synchronization.")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
         }
         .cardStyle()
     }

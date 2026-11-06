@@ -198,6 +198,7 @@ final class FieldRunCoordinator: ObservableObject {
     @Published private(set) var completedBlockIDs: Set<String> = []
     @Published private(set) var syncCueLabels: [String] = []
     @Published private(set) var failureNoteCount = 0
+    @Published private(set) var indoRestPilot = IndoRestPilotRecorder()
     @Published private(set) var evidenceBundle: OperatorEvidenceBundle?
     @Published private(set) var errorMessage: String?
 
@@ -379,6 +380,30 @@ final class FieldRunCoordinator: ObservableObject {
             }
         } catch {
             fail(error)
+        }
+    }
+
+    /// Append an optional experimental annotation into the existing hashed
+    /// operator journal. The event is never treated as a clock sync anchor.
+    /// Persist first, then publish the updated annotation state.
+    @discardableResult
+    func recordIndoRestPilotMarker(_ marker: IndoRestPilotMarker) -> Bool {
+        guard phase == .running, protocolKind == .indoBoard else {
+            errorMessage = "Recovery annotations require an active Indo Board run."
+            return false
+        }
+
+        var proposed = indoRestPilot
+        do {
+            let event = try proposed.accept(marker)
+            var payload = event.payload
+            payload["event_id"] = UUID().uuidString
+            try append(kind: event.kind, payload: payload)
+            indoRestPilot = proposed
+            return true
+        } catch {
+            errorMessage = "Recovery annotation not saved: " + String(describing: error)
+            return false
         }
     }
 
@@ -674,6 +699,7 @@ final class FieldRunCoordinator: ObservableObject {
         completedBlockIDs = []
         syncCueLabels = []
         failureNoteCount = 0
+        indoRestPilot = IndoRestPilotRecorder()
         evidenceBundle = nil
         errorMessage = nil
         directoryURL = nil
