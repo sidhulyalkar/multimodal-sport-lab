@@ -919,8 +919,21 @@ struct WatchContentView: View {
     /// A compact, optional watch-only annotation surface. Riders should
     /// operate it at a safe pause, never while actively balancing.
     private var restPilotControl: some View {
-        DisclosureGroup(isExpanded: $showRestPilot) {
-            VStack(spacing: 8) {
+        VStack(spacing: 7) {
+            Button {
+                showRestPilot.toggle()
+            } label: {
+                HStack {
+                    Label("Rest study · experimental", systemImage: "pause.circle")
+                        .font(.caption2.weight(.semibold))
+                    Spacer(minLength: 0)
+                    Image(systemName: showRestPilot ? "chevron.up" : "chevron.down")
+                }
+            }
+            .buttonStyle(.bordered)
+
+            if showRestPilot {
+                VStack(spacing: 8) {
                 Toggle(
                     "Record markers",
                     isOn: Binding(
@@ -1025,10 +1038,8 @@ struct WatchContentView: View {
                         .foregroundStyle(.orange)
                 }
             }
-            .padding(.top, 6)
-        } label: {
-            Label("Rest study · experimental", systemImage: "pause.circle")
-                .font(.caption2.weight(.semibold))
+                .padding(.top, 6)
+            }
         }
         .tint(.cyan)
     }
