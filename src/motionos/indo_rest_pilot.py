@@ -10,6 +10,7 @@ from __future__ import annotations
 import math
 import re
 import statistics
+from itertools import pairwise
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from typing import Any
@@ -35,7 +36,7 @@ def _number(value: Any) -> float | None:
 
 def _parse_bout(bout: Mapping[str, Any]) -> dict[str, Any]:
     if not isinstance(bout, Mapping):
-        raise ValueError("every bout must be an object")
+        raise TypeError("every bout must be an object")
     bout_id = bout.get("bout_id")
     phase = bout.get("phase")
     if not isinstance(bout_id, str) or not bout_id.strip():
@@ -48,7 +49,7 @@ def _parse_bout(bout: Mapping[str, Any]) -> dict[str, Any]:
         raise ValueError(f"invalid interval in {bout_id}")
     context = bout.get("context")
     if not isinstance(context, Mapping):
-        raise ValueError(f"missing context in {bout_id}")
+        raise TypeError(f"missing context in {bout_id}")
     for field in CONTEXT_FIELDS:
         if not isinstance(context.get(field), str) or not context[field].strip():
             raise ValueError(f"missing context.{field} in {bout_id}")
@@ -58,7 +59,7 @@ def _parse_bout(bout: Mapping[str, Any]) -> dict[str, Any]:
     metrics = bout.get("metrics")
     confidence = bout.get("confidence")
     if not isinstance(metrics, Mapping) or not isinstance(confidence, Mapping):
-        raise ValueError(f"metrics and confidence maps required in {bout_id}")
+        raise TypeError(f"metrics and confidence maps required in {bout_id}")
     return {
         "bout_id": bout_id,
         "phase": phase,
@@ -122,13 +123,13 @@ def build_indo_rest_pilot_report(
     if not isinstance(session_id, str) or not session_id.strip():
         raise ValueError("session_id must be nonempty")
     if not isinstance(bouts, (list, tuple)):
-        raise ValueError("bouts must be an ordered list")
+        raise TypeError("bouts must be an ordered list")
     parsed = [_parse_bout(raw) for raw in bouts]
     ids = [bout["bout_id"] for bout in parsed]
     if len(ids) != len(set(ids)):
         raise ValueError("duplicate bout_id")
     ordered = sorted(parsed, key=lambda b: b["start_s"])
-    if any(a["end_s"] > b["start_s"] for a, b in zip(ordered, ordered[1:])):
+    if any(a["end_s"] > b["start_s"] for a, b in pairwise(ordered)):
         raise ValueError("overlapping bout intervals")
 
     excluded: list[dict[str, str]] = []
