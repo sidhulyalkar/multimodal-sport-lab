@@ -87,7 +87,6 @@ from .indo_public_corpus import (
 from .indo_runtime_equipment_eval import (
     evaluate_runtime_equipment_predictions,
 )
-from .indo_watch_rest_events import extract_watch_rest_events
 from .indo_session_report import (
     build_indo_session_report,
     load_json_object,
@@ -99,6 +98,7 @@ from .indo_shadow_eval import (
 from .indo_shadow_gate import (
     assess_markerless_shadow_gate,
 )
+from .indo_watch_rest_events import extract_watch_rest_events
 from .insole import (
     import_opengo_text_export,
     write_p2_capture_receipt,
