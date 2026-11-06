@@ -944,7 +944,7 @@ struct IndoBoardSessionView: View {
             }
 
             if let activeID = fieldRun.indoRestPilot.activeBoutID {
-                Text("Recording attempt: " + activeID.prefix(8))
+                Text("Recording attempt: " + String(activeID.prefix(8)))
                     .font(.caption)
                 Button("Finish attempt") {
                     fieldRun.recordIndoRestPilotMarker(.boutFinished(id: activeID))
@@ -987,7 +987,7 @@ struct IndoBoardSessionView: View {
             if let previous = fieldRun.indoRestPilot.lastFinishedBoutID,
                fieldRun.indoRestPilot.activeBoutID == nil {
                 HStack {
-                    Stepper("Effort: \\(pilotEffort)/10", value: $pilotEffort, in: 0...10)
+                    Stepper("Effort: \(pilotEffort)/10", value: $pilotEffort, in: 0...10)
                     Button("Save") {
                         fieldRun.recordIndoRestPilotMarker(
                             .effortReported(boutID: previous, rating: pilotEffort)
