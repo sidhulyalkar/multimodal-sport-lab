@@ -87,6 +87,7 @@ from .indo_public_corpus import (
 from .indo_runtime_equipment_eval import (
     evaluate_runtime_equipment_predictions,
 )
+from .indo_watch_rest_events import extract_watch_rest_events
 from .indo_session_report import (
     build_indo_session_report,
     load_json_object,
@@ -745,6 +746,15 @@ def _parser() -> argparse.ArgumentParser:
     indo_model_qualification.add_argument(
         "--authorization-note",
     )
+
+    watch_rest = sub.add_parser(
+        "indo-watch-rest-events",
+        help="decode hash-verified Watch rest annotations without clock alignment claims",
+    )
+    watch_rest.add_argument("watch_journal")
+    watch_rest.add_argument("--watch-session-id", required=True)
+    watch_rest.add_argument("--expected-sha256", required=True)
+    watch_rest.add_argument("--run-id")
 
     indo_report = sub.add_parser(
         "indo-session-report",
@@ -1759,6 +1769,16 @@ def main(argv: list[str] | None = None) -> int:
                 sort_keys=True,
             )
         )
+        return 0
+
+    if args.command == "indo-watch-rest-events":
+        result = extract_watch_rest_events(
+            args.watch_journal,
+            watch_session_id=args.watch_session_id,
+            expected_sha256=args.expected_sha256,
+            expected_run_id=args.run_id,
+        )
+        print(json.dumps(result, indent=2, sort_keys=True))
         return 0
 
     if args.command == "indo-session-report":
