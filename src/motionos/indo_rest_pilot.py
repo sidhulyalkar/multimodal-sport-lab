@@ -10,9 +10,9 @@ from __future__ import annotations
 import math
 import re
 import statistics
-from itertools import pairwise
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
+from itertools import pairwise
 from typing import Any
 
 SCHEMA_VERSION = "motionos.indo-rest-pilot.v1"
